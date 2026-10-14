@@ -1,0 +1,322 @@
+{
+  "2": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "3": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    }
+  },
+  "4": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    }
+  },
+  "5": {
+    "class_type": "TextEncodeQwenImage21",
+    "inputs": {
+      "prompt": [
+        "55",
+        0
+      ],
+      "negative_prompt": "",
+      "resolution": 1024,
+      "clip": [
+        "3",
+        0
+      ],
+      "images.image_1": [
+        "12",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ]
+    }
+  },
+  "6": {
+    "class_type": "QwenImage21Cache",
+    "inputs": {
+      "device": "gpu",
+      "dtype": "default",
+      "model": [
+        "2",
+        0
+      ]
+    }
+  },
+  "7": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    }
+  },
+  "8": {
+    "class_type": "ManualSigmas",
+    "inputs": {
+      "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0.0"
+    }
+  },
+  "9": {
+    "class_type": "SamplerCustom",
+    "inputs": {
+      "add_noise": true,
+      "noise_seed": 0,
+      "cfg": 1,
+      "model": [
+        "6",
+        0
+      ],
+      "positive": [
+        "5",
+        0
+      ],
+      "negative": [
+        "5",
+        1
+      ],
+      "sampler": [
+        "7",
+        0
+      ],
+      "sigmas": [
+        "8",
+        0
+      ],
+      "latent_image": [
+        "5",
+        2
+      ]
+    }
+  },
+  "10": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "9",
+        0
+      ],
+      "vae": [
+        "4",
+        0
+      ]
+    }
+  },
+  "12": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "upscale_method": "lanczos",
+      "width": 0,
+      "height": 0,
+      "crop": "disabled",
+      "image": [
+        "19",
+        0
+      ]
+    }
+  },
+  "19": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": ""
+    }
+  },
+  "45": {
+    "class_type": "MangaRegionCrops",
+    "inputs": {
+      "images": [
+        "19",
+        0
+      ],
+      "layout_json": [
+        "42",
+        0
+      ],
+      "ocr_padding": 4,
+      "edit_margin": 12
+    }
+  },
+  "46": {
+    "class_type": "MangaOCRLoader",
+    "inputs": {
+      "model_name": "hayai-ocr-v2"
+    }
+  },
+  "47": {
+    "class_type": "MangaOCR",
+    "inputs": {
+      "images": [
+        "45",
+        0
+      ],
+      "model": [
+        "46",
+        0
+      ],
+      "max_new_tokens": 512,
+      "max_patches": 1024,
+      "repetition_penalty": 1.0,
+      "retry_on_repetition": true
+    }
+  },
+  "48": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "45",
+        0
+      ]
+    }
+  },
+  "49": {
+    "class_type": "MangaCollectOCR",
+    "inputs": {
+      "text": [
+        "47",
+        0
+      ],
+      "manifest_json": [
+        "45",
+        1
+      ]
+    }
+  },
+  "50": {
+    "class_type": "MangaSaveReview",
+    "inputs": {
+      "translated_json": [
+        "49",
+        0
+      ],
+      "filename_prefix": "manga_translator/ocr"
+    }
+  },
+  "51": {
+    "class_type": "MangaTranslate",
+    "inputs": {
+      "ocr_json": [
+        "50",
+        0
+      ],
+      "base_url": "http://127.0.0.1:8000/v1",
+      "model": "",
+      "target_language": "Korean",
+      "api_key_env": "MANGA_LLM_API_KEY",
+      "max_tokens": 4096,
+      "timeout": 300,
+      "translated_override_json": ""
+    }
+  },
+  "54": {
+    "class_type": "MangaSaveReview",
+    "inputs": {
+      "translated_json": [
+        "51",
+        0
+      ],
+      "filename_prefix": "manga_translator/translation"
+    }
+  },
+  "55": {
+    "class_type": "MangaEditPrompt",
+    "inputs": {
+      "translated_json": [
+        "54",
+        0
+      ],
+      "instructions": "Preserve the original lettering style, relative title/body sizes, alignment, and paragraph separation. Keep all illustrations, gray panels, speech-bubble outlines, and composition unchanged. Do not add new balloons or solid text backgrounds."
+    }
+  },
+  "60": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "19",
+        0
+      ],
+      "source": [
+        "10",
+        0
+      ],
+      "mask": [
+        "45",
+        2
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": true
+    }
+  },
+  "61": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "60",
+        0
+      ],
+      "filename_prefix": "manga_translator/final"
+    }
+  },
+  "62": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "10",
+        0
+      ]
+    }
+  },
+  "63": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "19",
+        0
+      ]
+    }
+  },
+  "40": {
+    "class_type": "MangaDetectorLoader",
+    "inputs": {
+      "model_name": "koharu-layout-rfdetr-seg-2xl-1152"
+    }
+  },
+  "41": {
+    "class_type": "MangaDetector",
+    "inputs": {
+      "images": [
+        "19",
+        0
+      ],
+      "model": [
+        "40",
+        0
+      ],
+      "text": 0.25,
+      "onomatopoeia": 0.2,
+      "bubble": 0.5,
+      "panel": 0.5
+    }
+  },
+  "42": {
+    "class_type": "MangaDetectionRegions",
+    "inputs": {
+      "result": [
+        "41",
+        0
+      ],
+      "include_sfx": false,
+      "dedupe_iou": 0.75,
+      "reading_order": "top_to_bottom"
+    }
+  }
+}

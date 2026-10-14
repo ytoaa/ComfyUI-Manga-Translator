@@ -1,0 +1,11 @@
+# Existing ComfyUI torch/CUDA is deliberately not specified or replaced.
+# Review against the current environment before installing these adapters.
+rfdetr==1.7.0
+safetensors
+numpy
+Pillow
+pydantic>=2,<3
+transformers
+tokenizers
+supervision
+opencv-python

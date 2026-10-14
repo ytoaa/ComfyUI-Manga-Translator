@@ -1,0 +1,52 @@
+{
+  "source_repository": "https://github.com/ytoaa/koharu-remote",
+  "source_commit": "ee6d9ddc82d9bfc4718383272f0e4797f805e2cd",
+  "files": [
+    {
+      "path": "adapters/hayai.py",
+      "source_path": "dgx/vision/hayai.py",
+      "sha256": "af5d1afe974f17c7d72fcf77844773895b4b8d6c4471d37aad2ebc129a8ae251",
+      "modified": false
+    },
+    {
+      "path": "adapters/hayai_files.py",
+      "source_path": "dgx/vision/hayai_files.py",
+      "sha256": "d5bda331af832c0449b2bf93ce819f154d6136b5a6e66f1e4a8f831054d2da42",
+      "modified": false
+    },
+    {
+      "path": "adapters/model.py",
+      "source_path": "dgx/vision/model.py",
+      "sha256": "001ce4aeb33f006640e8c681cc74e0696b6f3f4b18e1d04f073aab6b4e09a05c",
+      "modified": false
+    },
+    {
+      "path": "adapters/model_bundle.py",
+      "source_path": "dgx/vision/model_bundle.py",
+      "sha256": "3a902ad3daec1cf33638ab560636c829f7d620409c0808ca7360a052fefc7669",
+      "modified": false
+    },
+    {
+      "path": "adapters/model_files.py",
+      "source_path": "dgx/vision/model_files.py",
+      "sha256": "2f06e3a3c64245992ad983c5a1720f6700c5acd386b15e65f6ff7abab01dec6b",
+      "modified": false
+    },
+    {
+      "path": "adapters/options.py",
+      "source_path": "dgx/vision/options.py",
+      "sha256": "5411a232311fed11c44a90eb26b4bb886f0535242d7461b16edc330a5f2de179",
+      "modified": false
+    }
+  ],
+  "workflow_basis": "comfyui/koharu_nodes/workflows/inpainting.api.json",
+  "workflow_changes": [
+    "standalone OCR/detector nodes",
+    "translation and review JSON",
+    "literal replacement edit prompt",
+    "rectangular edit regions",
+    "direct SaveImage",
+    "no Koharu application/scene/renderer/API bridge"
+  ],
+  "reference_projects_copied": false
+}
