@@ -1,0 +1,702 @@
+{
+  "id": "3e6ee933-b245-5d94-ad0c-dc14164f2cdb",
+  "revision": 0,
+  "last_node_id": 11,
+  "last_link_id": 14,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        330,
+        120
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            1
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "manga-lettering-demo/original.png",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "manga-lettering-demo/original.png",
+        "upload": "image"
+      },
+      "title": "① 원본 · 지우기 전"
+    },
+    {
+      "id": 2,
+      "type": "LoadImage",
+      "pos": [
+        0,
+        300
+      ],
+      "size": [
+        330,
+        120
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            2,
+            9
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "manga-lettering-demo/cleaned.png",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "manga-lettering-demo/cleaned.png",
+        "upload": "image"
+      },
+      "title": "② 원문 제거 결과"
+    },
+    {
+      "id": 3,
+      "type": "LoadImageMask",
+      "pos": [
+        0,
+        600
+      ],
+      "size": [
+        330,
+        150
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": [
+            3
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImageMask"
+      },
+      "widgets_values": [
+        "manga-lettering-demo/source_mask.png",
+        "red",
+        "image"
+      ],
+      "widgets_values_named": {
+        "image": "manga-lettering-demo/source_mask.png",
+        "channel": "red",
+        "upload": "image"
+      },
+      "title": "③ 원문 마스크 · 흰색=글자"
+    },
+    {
+      "id": 4,
+      "type": "MangaLetterRegion",
+      "pos": [
+        390,
+        0
+      ],
+      "size": [
+        330,
+        180
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "original",
+          "type": "IMAGE",
+          "link": 1
+        },
+        {
+          "name": "cleaned",
+          "type": "IMAGE",
+          "link": 2
+        },
+        {
+          "name": "source_mask",
+          "type": "MASK",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "원본_글자_참조",
+          "type": "IMAGE",
+          "links": [
+            4
+          ]
+        },
+        {
+          "name": "지운_배경_크롭",
+          "type": "IMAGE",
+          "links": [
+            5
+          ]
+        },
+        {
+          "name": "원문_마스크_크롭",
+          "type": "MASK",
+          "links": [
+            6
+          ]
+        },
+        {
+          "name": "페이지_배치",
+          "type": "MANGA_LETTER_PLACEMENT",
+          "links": [
+            12
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaLetterRegion"
+      },
+      "widgets_values": [
+        85,
+        95,
+        420,
+        150
+      ],
+      "widgets_values_named": {
+        "x": 85,
+        "y": 95,
+        "width": 420,
+        "height": 150
+      },
+      "title": "원본 글자 영역 추출 · Manga"
+    },
+    {
+      "id": 5,
+      "type": "MangaLetterAnalyze",
+      "pos": [
+        790,
+        0
+      ],
+      "size": [
+        330,
+        120
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "reference",
+          "type": "IMAGE",
+          "link": 4
+        },
+        {
+          "name": "cleaned",
+          "type": "IMAGE",
+          "link": 5
+        },
+        {
+          "name": "source_mask",
+          "type": "MASK",
+          "link": 6
+        }
+      ],
+      "outputs": [
+        {
+          "name": "측정_스타일",
+          "type": "MANGA_LETTER_STYLE",
+          "links": [
+            7
+          ]
+        },
+        {
+          "name": "분석_보고서",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaLetterAnalyze"
+      },
+      "widgets_values": [
+        "auto",
+        0.07
+      ],
+      "widgets_values_named": {
+        "polarity": "auto",
+        "difference_threshold": 0.07
+      },
+      "title": "원본 글자 스타일 분석 · Manga"
+    },
+    {
+      "id": 6,
+      "type": "MangaLetterStyleAdjust",
+      "pos": [
+        1190,
+        0
+      ],
+      "size": [
+        330,
+        330
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "style",
+          "type": "MANGA_LETTER_STYLE",
+          "link": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "적용_스타일",
+          "type": "MANGA_LETTER_STYLE",
+          "links": [
+            8
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaLetterStyleAdjust"
+      },
+      "widgets_values": [
+        "auto",
+        "auto",
+        -1.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        "#000000"
+      ],
+      "widgets_values_named": {
+        "foreground": "auto",
+        "outline_color": "auto",
+        "outline_width": -1.0,
+        "weight_px": 0.0,
+        "texture_strength": 1.0,
+        "shadow_x": 0.0,
+        "shadow_y": 0.0,
+        "shadow_blur": 0.0,
+        "shadow_color": "#000000"
+      },
+      "title": "글자 스타일 조절 · Manga"
+    },
+    {
+      "id": 7,
+      "type": "MangaLetterRender",
+      "pos": [
+        1590,
+        0
+      ],
+      "size": [
+        330,
+        450
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "style",
+          "type": "MANGA_LETTER_STYLE",
+          "link": 8
+        },
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": 14,
+          "widget": {
+            "name": "text"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "번역문_RGB",
+          "type": "IMAGE",
+          "links": [
+            10
+          ]
+        },
+        {
+          "name": "번역문_알파",
+          "type": "MASK",
+          "links": [
+            11
+          ]
+        },
+        {
+          "name": "렌더링_보고서",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaLetterRender"
+      },
+      "widgets_values": [
+        "정말 괜찮아?",
+        "NanumGothic-Regular.ttf",
+        "horizontal",
+        "center",
+        10,
+        72,
+        12,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        2,
+        1
+      ],
+      "widgets_values_named": {
+        "text": "정말 괜찮아?",
+        "font_name": "NanumGothic-Regular.ttf",
+        "direction": "horizontal",
+        "alignment": "center",
+        "min_font": 10,
+        "max_font": 72,
+        "padding": 12,
+        "line_spacing": 1.0,
+        "tracking": 0.0,
+        "rotation": 0.0,
+        "shear": 0.0,
+        "supersample": 2,
+        "max_lines": 1
+      },
+      "title": "번역문 스타일 렌더링 · Manga"
+    },
+    {
+      "id": 8,
+      "type": "MangaLetterComposite",
+      "pos": [
+        2020,
+        0
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "cleaned_page",
+          "type": "IMAGE",
+          "link": 9
+        },
+        {
+          "name": "lettering",
+          "type": "IMAGE",
+          "link": 10
+        },
+        {
+          "name": "lettering_alpha",
+          "type": "MASK",
+          "link": 11
+        },
+        {
+          "name": "placement",
+          "type": "MANGA_LETTER_PLACEMENT",
+          "link": 12
+        }
+      ],
+      "outputs": [
+        {
+          "name": "최종_페이지",
+          "type": "IMAGE",
+          "links": [
+            13
+          ]
+        },
+        {
+          "name": "새_글자_페이지_알파",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaLetterComposite"
+      },
+      "widgets_values": [
+        1.0
+      ],
+      "widgets_values_named": {
+        "opacity": 1.0
+      },
+      "title": "번역문 최종 합성 · Manga"
+    },
+    {
+      "id": 9,
+      "type": "SaveImage",
+      "pos": [
+        2440,
+        0
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 13
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "manga_lettering/vllm"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "manga_lettering/vllm"
+      },
+      "title": "SaveImage"
+    },
+    {
+      "id": 10,
+      "type": "MangaLetterTranslate",
+      "pos": [
+        1190,
+        600
+      ],
+      "size": [
+        330,
+        330
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "확정_번역문",
+          "type": "STRING",
+          "links": [
+            14
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaLetterTranslate"
+      },
+      "widgets_values": [
+        "Are you okay?",
+        "http://127.0.0.1:8000/v1",
+        "",
+        "English",
+        "Korean",
+        1024,
+        0.2,
+        120,
+        "MANGA_LLM_API_KEY"
+      ],
+      "widgets_values_named": {
+        "source_text": "Are you okay?",
+        "base_url": "http://127.0.0.1:8000/v1",
+        "model": "",
+        "source_language": "English",
+        "target_language": "Korean",
+        "max_tokens": 1024,
+        "temperature": 0.2,
+        "timeout": 120,
+        "key_environment": "MANGA_LLM_API_KEY"
+      },
+      "title": "한 영역 vLLM 번역 · Manga"
+    },
+    {
+      "id": 11,
+      "type": "Note",
+      "pos": [
+        390,
+        550
+      ],
+      "size": [
+        500,
+        270
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "설치 스크립트가 입력 예제를 ComfyUI/input/manga-lettering-demo에 복사합니다.\n실제 작업: 원본·지운 배경·원문 마스크 선택 → 원본 좌표로 영역 지정 → 번역문/폰트/스타일 조절.\n글자 알파는 원문 마스크와 별개입니다. 이 그래프를 기존 01/02 모델 편집 그래프와 별도로 수동 식자를 검증할 수 있습니다.\n원본 폰트 자동 복제/학습형 스타일 전이는 포함하지 않습니다."
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      4,
+      0,
+      "IMAGE"
+    ],
+    [
+      2,
+      2,
+      0,
+      4,
+      1,
+      "IMAGE"
+    ],
+    [
+      3,
+      3,
+      0,
+      4,
+      2,
+      "MASK"
+    ],
+    [
+      4,
+      4,
+      0,
+      5,
+      0,
+      "IMAGE"
+    ],
+    [
+      5,
+      4,
+      1,
+      5,
+      1,
+      "IMAGE"
+    ],
+    [
+      6,
+      4,
+      2,
+      5,
+      2,
+      "MASK"
+    ],
+    [
+      7,
+      5,
+      0,
+      6,
+      0,
+      "MANGA_LETTER_STYLE"
+    ],
+    [
+      8,
+      6,
+      0,
+      7,
+      0,
+      "MANGA_LETTER_STYLE"
+    ],
+    [
+      9,
+      2,
+      0,
+      8,
+      0,
+      "IMAGE"
+    ],
+    [
+      10,
+      7,
+      0,
+      8,
+      1,
+      "IMAGE"
+    ],
+    [
+      11,
+      7,
+      1,
+      8,
+      2,
+      "MASK"
+    ],
+    [
+      12,
+      4,
+      3,
+      8,
+      3,
+      "MANGA_LETTER_PLACEMENT"
+    ],
+    [
+      13,
+      8,
+      0,
+      9,
+      0,
+      "IMAGE"
+    ],
+    [
+      14,
+      10,
+      0,
+      7,
+      1,
+      "STRING"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.55,
+      "offset": [
+        20,
+        20
+      ]
+    }
+  },
+  "version": 0.4
+}

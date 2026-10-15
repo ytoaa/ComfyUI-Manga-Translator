@@ -1,0 +1,51 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "manga-lettering-demo/original.png"
+    }
+  },
+  "2": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "manga-lettering-demo/cleaned.png"
+    }
+  },
+  "3": {
+    "class_type": "LoadImageMask",
+    "inputs": {
+      "image": "manga-lettering-demo/source_mask.png",
+      "channel": "red"
+    }
+  },
+  "4": {
+    "class_type": "MangaLetterPage",
+    "inputs": {
+      "regions_json": "{\n  \"schema\": 1,\n  \"coordinate_format\": \"xywh\",\n  \"page_size\": [\n    1024,\n    768\n  ],\n  \"regions\": [\n    {\n      \"id\": \"dialogue\",\n      \"bbox\": [\n        85,\n        95,\n        420,\n        150\n      ],\n      \"source_text\": \"Are you okay?\",\n      \"text\": \"정말 괜찮아?\",\n      \"font\": \"NanumGothic-Regular.ttf\",\n      \"layout\": {\n        \"max_font\": 72,\n        \"padding\": 12,\n        \"max_lines\": 1\n      }\n    },\n    {\n      \"id\": \"vertical\",\n      \"bbox\": [\n        660,\n        72,\n        265,\n        220\n      ],\n      \"source_text\": \"WAIT!\",\n      \"text\": \"잠깐!\\n기다려!\",\n      \"layout\": {\n        \"direction\": \"vertical_rtl\",\n        \"max_font\": 60,\n        \"padding\": 10,\n        \"max_lines\": 2\n      }\n    },\n    {\n      \"id\": \"effect\",\n      \"bbox\": [\n        100,\n        435,\n        820,\n        220\n      ],\n      \"source_text\": \"BOOOM!\",\n      \"text\": \"콰아앙!\",\n      \"layout\": {\n        \"max_font\": 138,\n        \"padding\": 16,\n        \"rotation\": 5,\n        \"shear\": 0.16,\n        \"max_lines\": 1\n      },\n      \"style\": {\n        \"shadow_x\": 4.0,\n        \"shadow_y\": 5.0,\n        \"shadow_blur\": 0.5\n      }\n    }\n  ]\n}",
+      "default_font": "NanumGothic-Bold.ttf",
+      "texture_strength": 1.0,
+      "original": [
+        "1",
+        0
+      ],
+      "cleaned": [
+        "2",
+        0
+      ],
+      "source_mask": [
+        "3",
+        0
+      ]
+    }
+  },
+  "5": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "manga_lettering/page",
+      "images": [
+        "4",
+        0
+      ]
+    }
+  }
+}

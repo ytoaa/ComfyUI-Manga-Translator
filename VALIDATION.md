@@ -28,3 +28,28 @@ pytest의 `--confcutdir=tests`는 하이픈이 있는 ComfyUI 저장소 루트�
 - end-to-end 소요 시간 및 VRAM 사용량.
 
 따라서 이 결과는 실행 가능한 소스/노드 연결의 로컬 검증이며 GPU 생성 결과의 품질을 보증하는 검증은 아니다. 이전 프로젝트의 실측 결과를 이번 독립 패키지의 실측으로 간주하지 않는다.
+# 원본 참조 스타일 식자 0.1.0 추가 검증
+
+- 기준 저장소: `ytoaa/ComfyUI-Manga-Translator`, base `da5cfb4e7a66ff03bd4ff00b0f4c5b4293ce9e6d`
+- 전체 테스트: **48 passed**, 다음 명령으로 실행. 루트에 ComfyUI `__init__.py`가 있는
+  저장소 구조 때문에 pytest의 탐색 경계를 tests로 명시한다.
+
+```bash
+python -m pytest --rootdir=tests --confcutdir=tests -q
+python tools/build_lettering_examples.py
+python -m compileall -q lettering tools tests
+```
+
+- 추가 검증: 실제 동봉 한글 폰트 렌더링, 원본 색/외곽선 측정, 가로·세로 레이아웃,
+  회전·기울기, 폰트 미지원 문자/넘치는 번역문 거부, 새 글자 알파 밖 원본 픽셀의 정확한 유지,
+  원문과 다른 위치의 번역문 획 보존, 겹치는 영역에서 원본 참조 재사용, 후보 질감의 변화량과
+  알파 보존, 기존 번역 JSON/좌표 어댑터, 원문 제거 프롬프트에 번역문 미포함,
+  예제 6개의 UI/API 연결·필수 입력·순환 참조 검사.
+- Python 모듈 등록: 기존 10개 + 스타일 식자 11개 = **21개**. 실제 torch 없이 import 가능.
+- 노드 래퍼 검사는 NumPy 텐서 대역을 사용했고, 픽셀·폰트 계산은 실제 Pillow/NumPy/SciPy로 실행했다.
+  전체 예제의 실제 ComfyUI executor/브라우저 가져오기 검증을 대체하지 않는다.
+- 합성 테스트 비교 이미지 `lettering/examples/comparison.png`를 생성하고 시각 확인했다.
+  코드로 만든 fixture이며 실물 만화·Qwen 생성 결과가 아니다.
+- **미검증:** DGX/GB10, 실제 GPU 모델 추론, 새 그래프의 vLLM 실서버 번역,
+  실제 ComfyUI UI/API 실행, 실물 만화의 손글씨/효과음 스타일 재현 품질.
+- 원본 폰트 자동 식별/학습형 형태 전이와 자동 OCR 재검증은 구현 범위에 포함하지 않는다.

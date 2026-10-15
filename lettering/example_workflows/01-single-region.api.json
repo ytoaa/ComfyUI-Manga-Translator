@@ -1,0 +1,133 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "manga-lettering-demo/original.png"
+    }
+  },
+  "2": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "manga-lettering-demo/cleaned.png"
+    }
+  },
+  "3": {
+    "class_type": "LoadImageMask",
+    "inputs": {
+      "image": "manga-lettering-demo/source_mask.png",
+      "channel": "red"
+    }
+  },
+  "4": {
+    "class_type": "MangaLetterRegion",
+    "inputs": {
+      "x": 85,
+      "y": 95,
+      "width": 420,
+      "height": 150,
+      "original": [
+        "1",
+        0
+      ],
+      "cleaned": [
+        "2",
+        0
+      ],
+      "source_mask": [
+        "3",
+        0
+      ]
+    }
+  },
+  "5": {
+    "class_type": "MangaLetterAnalyze",
+    "inputs": {
+      "polarity": "auto",
+      "difference_threshold": 0.07,
+      "reference": [
+        "4",
+        0
+      ],
+      "cleaned": [
+        "4",
+        1
+      ],
+      "source_mask": [
+        "4",
+        2
+      ]
+    }
+  },
+  "6": {
+    "class_type": "MangaLetterStyleAdjust",
+    "inputs": {
+      "foreground": "auto",
+      "outline_color": "auto",
+      "outline_width": -1.0,
+      "weight_px": 0.0,
+      "texture_strength": 1.0,
+      "shadow_x": 0.0,
+      "shadow_y": 0.0,
+      "shadow_blur": 0.0,
+      "shadow_color": "#000000",
+      "style": [
+        "5",
+        0
+      ]
+    }
+  },
+  "7": {
+    "class_type": "MangaLetterRender",
+    "inputs": {
+      "text": "정말 괜찮아?",
+      "font_name": "NanumGothic-Regular.ttf",
+      "direction": "horizontal",
+      "alignment": "center",
+      "min_font": 10,
+      "max_font": 72,
+      "padding": 12,
+      "line_spacing": 1.0,
+      "tracking": 0.0,
+      "rotation": 0.0,
+      "shear": 0.0,
+      "supersample": 2,
+      "max_lines": 1,
+      "style": [
+        "6",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "MangaLetterComposite",
+    "inputs": {
+      "opacity": 1.0,
+      "cleaned_page": [
+        "2",
+        0
+      ],
+      "lettering": [
+        "7",
+        0
+      ],
+      "lettering_alpha": [
+        "7",
+        1
+      ],
+      "placement": [
+        "4",
+        3
+      ]
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "manga_lettering/manual",
+      "images": [
+        "8",
+        0
+      ]
+    }
+  }
+}

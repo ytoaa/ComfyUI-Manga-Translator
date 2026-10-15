@@ -4,6 +4,12 @@ ComfyUI에서 원문 검출 → OCR → 번역 → 이미지 모델 편집 → �
 
 **현재 상태: 로컬 구조·계약 검사 대상인 초기 버전. 실제 ComfyUI 가져오기, GPU OCR/검출, 번역 서버, 이미지 편집 결과는 이 패키지로 아직 실행 검증하지 않았다.** 검증 범위는 [VALIDATION.md](VALIDATION.md)에 기록한다. 선행 프로젝트와 엔진 비교는 [조사 문서](docs/reference-research.md)에 있다.
 
+## 원본 참조 스타일 식자 추가
+
+원본 잉크색·외곽선·미세 질감을 측정하고 실제 한글 폰트로 번역문을 그리는 **스타일 식자 노드 11개와 예제 6개**를 추가했다. 가로/세로쓰기, 글자 크기 맞춤, 최대 행/열 수, 회전·기울기·그림자를 조절한다. 최종 합성은 원문 마스크가 아니라 새 번역문 알파를 사용한다. **원본 폰트 자동 복제 모델은 아니며** 실제 만화 품질과 GPU 실행은 미검증이다.
+
+기존 01/02 그래프는 그대로 유지한다. 추가 전체 흐름은 `lettering/example_workflows/05-rfdetr-ocr-cleanup-lettering.json`과 `06-manual-ocr-cleanup-lettering.json`이다. 기존 검출/OCR/번역 JSON을 그대로 연결하되 Qwen에는 원문 제거만 맡기고, 번역문 생성은 별도 식자 단계가 담당한다. 모델 없이 확인할 합성 테스트 입력·워크플로도 포함했다. 설치·사용·제약은 [스타일 식자 안내](docs/style-lettering.md)를 참고한다.
+
 ## 설치
 
 1. 이 저장소 폴더를 `ComfyUI/custom_nodes/ComfyUI-Manga-Translator`에 둔다. 저장소 루트의 `__init__.py`가 바로 보이는 구조다.
