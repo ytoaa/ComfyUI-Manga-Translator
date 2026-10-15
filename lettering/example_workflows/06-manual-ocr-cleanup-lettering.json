@@ -1,6 +1,6 @@
 {
   "id": "77f697fc-4b55-5998-a7b7-f93d63faf3cb",
-  "revision": 0,
+  "revision": 1,
   "last_node_id": 27,
   "last_link_id": 36,
   "nodes": [
@@ -545,12 +545,10 @@
         "Node name for S&R": "LoadImage"
       },
       "widgets_values": [
-        "",
-        "image"
+        ""
       ],
       "widgets_values_named": {
-        "image": "",
-        "upload": "image"
+        "image": ""
       },
       "title": "① 원본 이미지"
     },
@@ -1128,7 +1126,7 @@
       ],
       "size": [
         330,
-        150
+        120
       ],
       "flags": {},
       "order": 24,
@@ -1142,10 +1140,12 @@
         {
           "name": "translated_json",
           "type": "STRING",
-          "link": 32,
-          "widget": {
-            "name": "translated_json"
-          }
+          "link": 32
+        },
+        {
+          "name": "text_pixel_mask",
+          "type": "MASK",
+          "link": null
         }
       ],
       "outputs": [
@@ -1168,12 +1168,10 @@
         "Node name for S&R": "MangaLetterPrepare"
       },
       "widgets_values": [
-        "",
         12,
         "{}"
       ],
       "widgets_values_named": {
-        "translated_json": "",
         "region_padding": 12,
         "region_options_json": "{}"
       },
@@ -1573,7 +1571,8 @@
         20,
         20
       ]
-    }
+    },
+    "frontendVersion": "1.53.10"
   },
   "version": 0.4
 }

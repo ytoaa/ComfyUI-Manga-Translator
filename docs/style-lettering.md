@@ -15,6 +15,18 @@ Koharu 실행파일·Rust 식자 엔진·별도 Koharu Remote 저장소는 필�
 
 ## 설치와 예제 입력
 
+2026-10-15 수정: 연결 전용 JSON/문자열 입력에 `forceInput`을 명시하고 모든 예제의
+`widgets_values` 순서를 노드 선언과 맞췄다. 기존 파일에서는 번역 노드의 `Korean`이
+model로 들어가고 토큰 수·timeout이 밀릴 수 있었다. 저장된 잘못된 캔버스를 그대로
+계속 쓰지 말고, 저장소 업데이트 → ComfyUI 재시작 → 브라우저 새로고침 후 제공된
+일반 `.json`을 다시 가져온다. 개인 번역 URL·모델·이미지 선택은 다시 확인한다.
+
+기본 노드 우선 원칙: 01/03/04의 영역 크롭은 기본 `ImageCrop` 두 개와 `CropMask`,
+좌표 공유는 기본 `PrimitiveInt`, 최종 합성은 기본 `ImageCompositeMasked`를 사용한다.
+좌표 Int 노드는 `fixed`로 유지한다. 이전 `MangaLetterRegion`/`MangaLetterComposite`는
+기존 저장 파일 호환용 deprecated 노드이며 새 예제에서는 사용하지 않는다.
+스타일 분석·한글 렌더링·영역 JSON 연결·다중 영역 식자만 전용 노드에서 수행한다.
+
 기존 설치된 이 저장소를 업데이트하고 ComfyUI를 재시작한다. 추가 CPU 라이브러리는 `scipy`, `fonttools`이며 기존 ComfyUI 환경에 있으면 설치할 필요가 없다. torch/CUDA/Transformers를 교체하는 명령은 실행하지 않는다. 직접 확인하려면 ComfyUI의 Python으로 `import scipy, fontTools`를 실행한다.
 
 동봉 나눔고딕 Regular/Bold는 한글·영문용이다. 다른 한글 폰트는 `ComfyUI/models/fonts/` 아래에 두고 재시작하면 선택 목록에 나온다. 동봉 폰트를 원본 일본어 폰트로 가정하지 않는다. 스타일 참조는 원본 이미지 픽셀에서 읽는다.
@@ -75,7 +87,7 @@ Qwen의 배경 복원 오류는 이 식자 단계가 고쳐 주지 않는다. �
 
 04는 기존 Qwen Image 2.1 Turbo INT8, Qwen3-VL 인코더, VAE, 8-step sigma, Euler, CFG 1을 재사용한다. 별도 가중치 다운로드는 없다. 참조 1은 원본 글자 크롭, 참조 2는 정확한 한글 렌더링이다. 이미지 모델이 만든 글자를 직접 붙이지 않고 **기본 글자 내부의 제한된 미세 밝기 변화만** 가져온다. 기본 획 모양·색·외곽선·알파는 유지한다.
 
-따라서 원본 글자의 손글씨 형태를 새로 복제하는 TextCtrl/AnyText 모델 구현이 아니다. Qwen이 만드는 새로운 글자 모양·배경·색을 그대로 채택하지 않는다. `strength=0`은 기본 렌더링 그대로이고 `max_shift`로 밝기 변화량을 제한한다. 영역 크기를 바꾸면 후보의 `ImageScale.width/height`도 동일하게 맞춘다.
+따라서 원본 글자의 손글씨 형태를 새로 복제하는 TextCtrl/AnyText 모델 구현이 아니다. Qwen이 만드는 새로운 글자 모양·배경·색을 그대로 채택하지 않는다. `strength=0`은 기본 렌더링 그대로이고 `max_shift`로 밝기 변화량을 제한한다. 영역 크기 Int의 width/height가 크롭과 후보의 ImageScale에 공유된다.
 
 **GPU/실제 ComfyUI 실행과 실물 만화 스타일 품질은 미검증이다.** CPU 폰트/픽셀 처리와 그래프 연결 검사 범위는 `VALIDATION.md`를 참고한다.
 

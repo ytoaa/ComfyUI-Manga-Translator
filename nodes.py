@@ -185,7 +185,7 @@ class MangaRegionCrops:
 class MangaCollectOCR:
     @classmethod
     def INPUT_TYPES(cls):
-        return {'required': {'text': ('STRING',), 'manifest_json': ('STRING',)}}
+        return {'required': {'text': ('STRING', {'forceInput': True}), 'manifest_json': ('STRING', {'forceInput': True})}}
     INPUT_IS_LIST = True
     RETURN_TYPES = ('STRING',)
     RETURN_NAMES = ('ocr_json',)
@@ -206,7 +206,7 @@ class MangaCollectOCR:
 class MangaTranslate:
     @classmethod
     def INPUT_TYPES(cls):
-        return {'required': {'ocr_json': ('STRING',), 'base_url': ('STRING', {'default':'http://127.0.0.1:8000/v1'}),
+        return {'required': {'ocr_json': ('STRING', {'forceInput': True}), 'base_url': ('STRING', {'default':'http://127.0.0.1:8000/v1'}),
                              'model': ('STRING', {'default':''}), 'target_language': ('STRING', {'default':'Korean'}),
                              'api_key_env': ('STRING', {'default':'MANGA_LLM_API_KEY'}),
                              'max_tokens': ('INT', {'default':4096,'min':256,'max':16384}),
@@ -249,7 +249,7 @@ class MangaTranslate:
 class MangaEditPrompt:
     @classmethod
     def INPUT_TYPES(cls):
-        return {'required': {'translated_json': ('STRING',),
+        return {'required': {'translated_json': ('STRING', {'forceInput': True}),
                              'instructions': ('STRING', {'multiline':True,'default':'Preserve the original lettering style, relative title/body sizes, alignment, and paragraph separation. Keep all illustrations, gray panels, speech-bubble outlines, and composition unchanged. Do not add new balloons or solid text backgrounds.'})}}
     RETURN_TYPES = ('STRING',)
     RETURN_NAMES = ('edit_prompt',)
@@ -277,7 +277,7 @@ class MangaEditPrompt:
 class MangaSaveReview:
     @classmethod
     def INPUT_TYPES(cls):
-        return {'required': {'translated_json': ('STRING',), 'filename_prefix': ('STRING', {'default':'manga_translator/review'})}}
+        return {'required': {'translated_json': ('STRING', {'forceInput': True}), 'filename_prefix': ('STRING', {'default':'manga_translator/review'})}}
     RETURN_TYPES = ('STRING',)
     RETURN_NAMES = ('translated_json',)
     OUTPUT_NODE = True

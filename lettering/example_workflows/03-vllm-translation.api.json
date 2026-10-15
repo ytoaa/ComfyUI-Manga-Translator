@@ -19,46 +19,124 @@
     }
   },
   "4": {
-    "class_type": "MangaLetterRegion",
+    "class_type": "PrimitiveInt",
     "inputs": {
-      "x": 85,
-      "y": 95,
-      "width": 420,
-      "height": 150,
-      "original": [
+      "value": 85
+    }
+  },
+  "5": {
+    "class_type": "PrimitiveInt",
+    "inputs": {
+      "value": 95
+    }
+  },
+  "6": {
+    "class_type": "PrimitiveInt",
+    "inputs": {
+      "value": 420
+    }
+  },
+  "7": {
+    "class_type": "PrimitiveInt",
+    "inputs": {
+      "value": 150
+    }
+  },
+  "8": {
+    "class_type": "ImageCrop",
+    "inputs": {
+      "width": [
+        "6",
+        0
+      ],
+      "height": [
+        "7",
+        0
+      ],
+      "x": [
+        "4",
+        0
+      ],
+      "y": [
+        "5",
+        0
+      ],
+      "image": [
         "1",
         0
-      ],
-      "cleaned": [
-        "2",
+      ]
+    }
+  },
+  "9": {
+    "class_type": "ImageCrop",
+    "inputs": {
+      "width": [
+        "6",
         0
       ],
-      "source_mask": [
+      "height": [
+        "7",
+        0
+      ],
+      "x": [
+        "4",
+        0
+      ],
+      "y": [
+        "5",
+        0
+      ],
+      "image": [
+        "2",
+        0
+      ]
+    }
+  },
+  "10": {
+    "class_type": "CropMask",
+    "inputs": {
+      "x": [
+        "4",
+        0
+      ],
+      "y": [
+        "5",
+        0
+      ],
+      "width": [
+        "6",
+        0
+      ],
+      "height": [
+        "7",
+        0
+      ],
+      "mask": [
         "3",
         0
       ]
     }
   },
-  "5": {
+  "11": {
     "class_type": "MangaLetterAnalyze",
     "inputs": {
       "polarity": "auto",
       "difference_threshold": 0.07,
       "reference": [
-        "4",
+        "8",
         0
       ],
       "cleaned": [
-        "4",
-        1
+        "9",
+        0
       ],
       "source_mask": [
-        "4",
-        2
+        "10",
+        0
       ]
     }
   },
-  "6": {
+  "12": {
     "class_type": "MangaLetterStyleAdjust",
     "inputs": {
       "foreground": "auto",
@@ -71,16 +149,16 @@
       "shadow_blur": 0.0,
       "shadow_color": "#000000",
       "style": [
-        "5",
+        "11",
         0
       ]
     }
   },
-  "7": {
+  "13": {
     "class_type": "MangaLetterRender",
     "inputs": {
       "text": [
-        "10",
+        "16",
         0
       ],
       "font_name": "NanumGothic-Regular.ttf",
@@ -96,44 +174,48 @@
       "supersample": 2,
       "max_lines": 1,
       "style": [
-        "6",
+        "12",
         0
       ]
     }
   },
-  "8": {
-    "class_type": "MangaLetterComposite",
+  "14": {
+    "class_type": "ImageCompositeMasked",
     "inputs": {
-      "opacity": 1.0,
-      "cleaned_page": [
+      "x": [
+        "4",
+        0
+      ],
+      "y": [
+        "5",
+        0
+      ],
+      "resize_source": false,
+      "destination": [
         "2",
         0
       ],
-      "lettering": [
-        "7",
+      "source": [
+        "13",
         0
       ],
-      "lettering_alpha": [
-        "7",
+      "mask": [
+        "13",
         1
-      ],
-      "placement": [
-        "4",
-        3
       ]
     }
   },
-  "9": {
+  "15": {
     "class_type": "SaveImage",
     "inputs": {
       "filename_prefix": "manga_lettering/vllm",
       "images": [
-        "8",
+        "14",
         0
       ]
     }
   },
-  "10": {
+  "16": {
     "class_type": "MangaLetterTranslate",
     "inputs": {
       "source_text": "Are you okay?",

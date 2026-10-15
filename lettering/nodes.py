@@ -28,6 +28,9 @@ def field(kind, tooltip, **options):
 
 
 class MangaLetterRegion:
+    # Retained only so previously saved workflows can still load. New examples
+    # use native ImageCrop / CropMask with shared PrimitiveInt coordinates.
+    DEPRECATED = True
     DESCRIPTION = '원본·지운 배경·원문 마스크를 같은 좌표로 잘라 스타일 참조와 최종 배치 정보를 만듭니다. 원본을 지우기 전에 보존하세요.'
     CATEGORY = 'Manga Translator/스타일 식자'
     @classmethod
@@ -118,6 +121,8 @@ class MangaLetterRender:
 
 
 class MangaLetterComposite:
+    # New examples use the native ImageCompositeMasked node.
+    DEPRECATED = True
     DESCRIPTION = '번역문 자신의 알파로 지운 배경에 합성합니다. 원문 마스크와 교차하지 않으므로 달라진 한글 획이 잘리지 않습니다. 알파 밖 픽셀은 그대로 유지합니다.'
     CATEGORY = 'Manga Translator/스타일 식자'
     @classmethod
@@ -207,7 +212,7 @@ class MangaLetterPrepare:
     def INPUT_TYPES(cls):
         return {'required': {
             'original': field('IMAGE', '기존 LoadImage의 원본 페이지'),
-            'translated_json': field('STRING', '기존 번역 노드 또는 번역 검수 저장 노드의 JSON'),
+            'translated_json': field('STRING', '기존 번역 노드 또는 번역 검수 저장 노드의 JSON', forceInput=True),
             'region_padding': field('INT', 'edit_bbox_pixels가 없는 수동 JSON에 적용할 여백(px)', default=12, min=0, max=128),
             'region_options_json': field('STRING', '영역 ID별 선택 설정. 예: {"r1":{"font":"NanumGothic-Regular.ttf","layout":{"rotation":5},"style":{"outline_width":2}}}', default='{}', multiline=True)},
                 'optional': {'text_pixel_mask': field('MASK', '선택: 정확한 원문 획 마스크가 있으면 스타일 참조를 제한합니다. 없으면 편집 사각형 내부에서 원본/배경 차이를 측정합니다.')}}
@@ -257,7 +262,7 @@ class MangaCleanupPrompt:
     @classmethod
     def INPUT_TYPES(cls):
         return {'required': {
-            'translated_json': field('STRING', '기존 OCR·번역 영역 JSON'),
+            'translated_json': field('STRING', '기존 OCR·번역 영역 JSON', forceInput=True),
             'instructions': field('STRING', '추가 배경 보존 지시', default='Preserve original artwork, speech bubble borders, screen tones, colors, gradients and texture. Do not add any lettering or a solid replacement background.', multiline=True)}}
     RETURN_TYPES = ('STRING',)
     RETURN_NAMES = ('원문_제거_지시문',)

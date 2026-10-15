@@ -1,8 +1,8 @@
 {
   "id": "e50609ce-dcf8-5267-8cc2-813f4d7a394d",
-  "revision": 0,
-  "last_node_id": 10,
-  "last_link_id": 13,
+  "revision": 1,
+  "last_node_id": 16,
+  "last_link_id": 26,
   "nodes": [
     {
       "id": 1,
@@ -37,12 +37,10 @@
         "Node name for S&R": "LoadImage"
       },
       "widgets_values": [
-        "manga-lettering-demo/original.png",
-        "image"
+        "manga-lettering-demo/original.png"
       ],
       "widgets_values_named": {
-        "image": "manga-lettering-demo/original.png",
-        "upload": "image"
+        "image": "manga-lettering-demo/original.png"
       },
       "title": "① 원본 · 지우기 전"
     },
@@ -66,8 +64,8 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            2,
-            9
+            6,
+            21
           ]
         },
         {
@@ -80,12 +78,10 @@
         "Node name for S&R": "LoadImage"
       },
       "widgets_values": [
-        "manga-lettering-demo/cleaned.png",
-        "image"
+        "manga-lettering-demo/cleaned.png"
       ],
       "widgets_values_named": {
-        "image": "manga-lettering-demo/cleaned.png",
-        "upload": "image"
+        "image": "manga-lettering-demo/cleaned.png"
       },
       "title": "② 원문 제거 결과"
     },
@@ -109,7 +105,7 @@
           "name": "MASK",
           "type": "MASK",
           "links": [
-            3
+            11
           ]
         }
       ],
@@ -118,21 +114,177 @@
       },
       "widgets_values": [
         "manga-lettering-demo/source_mask.png",
-        "red",
-        "image"
+        "red"
       ],
       "widgets_values_named": {
         "image": "manga-lettering-demo/source_mask.png",
-        "channel": "red",
-        "upload": "image"
+        "channel": "red"
       },
       "title": "③ 원문 마스크 · 흰색=글자"
     },
     {
       "id": 4,
-      "type": "MangaLetterRegion",
+      "type": "PrimitiveInt",
       "pos": [
         390,
+        0
+      ],
+      "size": [
+        330,
+        120
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "links": [
+            2,
+            7,
+            12,
+            24
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        85,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 85,
+        "control_after_generate": "fixed"
+      },
+      "title": "영역 x"
+    },
+    {
+      "id": 5,
+      "type": "PrimitiveInt",
+      "pos": [
+        390,
+        160
+      ],
+      "size": [
+        330,
+        120
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "links": [
+            3,
+            8,
+            13,
+            25
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        95,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 95,
+        "control_after_generate": "fixed"
+      },
+      "title": "영역 y"
+    },
+    {
+      "id": 6,
+      "type": "PrimitiveInt",
+      "pos": [
+        390,
+        320
+      ],
+      "size": [
+        330,
+        120
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "links": [
+            4,
+            9,
+            14
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        420,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 420,
+        "control_after_generate": "fixed"
+      },
+      "title": "영역 width"
+    },
+    {
+      "id": 7,
+      "type": "PrimitiveInt",
+      "pos": [
+        390,
+        480
+      ],
+      "size": [
+        330,
+        120
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "links": [
+            5,
+            10,
+            15
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        150,
+        "fixed"
+      ],
+      "widgets_values_named": {
+        "value": 150,
+        "control_after_generate": "fixed"
+      },
+      "title": "영역 height"
+    },
+    {
+      "id": 8,
+      "type": "ImageCrop",
+      "pos": [
+        790,
         0
       ],
       "size": [
@@ -140,57 +292,216 @@
         180
       ],
       "flags": {},
-      "order": 3,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
-          "name": "original",
+          "name": "image",
           "type": "IMAGE",
           "link": 1
         },
         {
-          "name": "cleaned",
-          "type": "IMAGE",
-          "link": 2
+          "name": "x",
+          "type": "INT",
+          "link": 2,
+          "widget": {
+            "name": "x"
+          }
         },
         {
-          "name": "source_mask",
-          "type": "MASK",
-          "link": 3
+          "name": "y",
+          "type": "INT",
+          "link": 3,
+          "widget": {
+            "name": "y"
+          }
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "link": 4,
+          "widget": {
+            "name": "width"
+          }
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": 5,
+          "widget": {
+            "name": "height"
+          }
         }
       ],
       "outputs": [
         {
-          "name": "원본_글자_참조",
+          "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            4
-          ]
-        },
-        {
-          "name": "지운_배경_크롭",
-          "type": "IMAGE",
-          "links": [
-            5
-          ]
-        },
-        {
-          "name": "원문_마스크_크롭",
-          "type": "MASK",
-          "links": [
-            6
-          ]
-        },
-        {
-          "name": "페이지_배치",
-          "type": "MANGA_LETTER_PLACEMENT",
-          "links": [
-            12
+            16
           ]
         }
       ],
       "properties": {
-        "Node name for S&R": "MangaLetterRegion"
+        "Node name for S&R": "ImageCrop"
+      },
+      "widgets_values": [
+        420,
+        150,
+        85,
+        95
+      ],
+      "widgets_values_named": {
+        "width": 420,
+        "height": 150,
+        "x": 85,
+        "y": 95
+      },
+      "title": "reference · 기본 크롭"
+    },
+    {
+      "id": 9,
+      "type": "ImageCrop",
+      "pos": [
+        790,
+        250
+      ],
+      "size": [
+        330,
+        180
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 6
+        },
+        {
+          "name": "x",
+          "type": "INT",
+          "link": 7,
+          "widget": {
+            "name": "x"
+          }
+        },
+        {
+          "name": "y",
+          "type": "INT",
+          "link": 8,
+          "widget": {
+            "name": "y"
+          }
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "link": 9,
+          "widget": {
+            "name": "width"
+          }
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": 10,
+          "widget": {
+            "name": "height"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            17
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ImageCrop"
+      },
+      "widgets_values": [
+        420,
+        150,
+        85,
+        95
+      ],
+      "widgets_values_named": {
+        "width": 420,
+        "height": 150,
+        "x": 85,
+        "y": 95
+      },
+      "title": "cleaned · 기본 크롭"
+    },
+    {
+      "id": 10,
+      "type": "CropMask",
+      "pos": [
+        790,
+        500
+      ],
+      "size": [
+        330,
+        180
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 11
+        },
+        {
+          "name": "x",
+          "type": "INT",
+          "link": 12,
+          "widget": {
+            "name": "x"
+          }
+        },
+        {
+          "name": "y",
+          "type": "INT",
+          "link": 13,
+          "widget": {
+            "name": "y"
+          }
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "link": 14,
+          "widget": {
+            "name": "width"
+          }
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": 15,
+          "widget": {
+            "name": "height"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": [
+            18
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CropMask"
       },
       "widgets_values": [
         85,
@@ -204,13 +515,13 @@
         "width": 420,
         "height": 150
       },
-      "title": "원본 글자 영역 추출 · Manga"
+      "title": "source_mask · 기본 크롭"
     },
     {
-      "id": 5,
+      "id": 11,
       "type": "MangaLetterAnalyze",
       "pos": [
-        790,
+        1190,
         0
       ],
       "size": [
@@ -218,23 +529,23 @@
         120
       ],
       "flags": {},
-      "order": 4,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
           "name": "reference",
           "type": "IMAGE",
-          "link": 4
+          "link": 16
         },
         {
           "name": "cleaned",
           "type": "IMAGE",
-          "link": 5
+          "link": 17
         },
         {
           "name": "source_mask",
           "type": "MASK",
-          "link": 6
+          "link": 18
         }
       ],
       "outputs": [
@@ -242,7 +553,7 @@
           "name": "측정_스타일",
           "type": "MANGA_LETTER_STYLE",
           "links": [
-            7
+            19
           ]
         },
         {
@@ -265,10 +576,10 @@
       "title": "원본 글자 스타일 분석 · Manga"
     },
     {
-      "id": 6,
+      "id": 12,
       "type": "MangaLetterStyleAdjust",
       "pos": [
-        1190,
+        1590,
         0
       ],
       "size": [
@@ -276,13 +587,13 @@
         330
       ],
       "flags": {},
-      "order": 5,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
           "name": "style",
           "type": "MANGA_LETTER_STYLE",
-          "link": 7
+          "link": 19
         }
       ],
       "outputs": [
@@ -290,7 +601,7 @@
           "name": "적용_스타일",
           "type": "MANGA_LETTER_STYLE",
           "links": [
-            8
+            20
           ]
         }
       ],
@@ -322,10 +633,10 @@
       "title": "글자 스타일 조절 · Manga"
     },
     {
-      "id": 7,
+      "id": 13,
       "type": "MangaLetterRender",
       "pos": [
-        1590,
+        1990,
         0
       ],
       "size": [
@@ -333,13 +644,13 @@
         450
       ],
       "flags": {},
-      "order": 6,
+      "order": 12,
       "mode": 0,
       "inputs": [
         {
           "name": "style",
           "type": "MANGA_LETTER_STYLE",
-          "link": 8
+          "link": 20
         }
       ],
       "outputs": [
@@ -347,14 +658,14 @@
           "name": "번역문_RGB",
           "type": "IMAGE",
           "links": [
-            10
+            22
           ]
         },
         {
           "name": "번역문_알파",
           "type": "MASK",
           "links": [
-            11
+            23
           ]
         },
         {
@@ -399,71 +710,81 @@
       "title": "번역문 스타일 렌더링 · Manga"
     },
     {
-      "id": 8,
-      "type": "MangaLetterComposite",
+      "id": 14,
+      "type": "ImageCompositeMasked",
       "pos": [
-        2020,
+        2420,
         0
       ],
       "size": [
         330,
-        100
+        150
       ],
       "flags": {},
-      "order": 7,
+      "order": 13,
       "mode": 0,
       "inputs": [
         {
-          "name": "cleaned_page",
+          "name": "destination",
           "type": "IMAGE",
-          "link": 9
+          "link": 21
         },
         {
-          "name": "lettering",
+          "name": "source",
           "type": "IMAGE",
-          "link": 10
+          "link": 22
         },
         {
-          "name": "lettering_alpha",
+          "name": "mask",
           "type": "MASK",
-          "link": 11
+          "link": 23
         },
         {
-          "name": "placement",
-          "type": "MANGA_LETTER_PLACEMENT",
-          "link": 12
+          "name": "x",
+          "type": "INT",
+          "link": 24,
+          "widget": {
+            "name": "x"
+          }
+        },
+        {
+          "name": "y",
+          "type": "INT",
+          "link": 25,
+          "widget": {
+            "name": "y"
+          }
         }
       ],
       "outputs": [
         {
-          "name": "최종_페이지",
+          "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            13
+            26
           ]
-        },
-        {
-          "name": "새_글자_페이지_알파",
-          "type": "MASK",
-          "links": []
         }
       ],
       "properties": {
-        "Node name for S&R": "MangaLetterComposite"
+        "Node name for S&R": "ImageCompositeMasked"
       },
       "widgets_values": [
-        1.0
+        85,
+        95,
+        false
       ],
       "widgets_values_named": {
-        "opacity": 1.0
+        "x": 85,
+        "y": 95,
+        "resize_source": false
       },
-      "title": "번역문 최종 합성 · Manga"
+      "title": "기본 노드 · 새 글자 알파 합성"
     },
     {
-      "id": 9,
+      "id": 15,
       "type": "SaveImage",
       "pos": [
-        2440,
+        2840,
         0
       ],
       "size": [
@@ -471,13 +792,13 @@
         100
       ],
       "flags": {},
-      "order": 8,
+      "order": 14,
       "mode": 0,
       "inputs": [
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 13
+          "link": 26
         }
       ],
       "outputs": [],
@@ -493,24 +814,24 @@
       "title": "SaveImage"
     },
     {
-      "id": 10,
+      "id": 16,
       "type": "Note",
       "pos": [
-        390,
-        550
+        790,
+        850
       ],
       "size": [
         500,
         270
       ],
       "flags": {},
-      "order": 9,
+      "order": 15,
       "mode": 0,
       "inputs": [],
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "설치 스크립트가 입력 예제를 ComfyUI/input/manga-lettering-demo에 복사합니다.\n실제 작업: 원본·지운 배경·원문 마스크 선택 → 원본 좌표로 영역 지정 → 번역문/폰트/스타일 조절.\n글자 알파는 원문 마스크와 별개입니다. 이 그래프를 기존 01/02 모델 편집 그래프와 별도로 수동 식자를 검증할 수 있습니다.\n원본 폰트 자동 복제/학습형 스타일 전이는 포함하지 않습니다."
+        "설치 스크립트가 입력 예제를 ComfyUI/input/manga-lettering-demo에 복사합니다.\n실제 작업: 원본·지운 배경·원문 마스크 선택 → 원본 좌표로 영역 지정 → 번역문/폰트/스타일 조절.\n글자 알파는 원문 마스크와 별개입니다. 이 그래프를 기존 01/02 모델 편집 그래프와 별도로 수동 식자를 검증할 수 있습니다.\n좌표는 기본 Int 노드 4개에서 한 번 설정하며 기본 ImageCrop/CropMask/합성에 공유합니다.\n원본 폰트 자동 복제/학습형 스타일 전이는 포함하지 않습니다."
       ]
     }
   ],
@@ -519,103 +840,207 @@
       1,
       1,
       0,
-      4,
+      8,
       0,
       "IMAGE"
     ],
     [
       2,
-      2,
-      0,
       4,
+      0,
+      8,
       1,
-      "IMAGE"
+      "INT"
     ],
     [
       3,
-      3,
+      5,
       0,
-      4,
+      8,
       2,
-      "MASK"
+      "INT"
     ],
     [
       4,
-      4,
+      6,
       0,
-      5,
-      0,
-      "IMAGE"
+      8,
+      3,
+      "INT"
     ],
     [
       5,
+      7,
+      0,
+      8,
       4,
-      1,
-      5,
-      1,
-      "IMAGE"
+      "INT"
     ],
     [
       6,
-      4,
       2,
-      5,
-      2,
-      "MASK"
+      0,
+      9,
+      0,
+      "IMAGE"
     ],
     [
       7,
-      5,
+      4,
       0,
-      6,
-      0,
-      "MANGA_LETTER_STYLE"
+      9,
+      1,
+      "INT"
     ],
     [
       8,
-      6,
+      5,
       0,
-      7,
-      0,
-      "MANGA_LETTER_STYLE"
+      9,
+      2,
+      "INT"
     ],
     [
       9,
-      2,
+      6,
       0,
-      8,
-      0,
-      "IMAGE"
+      9,
+      3,
+      "INT"
     ],
     [
       10,
       7,
       0,
-      8,
-      1,
-      "IMAGE"
+      9,
+      4,
+      "INT"
     ],
     [
       11,
-      7,
-      1,
-      8,
-      2,
+      3,
+      0,
+      10,
+      0,
       "MASK"
     ],
     [
       12,
       4,
-      3,
-      8,
-      3,
-      "MANGA_LETTER_PLACEMENT"
+      0,
+      10,
+      1,
+      "INT"
     ],
     [
       13,
+      5,
+      0,
+      10,
+      2,
+      "INT"
+    ],
+    [
+      14,
+      6,
+      0,
+      10,
+      3,
+      "INT"
+    ],
+    [
+      15,
+      7,
+      0,
+      10,
+      4,
+      "INT"
+    ],
+    [
+      16,
       8,
       0,
+      11,
+      0,
+      "IMAGE"
+    ],
+    [
+      17,
       9,
+      0,
+      11,
+      1,
+      "IMAGE"
+    ],
+    [
+      18,
+      10,
+      0,
+      11,
+      2,
+      "MASK"
+    ],
+    [
+      19,
+      11,
+      0,
+      12,
+      0,
+      "MANGA_LETTER_STYLE"
+    ],
+    [
+      20,
+      12,
+      0,
+      13,
+      0,
+      "MANGA_LETTER_STYLE"
+    ],
+    [
+      21,
+      2,
+      0,
+      14,
+      0,
+      "IMAGE"
+    ],
+    [
+      22,
+      13,
+      0,
+      14,
+      1,
+      "IMAGE"
+    ],
+    [
+      23,
+      13,
+      1,
+      14,
+      2,
+      "MASK"
+    ],
+    [
+      24,
+      4,
+      0,
+      14,
+      3,
+      "INT"
+    ],
+    [
+      25,
+      5,
+      0,
+      14,
+      4,
+      "INT"
+    ],
+    [
+      26,
+      14,
+      0,
+      15,
       0,
       "IMAGE"
     ]
@@ -629,7 +1054,8 @@
         20,
         20
       ]
-    }
+    },
+    "frontendVersion": "1.53.10"
   },
   "version": 0.4
 }

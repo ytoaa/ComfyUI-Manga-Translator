@@ -284,14 +284,14 @@
   "25": {
     "class_type": "MangaLetterPrepare",
     "inputs": {
-      "translated_json": [
-        "19",
-        0
-      ],
       "region_padding": 12,
       "region_options_json": "{}",
       "original": [
         "11",
+        0
+      ],
+      "translated_json": [
+        "19",
         0
       ]
     }

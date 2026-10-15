@@ -6,6 +6,8 @@ from pathlib import Path
 import sys
 import uuid
 
+from workflow_widgets import normalize_workflow, widget_field
+
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
@@ -88,6 +90,14 @@ def demo():
 
 
 CORE_SCHEMAS = {
+    'PrimitiveInt': {'required': {'value': ('INT', {'default': 0, 'control_after_generate': True})}},
+    'ImageCrop': {'required': {'image': ('IMAGE',), 'width': ('INT', {'default': 512}),
+                              'height': ('INT', {'default': 512}), 'x': ('INT', {'default': 0}), 'y': ('INT', {'default': 0})}},
+    'CropMask': {'required': {'mask': ('MASK',), 'x': ('INT', {'default': 0}), 'y': ('INT', {'default': 0}),
+                             'width': ('INT', {'default': 512}), 'height': ('INT', {'default': 512})}},
+    'ImageCompositeMasked': {'required': {'destination': ('IMAGE',), 'source': ('IMAGE',),
+        'x': ('INT', {'default': 0}), 'y': ('INT', {'default': 0}), 'resize_source': ('BOOLEAN', {'default': False})},
+        'optional': {'mask': ('MASK',)}},
     'LoadImage': {'required': {'image': ([''], {'default': ''}), 'upload': ('STRING', {'default': 'image'})}},
     'LoadImageMask': {'required': {'image': ([''], {'default': ''}), 'channel': (['alpha', 'red', 'green', 'blue'], {'default': 'red'}), 'upload': ('STRING', {'default': 'image'})}},
     'PreviewImage': {'required': {'images': ('IMAGE',)}},
@@ -95,7 +105,9 @@ CORE_SCHEMAS = {
     'ImageScale': {'required': {'image': ('IMAGE',), 'upscale_method': (['lanczos'], {'default': 'lanczos'}),
                               'width': ('INT', {'default': 512}), 'height': ('INT', {'default': 256}),
                               'crop': (['disabled'], {'default': 'disabled'})}}}
-CORE_RETURNS = {'LoadImage': ('IMAGE', 'MASK'), 'LoadImageMask': ('MASK',), 'PreviewImage': (), 'SaveImage': (), 'ImageScale': ('IMAGE',)}
+CORE_RETURNS = {'LoadImage': ('IMAGE', 'MASK'), 'LoadImageMask': ('MASK',), 'PreviewImage': (), 'SaveImage': (),
+                'ImageScale': ('IMAGE',), 'PrimitiveInt': ('INT',), 'ImageCrop': ('IMAGE',),
+                'CropMask': ('MASK',), 'ImageCompositeMasked': ('IMAGE',)}
 
 
 class Graph:
@@ -109,9 +121,9 @@ class Graph:
         schema = cls.INPUT_TYPES() if cls else CORE_SCHEMAS[kind]
         returns = cls.RETURN_TYPES if cls else CORE_RETURNS[kind]
         inputs, widgets, named, api = [], [], {}, {}
-        for name, field in schema['required'].items():
+        for name, field in {**schema['required'], **schema.get('optional', {})}.items():
             t, options = field[0], field[1] if len(field) > 1 else {}
-            widget = isinstance(t, list) or t in ('STRING', 'INT', 'FLOAT', 'BOOLEAN')
+            widget = widget_field(field)
             if widget:
                 default = options.get('default', t[0] if isinstance(t, list) else '')
                 val = values.get(name, default)
@@ -119,6 +131,9 @@ class Graph:
                 named[name] = val
                 # upload is a UI-only button, not an API input.
                 if name != 'upload': api[name] = val
+                if options.get('control_after_generate'):
+                    widgets.append('fixed')
+                    named['control_after_generate'] = 'fixed'
             else:
                 inputs.append({'name': name, 'type': t, 'link': None})
         node = {'id': node_id, 'type': kind, 'pos': list(pos), 'size': [330, max(100, 60+30*len(widgets))],
@@ -163,6 +178,7 @@ class Graph:
         ui = {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'manga-lettering/'+name)), 'revision': 0,
               'last_node_id': len(self.nodes), 'last_link_id': len(self.links), 'nodes': self.nodes,
               'links': self.links, 'groups': [], 'config': {}, 'extra': {'ds': {'scale': .55, 'offset': [20, 20]}}, 'version': .4}
+        ui = normalize_workflow(ui, self.prompt, module.NODE_CLASS_MAPPINGS)
         folder = PACK/'example_workflows'
         folder.mkdir(exist_ok=True)
         (folder/(name+'.json')).write_text(json.dumps(ui, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -179,26 +195,37 @@ def sources(g):
 def single(kind='manual'):
     g = Graph()
     a, b, c = sources(g)
-    region = g.add('MangaLetterRegion', {'x': 85, 'y': 95, 'width': 420, 'height': 150}, (390, 0))
-    for src, slot, name in ((a, 0, 'original'), (b, 0, 'cleaned'), (c, 0, 'source_mask')): g.connect(src, slot, region, name)
-    analyze = g.add('MangaLetterAnalyze', pos=(790, 0))
-    for slot, name in enumerate(('reference', 'cleaned', 'source_mask')): g.connect(region, slot, analyze, name)
-    adjust = g.add('MangaLetterStyleAdjust', pos=(1190, 0))
+    coords = {name: g.add('PrimitiveInt', {'value': value}, (390, i*160), '영역 '+name)
+              for i, (name, value) in enumerate({'x': 85, 'y': 95, 'width': 420, 'height': 150}.items())}
+    region = {}
+    for i, (name, src, kind_name, input_name) in enumerate((
+            ('reference', a, 'ImageCrop', 'image'), ('cleaned', b, 'ImageCrop', 'image'),
+            ('source_mask', c, 'CropMask', 'mask'))):
+        crop = g.add(kind_name, {'x': 85, 'y': 95, 'width': 420, 'height': 150}, (790, i*250), name+' · 기본 크롭')
+        g.connect(src, 0, crop, input_name)
+        for field_name, coord in coords.items(): g.connect(coord, 0, crop, field_name)
+        region[name] = crop
+    analyze = g.add('MangaLetterAnalyze', pos=(1190, 0))
+    for name, src in region.items(): g.connect(src, 0, analyze, name)
+    adjust = g.add('MangaLetterStyleAdjust', pos=(1590, 0))
     g.connect(analyze, 0, adjust, 'style')
-    render = g.add('MangaLetterRender', {'text': '정말 괜찮아?', 'font_name': 'NanumGothic-Regular.ttf', 'max_font': 72, 'padding': 12, 'max_lines': 1}, (1590, 0))
+    render = g.add('MangaLetterRender', {'text': '정말 괜찮아?', 'font_name': 'NanumGothic-Regular.ttf', 'max_font': 72, 'padding': 12, 'max_lines': 1}, (1990, 0))
     g.connect(adjust, 0, render, 'style')
-    composite = g.add('MangaLetterComposite', pos=(2020, 0))
-    g.connect(b, 0, composite, 'cleaned_page'); g.connect(render, 0, composite, 'lettering')
-    g.connect(render, 1, composite, 'lettering_alpha'); g.connect(region, 3, composite, 'placement')
-    preview = g.add('SaveImage', {'filename_prefix': 'manga_lettering/'+kind}, (2440, 0))
+    composite = g.add('ImageCompositeMasked', {'x': 85, 'y': 95, 'resize_source': False}, (2420, 0), '기본 노드 · 새 글자 알파 합성')
+    g.connect(b, 0, composite, 'destination'); g.connect(render, 0, composite, 'source')
+    g.connect(render, 1, composite, 'mask')
+    g.connect(coords['x'], 0, composite, 'x'); g.connect(coords['y'], 0, composite, 'y')
+    preview = g.add('SaveImage', {'filename_prefix': 'manga_lettering/'+kind}, (2840, 0))
     g.connect(composite, 0, preview, 'images')
     if kind == 'vllm':
-        tr = g.add('MangaLetterTranslate', {'source_text': 'Are you okay?', 'source_language': 'English'}, (1190, 600))
+        tr = g.add('MangaLetterTranslate', {'source_text': 'Are you okay?', 'source_language': 'English'}, (1590, 650))
         g.connect(tr, 0, render, 'text')
     g.note('설치 스크립트가 입력 예제를 ComfyUI/input/manga-lettering-demo에 복사합니다.\n'
            '실제 작업: 원본·지운 배경·원문 마스크 선택 → 원본 좌표로 영역 지정 → 번역문/폰트/스타일 조절.\n'
            '글자 알파는 원문 마스크와 별개입니다. 이 그래프를 기존 01/02 모델 편집 그래프와 별도로 수동 식자를 검증할 수 있습니다.\n'
-           '원본 폰트 자동 복제/학습형 스타일 전이는 포함하지 않습니다.', (390, 550))
+           '좌표는 기본 Int 노드 4개에서 한 번 설정하며 기본 ImageCrop/CropMask/합성에 공유합니다.\n'
+           '원본 폰트 자동 복제/학습형 스타일 전이는 포함하지 않습니다.', (790, 850))
+    region['coordinates'] = coords
     return g, (region, render, composite)
 
 
@@ -217,12 +244,12 @@ def build_workflows(document):
               '입력 마스크는 원문 스타일 분석에 사용하고, 최종 합성에는 새 글자 알파를 사용합니다.', (420, 450))
     page.save('02-page-regions')
     g, (region, render, composite) = single('qwen-texture')
-    ref = g.add('MangaLetterAIReference', {'text': '정말 괜찮아?', 'source_text': 'Are you okay?'}, (1590, 800))
-    g.connect(region, 0, ref, 'reference'); g.connect(render, 0, ref, 'lettering'); g.connect(render, 1, ref, 'lettering_alpha')
+    ref = g.add('MangaLetterAIReference', {'text': '정말 괜찮아?', 'source_text': 'Are you okay?'}, (1590, 950))
+    g.connect(region['reference'], 0, ref, 'reference'); g.connect(render, 0, ref, 'lettering'); g.connect(render, 1, ref, 'lettering_alpha')
     template = json.loads((ROOT/'workflows/01-rfdetr-hayai-qwen21.json').read_text())
     q = {}
-    for old, pos in [(2, (2020, 600)), (3, (2020, 800)), (4, (2020, 1000)), (6, (2400, 600)),
-                      (5, (2400, 850)), (7, (2400, 1200)), (8, (2400, 1350)), (9, (2820, 800)), (10, (3220, 800))]:
+    for old, pos in [(2, (2020, 900)), (3, (2020, 1100)), (4, (2020, 1300)), (6, (2420, 900)),
+                      (5, (2420, 1150)), (7, (2420, 1550)), (8, (2420, 1750)), (9, (2840, 950)), (10, (3260, 950))]:
         q[old] = g.import_model_node(template, old, pos)
     g.connect(q[2], 0, q[6], 'model'); g.connect(q[3], 0, q[5], 'clip'); g.connect(q[4], 0, q[5], 'vae')
     g.connect(ref, 0, q[5], 'images.image_1'); g.connect(ref, 1, q[5], 'images.image_2')
@@ -231,12 +258,13 @@ def build_workflows(document):
                              (q[7], 0, 'sampler'), (q[8], 0, 'sigmas'), (q[5], 2, 'latent_image')]:
         g.connect(src, slot, q[9], field)
     g.connect(q[9], 0, q[10], 'samples'); g.connect(q[4], 0, q[10], 'vae')
-    scale = g.add('ImageScale', {'width': 420, 'height': 150}, (3600, 800), '후보 → 식자 크기 정렬 · 영역 크기 변경 시 수정')
+    scale = g.add('ImageScale', {'width': 420, 'height': 150}, (3660, 950), '후보 → 식자 크기 정렬 · 영역 크기 공유')
     g.connect(q[10], 0, scale, 'image')
-    pigment = g.add('MangaLetterCandidateTexture', pos=(4000, 800))
+    for field_name in ('width', 'height'): g.connect(region['coordinates'][field_name], 0, scale, field_name)
+    pigment = g.add('MangaLetterCandidateTexture', pos=(4060, 950))
     g.connect(render, 0, pigment, 'lettering'); g.connect(render, 1, pigment, 'lettering_alpha'); g.connect(scale, 0, pigment, 'candidate')
     # Replace links rather than leaving stale UI edges on the composite sockets.
-    for field, slot in [('lettering', 0), ('lettering_alpha', 1)]:
+    for field, slot in [('source', 0), ('mask', 1)]:
         dest = g.nodes[composite-1]
         inp = next(i for i in dest['inputs'] if i['name'] == field)
         old_link = next(l for l in g.links if l[0] == inp['link'])
@@ -244,13 +272,13 @@ def build_workflows(document):
         old_link[1], old_link[2] = pigment, slot
         g.nodes[pigment-1]['outputs'][slot]['links'].append(old_link[0])
         g.prompt[str(composite)]['inputs'][field] = [str(pigment), slot]
-    candidate_preview = g.add('PreviewImage', pos=(3600, 1100), title='AI 후보 확인 · 페이지에 직접 붙이지 않음')
+    candidate_preview = g.add('PreviewImage', pos=(3660, 1250), title='AI 후보 확인 · 페이지에 직접 붙이지 않음')
     g.connect(scale, 0, candidate_preview, 'images')
     g.note('선택형 GPU 실험: 기존 Qwen 2.1 Turbo INT8·인코더·VAE와 8스텝을 재사용합니다.\n'
            '참조1=원본 스타일, 참조2=정확한 한글 렌더링. 생성된 후보의 미세 밝기 질감만 사용합니다.\n'
            '번역문 획/외곽선/알파는 기본 렌더링을 유지합니다. 원본 폰트 형태를 복제하는 모델은 아닙니다.\n'
            '실제 Qwen 노드/GPU 실행은 이 환경에서 미검증. 먼저 01/02를 실행하세요.\n'
-           '영역 크기를 변경하면 ImageScale의 width/height도 동일하게 맞추세요.', (2820, 1250))
+           '기본 Int의 width/height가 크롭과 AI 후보 크기 정렬에 함께 연결됩니다.', (2840, 1450))
     g.save('04-qwen-pigment-experimental')
 
 
@@ -317,4 +345,11 @@ if __name__ == '__main__':
     build_workflows(demo())
     integrated_workflow()
     integrated_workflow(manual=True)
+    for path in (ROOT/'workflows').glob('*.json'):
+        if path.name.endswith('.api.json'):
+            continue
+        ui = json.loads(path.read_text())
+        api = json.loads(path.with_name(path.stem+'.api.json').read_text())
+        ui = normalize_workflow(ui, api, module.NODE_CLASS_MAPPINGS)
+        path.write_text(json.dumps(ui, ensure_ascii=False, indent=2), encoding='utf-8', newline='\r\n')
     print(PACK/'examples/comparison.png')

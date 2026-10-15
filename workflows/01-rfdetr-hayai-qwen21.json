@@ -1,6 +1,6 @@
 {
   "id": "fb632c93-e26e-4676-8b2a-055f8da61061",
-  "revision": 0,
+  "revision": 1,
   "last_node_id": 90,
   "last_link_id": 34,
   "nodes": [
@@ -544,12 +544,10 @@
         "Node name for S&R": "LoadImage"
       },
       "widgets_values": [
-        "",
-        "image"
+        ""
       ],
       "widgets_values_named": {
-        "image": "",
-        "upload": "image"
+        "image": ""
       },
       "title": "① 원본 이미지"
     },

@@ -1,6 +1,6 @@
 {
   "id": "cd1f17c7-8342-5f20-b9cd-dd184f126608",
-  "revision": 0,
+  "revision": 1,
   "last_node_id": 6,
   "last_link_id": 4,
   "nodes": [
@@ -37,12 +37,10 @@
         "Node name for S&R": "LoadImage"
       },
       "widgets_values": [
-        "manga-lettering-demo/original.png",
-        "image"
+        "manga-lettering-demo/original.png"
       ],
       "widgets_values_named": {
-        "image": "manga-lettering-demo/original.png",
-        "upload": "image"
+        "image": "manga-lettering-demo/original.png"
       },
       "title": "① 원본 · 지우기 전"
     },
@@ -79,12 +77,10 @@
         "Node name for S&R": "LoadImage"
       },
       "widgets_values": [
-        "manga-lettering-demo/cleaned.png",
-        "image"
+        "manga-lettering-demo/cleaned.png"
       ],
       "widgets_values_named": {
-        "image": "manga-lettering-demo/cleaned.png",
-        "upload": "image"
+        "image": "manga-lettering-demo/cleaned.png"
       },
       "title": "② 원문 제거 결과"
     },
@@ -117,13 +113,11 @@
       },
       "widgets_values": [
         "manga-lettering-demo/source_mask.png",
-        "red",
-        "image"
+        "red"
       ],
       "widgets_values_named": {
         "image": "manga-lettering-demo/source_mask.png",
-        "channel": "red",
-        "upload": "image"
+        "channel": "red"
       },
       "title": "③ 원문 마스크 · 흰색=글자"
     },
@@ -290,7 +284,8 @@
         20,
         20
       ]
-    }
+    },
+    "frontendVersion": "1.53.10"
   },
   "version": 0.4
 }

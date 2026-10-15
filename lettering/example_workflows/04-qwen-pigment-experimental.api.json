@@ -19,46 +19,124 @@
     }
   },
   "4": {
-    "class_type": "MangaLetterRegion",
+    "class_type": "PrimitiveInt",
     "inputs": {
-      "x": 85,
-      "y": 95,
-      "width": 420,
-      "height": 150,
-      "original": [
+      "value": 85
+    }
+  },
+  "5": {
+    "class_type": "PrimitiveInt",
+    "inputs": {
+      "value": 95
+    }
+  },
+  "6": {
+    "class_type": "PrimitiveInt",
+    "inputs": {
+      "value": 420
+    }
+  },
+  "7": {
+    "class_type": "PrimitiveInt",
+    "inputs": {
+      "value": 150
+    }
+  },
+  "8": {
+    "class_type": "ImageCrop",
+    "inputs": {
+      "width": [
+        "6",
+        0
+      ],
+      "height": [
+        "7",
+        0
+      ],
+      "x": [
+        "4",
+        0
+      ],
+      "y": [
+        "5",
+        0
+      ],
+      "image": [
         "1",
         0
-      ],
-      "cleaned": [
-        "2",
+      ]
+    }
+  },
+  "9": {
+    "class_type": "ImageCrop",
+    "inputs": {
+      "width": [
+        "6",
         0
       ],
-      "source_mask": [
+      "height": [
+        "7",
+        0
+      ],
+      "x": [
+        "4",
+        0
+      ],
+      "y": [
+        "5",
+        0
+      ],
+      "image": [
+        "2",
+        0
+      ]
+    }
+  },
+  "10": {
+    "class_type": "CropMask",
+    "inputs": {
+      "x": [
+        "4",
+        0
+      ],
+      "y": [
+        "5",
+        0
+      ],
+      "width": [
+        "6",
+        0
+      ],
+      "height": [
+        "7",
+        0
+      ],
+      "mask": [
         "3",
         0
       ]
     }
   },
-  "5": {
+  "11": {
     "class_type": "MangaLetterAnalyze",
     "inputs": {
       "polarity": "auto",
       "difference_threshold": 0.07,
       "reference": [
-        "4",
+        "8",
         0
       ],
       "cleaned": [
-        "4",
-        1
+        "9",
+        0
       ],
       "source_mask": [
-        "4",
-        2
+        "10",
+        0
       ]
     }
   },
-  "6": {
+  "12": {
     "class_type": "MangaLetterStyleAdjust",
     "inputs": {
       "foreground": "auto",
@@ -71,12 +149,12 @@
       "shadow_blur": 0.0,
       "shadow_color": "#000000",
       "style": [
-        "5",
+        "11",
         0
       ]
     }
   },
-  "7": {
+  "13": {
     "class_type": "MangaLetterRender",
     "inputs": {
       "text": "정말 괜찮아?",
@@ -93,70 +171,74 @@
       "supersample": 2,
       "max_lines": 1,
       "style": [
-        "6",
+        "12",
         0
       ]
     }
   },
-  "8": {
-    "class_type": "MangaLetterComposite",
+  "14": {
+    "class_type": "ImageCompositeMasked",
     "inputs": {
-      "opacity": 1.0,
-      "cleaned_page": [
+      "x": [
+        "4",
+        0
+      ],
+      "y": [
+        "5",
+        0
+      ],
+      "resize_source": false,
+      "destination": [
         "2",
         0
       ],
-      "lettering": [
-        "22",
+      "source": [
+        "28",
         0
       ],
-      "lettering_alpha": [
-        "22",
+      "mask": [
+        "28",
         1
-      ],
-      "placement": [
-        "4",
-        3
       ]
     }
   },
-  "9": {
+  "15": {
     "class_type": "SaveImage",
     "inputs": {
       "filename_prefix": "manga_lettering/qwen-texture",
       "images": [
-        "8",
+        "14",
         0
       ]
     }
   },
-  "11": {
+  "17": {
     "class_type": "MangaLetterAIReference",
     "inputs": {
       "text": "정말 괜찮아?",
       "source_text": "Are you okay?",
       "reference": [
-        "4",
+        "8",
         0
       ],
       "lettering": [
-        "7",
+        "13",
         0
       ],
       "lettering_alpha": [
-        "7",
+        "13",
         1
       ]
     }
   },
-  "12": {
+  "18": {
     "class_type": "UNETLoader",
     "inputs": {
       "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
       "weight_dtype": "default"
     }
   },
-  "13": {
+  "19": {
     "class_type": "CLIPLoader",
     "inputs": {
       "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
@@ -164,145 +246,151 @@
       "device": "default"
     }
   },
-  "14": {
+  "20": {
     "class_type": "VAELoader",
     "inputs": {
       "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
     }
   },
-  "15": {
+  "21": {
     "class_type": "QwenImage21Cache",
     "inputs": {
       "device": "gpu",
       "dtype": "default",
       "model": [
-        "12",
+        "18",
         0
       ]
     }
   },
-  "16": {
+  "22": {
     "class_type": "TextEncodeQwenImage21",
     "inputs": {
       "prompt": [
-        "11",
+        "17",
         2
       ],
       "negative_prompt": "",
       "resolution": 1024,
       "clip": [
-        "13",
+        "19",
         0
       ],
       "vae": [
-        "14",
+        "20",
         0
       ],
       "images.image_1": [
-        "11",
+        "17",
         0
       ],
       "images.image_2": [
-        "11",
+        "17",
         1
       ]
     }
   },
-  "17": {
+  "23": {
     "class_type": "KSamplerSelect",
     "inputs": {
       "sampler_name": "euler"
     }
   },
-  "18": {
+  "24": {
     "class_type": "ManualSigmas",
     "inputs": {
       "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0.0"
     }
   },
-  "19": {
+  "25": {
     "class_type": "SamplerCustom",
     "inputs": {
       "add_noise": true,
       "noise_seed": 0,
       "cfg": 1,
       "model": [
-        "15",
+        "21",
         0
       ],
       "positive": [
-        "16",
+        "22",
         0
       ],
       "negative": [
-        "16",
+        "22",
         1
       ],
       "sampler": [
-        "17",
+        "23",
         0
       ],
       "sigmas": [
-        "18",
+        "24",
         0
       ],
       "latent_image": [
-        "16",
+        "22",
         2
       ]
     }
   },
-  "20": {
+  "26": {
     "class_type": "VAEDecode",
     "inputs": {
       "samples": [
-        "19",
+        "25",
         0
       ],
       "vae": [
-        "14",
-        0
-      ]
-    }
-  },
-  "21": {
-    "class_type": "ImageScale",
-    "inputs": {
-      "upscale_method": "lanczos",
-      "width": 420,
-      "height": 150,
-      "crop": "disabled",
-      "image": [
         "20",
         0
       ]
     }
   },
-  "22": {
+  "27": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "upscale_method": "lanczos",
+      "width": [
+        "6",
+        0
+      ],
+      "height": [
+        "7",
+        0
+      ],
+      "crop": "disabled",
+      "image": [
+        "26",
+        0
+      ]
+    }
+  },
+  "28": {
     "class_type": "MangaLetterCandidateTexture",
     "inputs": {
       "strength": 0.35,
       "max_shift": 0.12,
       "radius": 2.0,
       "lettering": [
-        "7",
+        "13",
         0
       ],
       "lettering_alpha": [
-        "7",
+        "13",
         1
       ],
       "candidate": [
-        "21",
+        "27",
         0
       ]
     }
   },
-  "23": {
+  "29": {
     "class_type": "PreviewImage",
     "inputs": {
       "images": [
-        "21",
+        "27",
         0
       ]
     }
