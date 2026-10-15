@@ -5,6 +5,10 @@ from .models import NODE_CLASS_MAPPINGS as MODEL_NODES, NODE_DISPLAY_NAME_MAPPIN
 NODE_CLASS_MAPPINGS.update(MODEL_NODES)
 NODE_DISPLAY_NAME_MAPPINGS.update(MODEL_NAMES)
 
+from .detection_policy import MangaDetectorDetailResolved
+NODE_CLASS_MAPPINGS['MangaDetectorDetail'] = MangaDetectorDetailResolved
+NODE_DISPLAY_NAME_MAPPINGS['MangaDetectorDetail'] = '글자 위치 검출 · native sliding 보강'
+
 from .region_policy import MangaDetectionRegionsResolved
 NODE_CLASS_MAPPINGS['MangaDetectionRegions'] = MangaDetectionRegionsResolved
 NODE_DISPLAY_NAME_MAPPINGS['MangaDetectionRegions'] = '검출 영역 정리 · 문단 중복 해소'
