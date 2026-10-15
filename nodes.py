@@ -152,6 +152,50 @@ def translations(source, response):
     return {**source, 'regions': [{**row, 'target': mapped[row['id']]} for row in source['regions']]}
 
 
+def _detector_region(item, width, height):
+    box, score = item.get('bbox'), item.get('score')
+    if not isinstance(box,list) or len(box)!=4 or any(type(v) not in (int,float) or not math.isfinite(v) for v in box):
+        raise ValueError('Invalid detector box')
+    if type(score) not in (int,float) or not math.isfinite(score):
+        raise ValueError('Invalid detector score')
+    box = [max(0.,min(width,box[0])),max(0.,min(height,box[1])),max(0.,min(width,box[2])),max(0.,min(height,box[3]))]
+    if box[0] >= box[2] or box[1] >= box[3]:
+        raise ValueError('Empty detector box')
+    mask = item.get('mask')
+    if mask is not None:
+        if not isinstance(mask,dict) or any(type(mask.get(k)) is not int for k in ('x','y','width','height')):
+            raise ValueError('Invalid detector mask bounds')
+        x,y,w,h = (mask[k] for k in ('x','y','width','height'))
+        if min(x,y) < 0 or min(w,h) <= 0 or x+w > width or y+h > height:
+            raise ValueError('Detector mask bounds exceed source image')
+        box = [min(box[0],float(x)),min(box[1],float(y)),max(box[2],float(x+w)),max(box[3],float(y+h))]
+    return {**item,'bbox':box}
+
+
+def _merge_detector_regions(candidates, threshold):
+    """Merge duplicate same-label regions without losing either detected extent."""
+    items = [dict(item) for item in sorted(candidates,key=lambda row:row['score'],reverse=True)]
+    while True:
+        merged = False
+        for left in range(len(items)):
+            for right in range(left+1,len(items)):
+                a,b = items[left],items[right]
+                if a['label'] != b['label'] or iou(a['bbox'],b['bbox']) < threshold:
+                    continue
+                winner, loser = (a,b) if a['score'] >= b['score'] else (b,a)
+                union = [min(a['bbox'][0],b['bbox'][0]),min(a['bbox'][1],b['bbox'][1]),
+                         max(a['bbox'][2],b['bbox'][2]),max(a['bbox'][3],b['bbox'][3])]
+                replacement = {**winner,'bbox':union}
+                items[left] = replacement
+                items.pop(right)
+                merged = True
+                break
+            if merged:
+                break
+        if not merged:
+            return items
+
+
 class MangaDetectionRegions:
     @classmethod
     def INPUT_TYPES(cls):
@@ -172,23 +216,8 @@ class MangaDetectionRegions:
         if type(include_sfx) is not bool or not isinstance(dedupe_iou, (int,float)) or not 0.1 <= dedupe_iou <= 1 or reading_order not in ('top_to_bottom','right_to_left'):
             raise ValueError('Invalid region selection options')
         labels = {'text', 'onomatopoeia'} if include_sfx else {'text'}
-        candidates = []
-        for item in result['detections']:
-            if item.get('label') not in labels:
-                continue
-            box, score = item.get('bbox'), item.get('score')
-            if not isinstance(box,list) or len(box)!=4 or any(type(v) not in (int,float) or not math.isfinite(v) for v in box):
-                raise ValueError('Invalid detector box')
-            if type(score) not in (int,float) or not math.isfinite(score):
-                raise ValueError('Invalid detector score')
-            box = [max(0.,min(width,box[0])),max(0.,min(height,box[1])),max(0.,min(width,box[2])),max(0.,min(height,box[3]))]
-            if box[0] >= box[2] or box[1] >= box[3]:
-                raise ValueError('Empty detector box')
-            candidates.append({**item,'bbox':box})
-        selected = []
-        for item in sorted(candidates,key=lambda row:row['score'],reverse=True):
-            if not any(item['label']==other['label'] and iou(item['bbox'],other['bbox'])>=dedupe_iou for other in selected):
-                selected.append(item)
+        candidates = [_detector_region(item,width,height) for item in result['detections'] if item.get('label') in labels]
+        selected = _merge_detector_regions(candidates,dedupe_iou)
         selected.sort(key=(lambda row:(row['bbox'][1],row['bbox'][0])) if reading_order=='top_to_bottom' else (lambda row:(-row['bbox'][0],row['bbox'][1])))
         rows = [{'id':f'r{i+1}','kind':'sfx' if item['label']=='onomatopoeia' else 'text',
                  'bbox':[item['bbox'][0]/width*1000,item['bbox'][1]/height*1000,item['bbox'][2]/width*1000,item['bbox'][3]/height*1000]}
