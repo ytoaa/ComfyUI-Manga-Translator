@@ -22,3 +22,14 @@ ComfyUI의 표준 및 Qwen 노드를 워크플로우에서 참조하지만 Comfy
 [조사 문서](docs/reference-research.md)에 나열한 `manga-translator-ui`, `comic-translate`, `BallonsTranslator`, `manga-image-translator`, `MangaTranslator`, `ComfyUI-QwenVL`, `ComfyUI-Florence2`, `comfyui-ollama`의 코드·기본 프롬프트·모델·폰트는 가져오지 않았다. 특히 AI renderer의 **구조**를 참고했으며 GPL 코드나 프롬프트를 새 패키지에 복사하지 않았다.
 
 추가 조사한 `ComfyUI-text-replace`, `ComfyUI_LayerStyle_Advance`, `manga-editor-desu`, `ComfyUI-Manga-Autopilot`도 참고 사례이며 그 코드나 포함 폰트를 도입하지 않았다.
+# 스타일 식자 동봉 폰트
+
+`lettering/fonts/NanumGothic-Regular.ttf`, `NanumGothic-Bold.ttf`는 Google Fonts의
+`ofl/nanumgothic`에서 가져온 수정하지 않은 나눔고딕이다. Copyright (c) 2010,
+NHN Corporation. SIL Open Font License 1.1 전문과 Reserved Font Name 고지는
+`lettering/fonts/OFL.txt`에 보존한다. 원본 URL·SHA256은 `lettering/fonts/sources.json`에
+기록한다. 폰트 라이선스는 저장소 연결 코드의 MIT 라이선스와 별개다.
+
+스타일 식자 코드는 TextCtrl/AnyText/STELLAR의 코드나 가중치를 포함하지 않는다.
+색·외곽선·미세 질감은 로컬 픽셀 측정이며 실제 글자 모양은 선택한 한글 폰트다.
+선택형 Qwen 워크플로는 사용자가 기존에 설치한 모델을 참조하며 가중치를 재배포하지 않는다.

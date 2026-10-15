@@ -1,0 +1,147 @@
+{
+  "schema": 1,
+  "regions": [
+    {
+      "id": "dialogue",
+      "analysis": {
+        "version": 1,
+        "size": [
+          420,
+          150
+        ],
+        "foreground": [
+          0.07828052341938019,
+          0.07828052341938019,
+          0.07828052341938019
+        ],
+        "outline_color": [
+          0.60638427734375,
+          0.60638427734375,
+          0.60638427734375
+        ],
+        "outline_width": 1.0,
+        "stroke_width": 2.8284271247461903,
+        "polarity": "dark",
+        "texture_strength": 1.0,
+        "weight_px": 0.0,
+        "shadow_x": 0.0,
+        "shadow_y": 0.0,
+        "shadow_blur": 0.0,
+        "shadow_color": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "sample_pixels": 4479,
+        "measurement": "heuristic pigment/outline/texture; font and shadow are user-selected",
+        "texture_std": 0.0010811673710122705
+      },
+      "render": {
+        "text": "정말 괜찮아?",
+        "font": "NanumGothic-Regular.ttf",
+        "font_size": 71,
+        "direction": "horizontal",
+        "line_count": 1,
+        "rotation": 0.0,
+        "shear": 0.0,
+        "glyph_geometry": "font-rendered; no generative rewriting",
+        "font_identification": "user selection, not inferred original font"
+      }
+    },
+    {
+      "id": "vertical",
+      "analysis": {
+        "version": 1,
+        "size": [
+          265,
+          220
+        ],
+        "foreground": [
+          0.07640893012285233,
+          0.07640893012285233,
+          0.07637633383274078
+        ],
+        "outline_color": [
+          0.5782167911529541,
+          0.5782167911529541,
+          0.5690123438835144
+        ],
+        "outline_width": 1.0,
+        "stroke_width": 5.656854249492381,
+        "polarity": "dark",
+        "texture_strength": 1.0,
+        "weight_px": 0.0,
+        "shadow_x": 0.0,
+        "shadow_y": 0.0,
+        "shadow_blur": 0.0,
+        "shadow_color": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "sample_pixels": 3353,
+        "measurement": "heuristic pigment/outline/texture; font and shadow are user-selected",
+        "texture_std": 0.0011313268914818764
+      },
+      "render": {
+        "text": "잠깐!\n기다려!",
+        "font": "NanumGothic-Bold.ttf",
+        "font_size": 49,
+        "direction": "vertical_rtl",
+        "line_count": 2,
+        "rotation": 0.0,
+        "shear": 0.0,
+        "glyph_geometry": "font-rendered; no generative rewriting",
+        "font_identification": "user selection, not inferred original font"
+      }
+    },
+    {
+      "id": "effect",
+      "analysis": {
+        "version": 1,
+        "size": [
+          820,
+          220
+        ],
+        "foreground": [
+          0.691503643989563,
+          0.05186840146780014,
+          0.08141018450260162
+        ],
+        "outline_color": [
+          0.9892285466194153,
+          0.9849880337715149,
+          0.985366940498352
+        ],
+        "outline_width": 5.0,
+        "stroke_width": 10.0,
+        "polarity": "dark",
+        "texture_strength": 1.0,
+        "weight_px": 0.0,
+        "shadow_x": 0.0,
+        "shadow_y": 0.0,
+        "shadow_blur": 0.0,
+        "shadow_color": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "sample_pixels": 38291,
+        "measurement": "heuristic pigment/outline/texture; font and shadow are user-selected",
+        "texture_std": 0.00032925777486525476
+      },
+      "render": {
+        "text": "콰아앙!",
+        "font": "NanumGothic-Bold.ttf",
+        "font_size": 127,
+        "direction": "horizontal",
+        "line_count": 1,
+        "rotation": 5,
+        "shear": 0.16,
+        "glyph_geometry": "font-rendered; no generative rewriting",
+        "font_identification": "user selection, not inferred original font"
+      }
+    }
+  ],
+  "style_method": "measured colors/outline/pigment + selected font; no trained style-transfer model"
+}

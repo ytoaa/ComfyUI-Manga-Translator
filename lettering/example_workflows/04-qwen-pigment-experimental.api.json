@@ -1,0 +1,310 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "manga-lettering-demo/original.png"
+    }
+  },
+  "2": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "manga-lettering-demo/cleaned.png"
+    }
+  },
+  "3": {
+    "class_type": "LoadImageMask",
+    "inputs": {
+      "image": "manga-lettering-demo/source_mask.png",
+      "channel": "red"
+    }
+  },
+  "4": {
+    "class_type": "MangaLetterRegion",
+    "inputs": {
+      "x": 85,
+      "y": 95,
+      "width": 420,
+      "height": 150,
+      "original": [
+        "1",
+        0
+      ],
+      "cleaned": [
+        "2",
+        0
+      ],
+      "source_mask": [
+        "3",
+        0
+      ]
+    }
+  },
+  "5": {
+    "class_type": "MangaLetterAnalyze",
+    "inputs": {
+      "polarity": "auto",
+      "difference_threshold": 0.07,
+      "reference": [
+        "4",
+        0
+      ],
+      "cleaned": [
+        "4",
+        1
+      ],
+      "source_mask": [
+        "4",
+        2
+      ]
+    }
+  },
+  "6": {
+    "class_type": "MangaLetterStyleAdjust",
+    "inputs": {
+      "foreground": "auto",
+      "outline_color": "auto",
+      "outline_width": -1.0,
+      "weight_px": 0.0,
+      "texture_strength": 1.0,
+      "shadow_x": 0.0,
+      "shadow_y": 0.0,
+      "shadow_blur": 0.0,
+      "shadow_color": "#000000",
+      "style": [
+        "5",
+        0
+      ]
+    }
+  },
+  "7": {
+    "class_type": "MangaLetterRender",
+    "inputs": {
+      "text": "정말 괜찮아?",
+      "font_name": "NanumGothic-Regular.ttf",
+      "direction": "horizontal",
+      "alignment": "center",
+      "min_font": 10,
+      "max_font": 72,
+      "padding": 12,
+      "line_spacing": 1.0,
+      "tracking": 0.0,
+      "rotation": 0.0,
+      "shear": 0.0,
+      "supersample": 2,
+      "max_lines": 1,
+      "style": [
+        "6",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "MangaLetterComposite",
+    "inputs": {
+      "opacity": 1.0,
+      "cleaned_page": [
+        "2",
+        0
+      ],
+      "lettering": [
+        "22",
+        0
+      ],
+      "lettering_alpha": [
+        "22",
+        1
+      ],
+      "placement": [
+        "4",
+        3
+      ]
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "manga_lettering/qwen-texture",
+      "images": [
+        "8",
+        0
+      ]
+    }
+  },
+  "11": {
+    "class_type": "MangaLetterAIReference",
+    "inputs": {
+      "text": "정말 괜찮아?",
+      "source_text": "Are you okay?",
+      "reference": [
+        "4",
+        0
+      ],
+      "lettering": [
+        "7",
+        0
+      ],
+      "lettering_alpha": [
+        "7",
+        1
+      ]
+    }
+  },
+  "12": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "13": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    }
+  },
+  "14": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    }
+  },
+  "15": {
+    "class_type": "QwenImage21Cache",
+    "inputs": {
+      "device": "gpu",
+      "dtype": "default",
+      "model": [
+        "12",
+        0
+      ]
+    }
+  },
+  "16": {
+    "class_type": "TextEncodeQwenImage21",
+    "inputs": {
+      "prompt": [
+        "11",
+        2
+      ],
+      "negative_prompt": "",
+      "resolution": 1024,
+      "clip": [
+        "13",
+        0
+      ],
+      "vae": [
+        "14",
+        0
+      ],
+      "images.image_1": [
+        "11",
+        0
+      ],
+      "images.image_2": [
+        "11",
+        1
+      ]
+    }
+  },
+  "17": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    }
+  },
+  "18": {
+    "class_type": "ManualSigmas",
+    "inputs": {
+      "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0.0"
+    }
+  },
+  "19": {
+    "class_type": "SamplerCustom",
+    "inputs": {
+      "add_noise": true,
+      "noise_seed": 0,
+      "cfg": 1,
+      "model": [
+        "15",
+        0
+      ],
+      "positive": [
+        "16",
+        0
+      ],
+      "negative": [
+        "16",
+        1
+      ],
+      "sampler": [
+        "17",
+        0
+      ],
+      "sigmas": [
+        "18",
+        0
+      ],
+      "latent_image": [
+        "16",
+        2
+      ]
+    }
+  },
+  "20": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "19",
+        0
+      ],
+      "vae": [
+        "14",
+        0
+      ]
+    }
+  },
+  "21": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "upscale_method": "lanczos",
+      "width": 420,
+      "height": 150,
+      "crop": "disabled",
+      "image": [
+        "20",
+        0
+      ]
+    }
+  },
+  "22": {
+    "class_type": "MangaLetterCandidateTexture",
+    "inputs": {
+      "strength": 0.35,
+      "max_shift": 0.12,
+      "radius": 2.0,
+      "lettering": [
+        "7",
+        0
+      ],
+      "lettering_alpha": [
+        "7",
+        1
+      ],
+      "candidate": [
+        "21",
+        0
+      ]
+    }
+  },
+  "23": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "21",
+        0
+      ]
+    }
+  }
+}

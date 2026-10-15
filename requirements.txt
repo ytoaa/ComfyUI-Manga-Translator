@@ -9,3 +9,5 @@ transformers
 tokenizers
 supervision
 opencv-python
+scipy
+fonttools>=4.45
