@@ -34,7 +34,7 @@ def test_widget_positions_match_runtime_schema_and_api_literals(path):
         saved = node.get('widgets_values', [])
         assert len(saved) == len(expected), (path.name, node['type'], expected, saved)
         restored = dict(zip(expected, saved))
-        assert restored == node['widgets_values_named'], (path.name, node['type'])
+        assert restored == node.get('widgets_values_named', {}), (path.name, node['type'])
         sockets = {item['name']: item for item in node.get('inputs', [])}
         for name, value in restored.items():
             field = fields[name]

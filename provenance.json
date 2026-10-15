@@ -39,6 +39,14 @@
       "modified": false
     }
   ],
+  "integrated_cleanup_design": {
+    "reference_repository": "https://github.com/ytoaa/koharu-remote",
+    "reference_commit": "ee6d9ddc82d9bfc4718383272f0e4797f805e2cd",
+    "reference_path": "patches/remote-models.patch",
+    "reference_function": "inpaint_remote",
+    "implementation": "New Python mask-component planner and assembler; native ComfyUI ImageCrop/ImageScale/ImageCompositeMasked execute the image operations",
+    "differences": "Uniform fill uses a conservative local background ring rather than scene bubble polygons; unchanged-ink gate is heuristic"
+  },
   "workflow_basis": "comfyui/koharu_nodes/workflows/inpainting.api.json",
   "workflow_changes": [
     "standalone OCR/detector nodes",

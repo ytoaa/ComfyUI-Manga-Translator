@@ -26,7 +26,9 @@ def test_one_complete_json_value_can_have_optional_markdown_fences(wrapped):
 
 @pytest.mark.parametrize('bad', ['```json\n'+BODY[:-2], '```json\n'+BODY+'\n``',
     BODY+' '+BODY, 'Commentary: '+BODY, '```json\n'+BODY+'\n```\nMore commentary',
-    '```python\n'+BODY+'\n```', '{"translations": NaN}', '', 'x'*200001])
+    '```python\n'+BODY+'\n```', '{"translations": NaN}', '', 'x'*200001],
+    ids=['truncated', 'broken-fence', 'multiple-json', 'leading-prose', 'trailing-prose',
+         'wrong-language', 'nonfinite', 'empty', 'oversized'])
 def test_partial_json_extra_answers_and_unexpected_text_are_not_repaired(bad):
     with pytest.raises(ValueError): N.decode_translation(bad)
 

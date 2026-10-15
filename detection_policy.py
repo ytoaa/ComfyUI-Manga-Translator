@@ -15,7 +15,8 @@ def _sliding_windows(length, tile_size, overlap):
         raise ValueError('Invalid detail tile geometry')
     if tile_size >= length:
         return [(0, length)]
-    overlap = min(int(overlap), tile_size - 1)
+    # A supported UI value must never turn into a one-pixel inference stride.
+    overlap = min(int(overlap), tile_size // 2)
     stride = max(1, tile_size - overlap)
     starts = list(range(0, max(1, length - tile_size + 1), stride))
     last = length - tile_size
@@ -59,14 +60,33 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
             'tile_size': tile, 'windows': [[0, width, 0, height]],
             'tiles': 0, 'detail_regions': 0}}
 
+    windows = [[x0, x1, y0, y1] for y0, y1 in y_windows for x0, x1 in x_windows]
+    # On large pages auto also checks compact crops. A single native-width pass
+    # can still miss tiny paragraphs; these are actual extra detector calls,
+    # not a claim that every text region is guaranteed to be recovered.
+    if detail_mode == 'auto':
+        native_windows = list(windows)
+        # Keep large supported pages usable: trade detail scale for the fixed
+        # inference budget rather than creating hundreds of compact windows.
+        for compact in (_DETECTOR_NATIVE_SIZE // 2, 768):
+            proposed = list(native_windows)
+            for y0, y1 in _sliding_windows(height, compact, detail_overlap):
+                for x0, x1 in _sliding_windows(width, compact, detail_overlap):
+                    box = [x0, x1, y0, y1]
+                    if box not in proposed:
+                        proposed.append(box)
+            if len(proposed) <= 64:
+                windows = proposed
+                break
+    if len(windows) > 64:
+        raise ValueError(f'Detail detection requires {len(windows)} windows; split the page (limit=64)')
     recovered = []
-    windows = []
-    for y0, y1 in y_windows:
-        for x0, x1 in x_windows:
-            windows.append([x0, x1, y0, y1])
-            result = model.detect(image.crop((x0, y0, x1, y1)), thresholds)
-            for item in result.get('detections', []):
-                recovered.append(_offset_detection(item, x0, y0, width, height))
+    for x0, x1, y0, y1 in windows:
+        result = model.detect(image.crop((x0, y0, x1, y1)), thresholds)
+        for item in result.get('detections', []):
+            recovered.append(_offset_detection(item, x0, y0, width, height))
+        if len(full.get('detections', [])) + len(recovered) > 512:
+            raise ValueError('Detail detector produced too many regions; lower detail mode or thresholds')
 
     if len(full.get('detections', [])) + len(recovered) > 512:
         raise ValueError('Detail detector produced too many regions; lower detail mode or thresholds')

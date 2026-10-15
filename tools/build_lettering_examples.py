@@ -138,7 +138,7 @@ class Graph:
                 inputs.append({'name': name, 'type': t, 'link': None})
         node = {'id': node_id, 'type': kind, 'pos': list(pos), 'size': [330, max(100, 60+30*len(widgets))],
                 'flags': {}, 'order': node_id-1, 'mode': 0, 'inputs': inputs,
-                'outputs': [{'name': cls.RETURN_NAMES[i] if cls else t, 'type': t, 'links': []} for i, t in enumerate(returns)],
+                'outputs': [{'name': getattr(cls, 'RETURN_NAMES', returns)[i] if cls else t, 'type': t, 'links': []} for i, t in enumerate(returns)],
                 'properties': {'Node name for S&R': kind}, 'widgets_values': widgets,
                 'widgets_values_named': named, 'title': title or nodes.NODE_DISPLAY_NAME_MAPPINGS.get(kind, kind)}
         self.nodes.append(node)

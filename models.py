@@ -182,7 +182,10 @@ def _tight_ocr_image(image, padding=4, contrast=12.0):
         minimum = max(2,int(math.ceil(width*height*0.0002)))
         keep = sizes >= minimum
         keep[0] = False
-        foreground = keep[labels]
+        # Large components locate the text body; small punctuation/dakuten
+        # still belong to its crop. Do not discard them when choosing bounds.
+        if not keep[labels].any():
+            return image
     ys,xs = np.nonzero(foreground)
     if not len(xs):
         return image
@@ -384,14 +387,14 @@ class MangaOCRAdaptive:
             'small_text_patches':([512,1024],{'default':1024}),
             'small_text_px':('INT',{'default':48,'min':8,'max':256}),
             'line_split':('BOOLEAN',{'default':True}),
-            'tight_crop':('BOOLEAN',{'default':True}),
+            'tight_crop':('BOOLEAN',{'default':False}),
             'repetition_penalty':('FLOAT',{'default':1.,'min':1.,'max':2.,'step':0.01}),
             'retry_on_repetition':('BOOLEAN',{'default':True})}}
     RETURN_TYPES=('STRING',)
     FUNCTION='read'
     CATEGORY='Manga Translator/OCR'
     def read(self,images,model,max_new_tokens=256,base_patches=512,small_text_patches=1024,small_text_px=48,
-             line_split=True,tight_crop=True,repetition_penalty=1.,retry_on_repetition=True):
+             line_split=True,tight_crop=False,repetition_penalty=1.,retry_on_repetition=True):
         from .adapters.options import OcrOptions
         if type(base_patches) is not int or base_patches not in (256,512,1024):
             raise ValueError('Invalid base OCR patch budget')

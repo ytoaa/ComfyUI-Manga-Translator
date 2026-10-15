@@ -2,6 +2,8 @@
 
 ## 포함한 코드
 
+`inpaint_tiles.py`는 기존 코하루 `inpaint_remote`의 제한된 코어+주변 문맥/마스크 소유권 설계를 참고해 ComfyUI용으로 작성했다. 참고 기준은 위 저장소 commit `ee6d9ddc82d9bfc4718383272f0e4797f805e2cd`의 `patches/remote-models.patch`와 upstream 인페인트 구현이다. Rust scene/실행기 코드는 포함하지 않으며 실제 크롭·크기 복원·타일 마스크 합성은 ComfyUI 기본 노드를 호출한다. 균일색 판정은 검출 말풍선 다각형 대신 주변 픽셀의 보수적 분산 검사로 구현되어 원래 코하루의 색 채우기 판정과 동일하지 않다.
+
 `adapters/model.py`, `model_files.py`, `model_bundle.py`, `hayai.py`, `hayai_files.py`, `options.py`는 [ytoaa/koharu-remote](https://github.com/ytoaa/koharu-remote)의 `dgx/vision/`에서 가져왔다. 기준 커밋은 `ee6d9ddc82d9bfc4718383272f0e4797f805e2cd`이다. 이 여섯 파일의 내용은 변경하지 않았다. SHA256과 원본 경로는 `provenance.json`에 기록한다.
 
 기존 프로젝트가 기반으로 삼은 공식 [Koharu](https://github.com/koharu-rs/koharu)의 버전은 0.83.5, 커밋은 `52bb4f55e2266f72c1523562a583c827ec191ceb`이다. 그 프로젝트의 MIT/Apache-2.0 라이선스 원문과 저작권 고지를 `LICENSE-THIRD-PARTY-MIT`, `LICENSE-THIRD-PARTY-APACHE`에 보존한다. 기존 모델별 전처리·핀된 로더·검증 코드를 독립 패키지에서 활용하기 위한 출처 고지이며 공식 Koharu의 배포나 보증을 뜻하지 않는다.

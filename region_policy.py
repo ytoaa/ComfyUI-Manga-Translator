@@ -26,6 +26,17 @@ def containment_overlap(a, b):
     return _intersection(a, b) / smaller if smaller > 0 else 0.0
 
 
+def _same_line_fragments(a, b):
+    """Overlapping sliding windows may return complementary halves of one row."""
+    ah, bh = a[3]-a[1], b[3]-b[1]
+    aw, bw = a[2]-a[0], b[2]-b[0]
+    if min(aw, bw, ah, bh) <= 0 or min(ah, bh)/max(ah, bh) < .65:
+        return False
+    vertical = max(0., min(a[3], b[3])-max(a[1], b[1]))/min(ah, bh)
+    horizontal = max(0., min(a[2], b[2])-max(a[0], b[0]))/min(aw, bw)
+    return vertical >= .8 and horizontal >= .1
+
+
 def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CONTAINMENT_OVERLAP):
     """Merge same-label duplicates transitively without dropping detected extent.
 
@@ -44,7 +55,8 @@ def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CON
                 if a['label'] != b['label']:
                     continue
                 same = (iou(a['bbox'], b['bbox']) >= iou_threshold or
-                        containment_overlap(a['bbox'], b['bbox']) >= containment_threshold)
+                        containment_overlap(a['bbox'], b['bbox']) >= containment_threshold or
+                        _same_line_fragments(a['bbox'], b['bbox']))
                 if not same:
                     continue
                 winner = a if a['score'] >= b['score'] else b

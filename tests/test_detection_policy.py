@@ -49,10 +49,42 @@ def test_auto_detail_keeps_both_overlapping_tile_results_for_resolver():
     result = policy.detail_detect(page, Model(),
                                   {'text': .25, 'onomatopoeia': .2, 'bubble': .5, 'panel': .5},
                                   'auto', 64)
-    assert calls == [(1600, 640), (1152, 640), (1152, 640)]
-    assert result['detail_detection']['windows'] == [[0, 1152, 0, 640], [448, 1600, 0, 640]]
-    assert result['detail_detection']['detail_regions'] == 2
-    assert len(result['detections']) == 3
+    assert calls[:3] == [(1600, 640), (1152, 640), (1152, 640)]
+    assert calls[3:] == [(576, 576)] * 6
+    assert result['detail_detection']['windows'][:2] == [[0, 1152, 0, 640], [448, 1600, 0, 640]]
+    assert result['detail_detection']['detail_regions'] == 8
+    assert len(result['detections']) == 9
+
+
+def test_maximum_overlap_does_not_create_one_pixel_stride():
+    x = policy._sliding_windows(1600, policy._tile_size('3x'), 384)
+    y = policy._sliding_windows(640, policy._tile_size('3x'), 384)
+    assert len(x)*len(y) <= 64
+
+
+def test_excessive_detail_windows_stop_before_tile_inference():
+    import pytest
+    class Model:
+        calls = 0
+        def detect(self, image, thresholds):
+            self.calls += 1
+            return {'image_width': image.width, 'image_height': image.height, 'detections': []}
+    model = Model()
+    with pytest.raises(ValueError, match='limit=64'):
+        policy.detail_detect(Image.new('RGB', (6000, 6000)), model, {}, '3x', 384)
+    assert model.calls == 1
+
+
+def test_large_auto_page_adapts_detail_scale_to_execution_budget():
+    class Model:
+        calls = 0
+        def detect(self, image, thresholds):
+            self.calls += 1
+            return {'image_width': image.width, 'image_height': image.height, 'detections': []}
+    model = Model()
+    result = policy.detail_detect(Image.new('RGB', (4000, 4000)), model, {}, 'auto', 64)
+    assert result['detail_detection']['tiles'] <= 64
+    assert model.calls == 1+result['detail_detection']['tiles']
 
 
 def test_small_page_auto_does_not_duplicate_full_inference():

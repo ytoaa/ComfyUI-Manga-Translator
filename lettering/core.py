@@ -263,10 +263,11 @@ def _word_units(paragraph):
     return units
 
 
-def _layout(text, font, width, height, direction, spacing, tracking):
+def _layout(text, font, width, height, direction, spacing, tracking, effect_padding=0):
     ascent, descent = font.getmetrics()
     cell = ascent + descent
-    line_step = max(1., cell * spacing)
+    # Reserve each line's outline/weight/shadow so auto-sized rows do not collide.
+    line_step = max(1., cell * spacing, cell + 2*effect_padding + cell*.12)
     lines = []
     if direction == 'horizontal':
         for paragraph in text.split('\n'):
@@ -325,8 +326,10 @@ def render_text(text, style, font_name='NanumGothic-Bold.ttf', direction='horizo
     # A bounded exhaustive descending search handles line-wrap discontinuities.
     for size in range(max_font, min_font-1, -1):
         font = ImageFont.truetype(path, size * supersample)
+        effect = math.ceil(style['outline_width'] + max(0, style['weight_px']) +
+                           max(abs(style['shadow_x']), abs(style['shadow_y'])) + 3*style['shadow_blur'])
         layout = _layout(text, font, available_w*supersample, available_h*supersample,
-                         direction, line_spacing, tracking*supersample)
+                         direction, line_spacing, tracking*supersample, effect*supersample)
         ew, eh = layout[1]
         angle = math.radians(rotation)
         sheared_w = ew + abs(shear)*eh
@@ -348,7 +351,7 @@ def render_text(text, style, font_name='NanumGothic-Bold.ttf', direction='horizo
             lw = widths[row]
             x = border*s if alignment == 'left' else ((w*s-lw)/2 if alignment == 'center' else w*s-border*s-lw)
             for char in line:
-                draw.text((x, origin_y+row*line_step), char, font=font, fill=255, anchor='lt')
+                draw.text((x, origin_y+row*line_step), char, font=font, fill=255, anchor='la')
                 x += float(font.getlength(char)) + tracking*s
     else:
         for column, chars in enumerate(lines):
@@ -394,7 +397,7 @@ def render_text(text, style, font_name='NanumGothic-Bold.ttf', direction='horizo
     layer = np.divide(premult, alpha[..., None], out=np.zeros_like(premult), where=alpha[..., None] > 1e-6)
     layer = np.clip(layer, 0, 1).astype(np.float32)
     report = {'text': text, 'font': font_name, 'font_size': size, 'direction': direction,
-              'line_count': len(lines), 'rotation': rotation, 'shear': shear,
+              'line_count': len(lines), 'line_step_px': line_step/s, 'rotation': rotation, 'shear': shear,
               'glyph_geometry': 'font-rendered; no generative rewriting',
               'font_identification': 'user selection, not inferred original font'}
     return layer, alpha.astype(np.float32), json.dumps(report, ensure_ascii=False, indent=2)

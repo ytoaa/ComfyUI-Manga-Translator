@@ -1,0 +1,2136 @@
+{
+  "id": "6489a8d0-adb0-54db-baf9-5a11c43d9dd8",
+  "revision": 1,
+  "last_node_id": 34,
+  "last_link_id": 53,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [
+        0,
+        50
+      ],
+      "size": [
+        330,
+        120
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            1,
+            6,
+            15,
+            43,
+            46
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        ""
+      ],
+      "widgets_values_named": {
+        "image": ""
+      },
+      "title": "① 원본 페이지"
+    },
+    {
+      "id": 2,
+      "type": "MangaDetectorLoader",
+      "pos": [
+        0,
+        400
+      ],
+      "size": [
+        330,
+        160
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MANGA_DETECTOR_MODEL",
+          "type": "MANGA_DETECTOR_MODEL",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "title": "기존 RF-DETR 모델",
+      "properties": {
+        "aux_id": "ytoaa/ComfyUI-Manga-Translator",
+        "ver": "7ee9ddbface00a5f2e1f26f3e3d114f1efe56cfa",
+        "Node name for S&R": "MangaDetectorLoader"
+      },
+      "widgets_values": [
+        "koharu-layout-rfdetr-seg-2xl-1152"
+      ],
+      "widgets_values_named": {
+        "model_name": "koharu-layout-rfdetr-seg-2xl-1152"
+      }
+    },
+    {
+      "id": 3,
+      "type": "MangaDetectorDetail",
+      "pos": [
+        420,
+        50
+      ],
+      "size": [
+        330,
+        240
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 1
+        },
+        {
+          "name": "model",
+          "type": "MANGA_DETECTOR_MODEL",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MANGA_DETECTION",
+          "type": "MANGA_DETECTION",
+          "links": [
+            3,
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaDetectorDetail"
+      },
+      "widgets_values": [
+        0.25,
+        0.2,
+        0.5,
+        0.5,
+        "auto",
+        64
+      ],
+      "widgets_values_named": {
+        "text": 0.25,
+        "onomatopoeia": 0.2,
+        "bubble": 0.5,
+        "panel": 0.5,
+        "detail_mode": "auto",
+        "detail_overlap": 64
+      },
+      "title": "② 전체+문맥/작은 타일 검출"
+    },
+    {
+      "id": 4,
+      "type": "MangaDetectionRegions",
+      "pos": [
+        840,
+        50
+      ],
+      "size": [
+        330,
+        150
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "result",
+          "type": "MANGA_DETECTION",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "layout_json",
+          "type": "STRING",
+          "links": [
+            7
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaDetectionRegions"
+      },
+      "widgets_values": [
+        false,
+        0.75,
+        "top_to_bottom"
+      ],
+      "widgets_values_named": {
+        "include_sfx": false,
+        "dedupe_iou": 0.75,
+        "reading_order": "top_to_bottom"
+      },
+      "title": "③ 중복 해소 · OCR 영역"
+    },
+    {
+      "id": 5,
+      "type": "MangaDetectionMask",
+      "pos": [
+        840,
+        400
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "result",
+          "type": "MANGA_DETECTION",
+          "link": 4
+        }
+      ],
+      "outputs": [
+        {
+          "name": "text_pixel_mask",
+          "type": "MASK",
+          "links": [
+            5,
+            16,
+            45
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaDetectionMask"
+      },
+      "widgets_values": [
+        false
+      ],
+      "widgets_values_named": {
+        "include_sfx": false
+      },
+      "title": "원문 글자 마스크"
+    },
+    {
+      "id": 6,
+      "type": "GrowMask",
+      "pos": [
+        1260,
+        400
+      ],
+      "size": [
+        330,
+        120
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 5
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": [
+            17,
+            52
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "GrowMask"
+      },
+      "widgets_values": [
+        8,
+        true
+      ],
+      "widgets_values_named": {
+        "expand": 8,
+        "tapered_corners": true
+      },
+      "title": "제거 여유 · 기본 GrowMask"
+    },
+    {
+      "id": 7,
+      "type": "MangaRegionCrops",
+      "pos": [
+        1260,
+        50
+      ],
+      "size": [
+        330,
+        150
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 6
+        },
+        {
+          "name": "layout_json",
+          "type": "STRING",
+          "link": 7,
+          "widget": {
+            "name": "layout_json"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ocr_crops",
+          "type": "IMAGE",
+          "links": [
+            8
+          ]
+        },
+        {
+          "name": "manifest_json",
+          "type": "STRING",
+          "links": [
+            11
+          ]
+        },
+        {
+          "name": "edit_region_mask",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaRegionCrops"
+      },
+      "widgets_values": [
+        "{\"regions\":[{\"id\":\"r1\",\"bbox\":[0,0,1000,1000]}]}",
+        4,
+        12
+      ],
+      "widgets_values_named": {
+        "layout_json": "{\"regions\":[{\"id\":\"r1\",\"bbox\":[0,0,1000,1000]}]}",
+        "ocr_padding": 4,
+        "edit_margin": 12
+      },
+      "title": "④ OCR 영역 · 좌표 유지"
+    },
+    {
+      "id": 8,
+      "type": "MangaOCRLoader",
+      "pos": [
+        1260,
+        -220
+      ],
+      "size": [
+        330,
+        160
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MANGA_OCR_MODEL",
+          "type": "MANGA_OCR_MODEL",
+          "links": [
+            9
+          ]
+        }
+      ],
+      "title": "MangaOCRLoader",
+      "properties": {
+        "aux_id": "ytoaa/ComfyUI-Manga-Translator",
+        "ver": "7ee9ddbface00a5f2e1f26f3e3d114f1efe56cfa",
+        "Node name for S&R": "MangaOCRLoader"
+      },
+      "widgets_values": [
+        "hayai-ocr-v2"
+      ],
+      "widgets_values_named": {
+        "model_name": "hayai-ocr-v2"
+      }
+    },
+    {
+      "id": 9,
+      "type": "MangaOCRAdaptive",
+      "pos": [
+        1680,
+        50
+      ],
+      "size": [
+        330,
+        300
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 8
+        },
+        {
+          "name": "model",
+          "type": "MANGA_OCR_MODEL",
+          "link": 9
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            10
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaOCRAdaptive"
+      },
+      "widgets_values": [
+        256,
+        512,
+        1024,
+        48,
+        true,
+        false,
+        1.0,
+        true
+      ],
+      "widgets_values_named": {
+        "max_new_tokens": 256,
+        "base_patches": 512,
+        "small_text_patches": 1024,
+        "small_text_px": 48,
+        "line_split": true,
+        "tight_crop": false,
+        "repetition_penalty": 1.0,
+        "retry_on_repetition": true
+      },
+      "title": "⑤ 줄별 OCR · 작은 획 보존"
+    },
+    {
+      "id": 10,
+      "type": "MangaCollectOCR",
+      "pos": [
+        2100,
+        50
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": 10
+        },
+        {
+          "name": "manifest_json",
+          "type": "STRING",
+          "link": 11
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ocr_json",
+          "type": "STRING",
+          "links": [
+            12
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaCollectOCR"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "MangaCollectOCR"
+    },
+    {
+      "id": 11,
+      "type": "MangaSaveReview",
+      "pos": [
+        2520,
+        50
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "translated_json",
+          "type": "STRING",
+          "link": 12
+        }
+      ],
+      "outputs": [
+        {
+          "name": "translated_json",
+          "type": "STRING",
+          "links": [
+            13
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaSaveReview"
+      },
+      "widgets_values": [
+        "manga_translator/ocr"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "manga_translator/ocr"
+      },
+      "title": "OCR JSON 저장"
+    },
+    {
+      "id": 12,
+      "type": "MangaTranslate",
+      "pos": [
+        2940,
+        50
+      ],
+      "size": [
+        330,
+        270
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "ocr_json",
+          "type": "STRING",
+          "link": 13
+        }
+      ],
+      "outputs": [
+        {
+          "name": "translated_json",
+          "type": "STRING",
+          "links": [
+            14
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaTranslate"
+      },
+      "widgets_values": [
+        "http://127.0.0.1:8000/v1",
+        "",
+        "Korean",
+        "MANGA_LLM_API_KEY",
+        4096,
+        300,
+        ""
+      ],
+      "widgets_values_named": {
+        "base_url": "http://127.0.0.1:8000/v1",
+        "model": "",
+        "target_language": "Korean",
+        "api_key_env": "MANGA_LLM_API_KEY",
+        "max_tokens": 4096,
+        "timeout": 300,
+        "translated_override_json": ""
+      },
+      "title": "⑥ 번역 · 영역 ID 유지"
+    },
+    {
+      "id": 13,
+      "type": "MangaSaveReview",
+      "pos": [
+        3360,
+        50
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "translated_json",
+          "type": "STRING",
+          "link": 14
+        }
+      ],
+      "outputs": [
+        {
+          "name": "translated_json",
+          "type": "STRING",
+          "links": [
+            44
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaSaveReview"
+      },
+      "widgets_values": [
+        "manga_translator/translation"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "manga_translator/translation"
+      },
+      "title": "번역 JSON 저장"
+    },
+    {
+      "id": 14,
+      "type": "MangaInpaintPlan",
+      "pos": [
+        1680,
+        650
+      ],
+      "size": [
+        330,
+        180
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "original",
+          "type": "IMAGE",
+          "link": 15
+        },
+        {
+          "name": "source_mask",
+          "type": "MASK",
+          "link": 16
+        },
+        {
+          "name": "cleanup_mask",
+          "type": "MASK",
+          "link": 17
+        }
+      ],
+      "outputs": [
+        {
+          "name": "base_page",
+          "type": "IMAGE",
+          "links": [
+            18
+          ]
+        },
+        {
+          "name": "x",
+          "type": "INT",
+          "links": [
+            19
+          ]
+        },
+        {
+          "name": "y",
+          "type": "INT",
+          "links": [
+            20
+          ]
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "links": [
+            21,
+            36
+          ]
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": [
+            22,
+            37
+          ]
+        },
+        {
+          "name": "owned_tile_masks",
+          "type": "MASK",
+          "links": [
+            40
+          ]
+        },
+        {
+          "name": "plan",
+          "type": "MANGA_INPAINT_PLAN",
+          "links": [
+            41
+          ]
+        },
+        {
+          "name": "plan_report",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaInpaintPlan"
+      },
+      "widgets_values": [
+        512,
+        128,
+        64,
+        true
+      ],
+      "widgets_values_named": {
+        "tile_size": 512,
+        "context": 128,
+        "max_tiles": 64,
+        "uniform_fill": true
+      },
+      "title": "⑦ 제거 타일 계획 · 512+128px"
+    },
+    {
+      "id": 15,
+      "type": "ImageCrop",
+      "pos": [
+        2100,
+        650
+      ],
+      "size": [
+        330,
+        180
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 18
+        },
+        {
+          "name": "x",
+          "type": "INT",
+          "link": 19,
+          "widget": {
+            "name": "x"
+          }
+        },
+        {
+          "name": "y",
+          "type": "INT",
+          "link": 20,
+          "widget": {
+            "name": "y"
+          }
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "link": 21,
+          "widget": {
+            "name": "width"
+          }
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": 22,
+          "widget": {
+            "name": "height"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            26,
+            38
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ImageCrop"
+      },
+      "widgets_values": [
+        512,
+        512,
+        0,
+        0
+      ],
+      "widgets_values_named": {
+        "width": 512,
+        "height": 512,
+        "x": 0,
+        "y": 0
+      },
+      "title": "영역 자르기 · 기본 ImageCrop"
+    },
+    {
+      "id": 16,
+      "type": "UNETLoader",
+      "pos": [
+        1680,
+        1050
+      ],
+      "size": [
+        270,
+        82
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            23
+          ]
+        }
+      ],
+      "title": "UNETLoader",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.39.2",
+        "Node name for S&R": "UNETLoader"
+      },
+      "widgets_values": [
+        "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "default"
+      ],
+      "widgets_values_named": {
+        "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    {
+      "id": 17,
+      "type": "CLIPLoader",
+      "pos": [
+        1680,
+        1250
+      ],
+      "size": [
+        270,
+        106
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            24
+          ]
+        }
+      ],
+      "title": "CLIPLoader",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.39.2",
+        "Node name for S&R": "CLIPLoader"
+      },
+      "widgets_values": [
+        "qwen3vl_8b_int8_convrot.safetensors",
+        "qwen_image",
+        "default"
+      ],
+      "widgets_values_named": {
+        "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+        "type": "qwen_image",
+        "device": "default"
+      }
+    },
+    {
+      "id": 18,
+      "type": "VAELoader",
+      "pos": [
+        1680,
+        1450
+      ],
+      "size": [
+        270,
+        58
+      ],
+      "flags": {},
+      "order": 17,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            25,
+            34
+          ]
+        }
+      ],
+      "title": "VAELoader",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.39.2",
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "qwen_image_2.1_vae_bf16.safetensors"
+      ],
+      "widgets_values_named": {
+        "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+      }
+    },
+    {
+      "id": 19,
+      "type": "TextEncodeQwenImage21",
+      "pos": [
+        2520,
+        650
+      ],
+      "size": [
+        440.09650210067116,
+        275.25303894630883
+      ],
+      "flags": {},
+      "order": 18,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 24
+        },
+        {
+          "name": "images.image_1",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 26
+        },
+        {
+          "name": "images.image_2",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "images.image_3",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "vae",
+          "shape": 7,
+          "type": "VAE",
+          "link": 25
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            28
+          ]
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "links": [
+            29
+          ]
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "links": [
+            32
+          ]
+        }
+      ],
+      "title": "⑧ Qwen · 페이지가 아닌 타일 원문 제거",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.39.2",
+        "Node name for S&R": "TextEncodeQwenImage21"
+      },
+      "widgets_values": [
+        "Remove all visible text and lettering from <image1>, including titles, names, small captions, labels, and every line of fine print. Completely erase lettering and text remnants. Reconstruct the background beneath the removed text to match the surrounding color, shading, and texture. Preserve gray panels, speech bubble outlines, illustrations, and layout.",
+        "",
+        0
+      ],
+      "widgets_values_named": {
+        "prompt": "Remove all visible text and lettering from <image1>, including titles, names, small captions, labels, and every line of fine print. Completely erase lettering and text remnants. Reconstruct the background beneath the removed text to match the surrounding color, shading, and texture. Preserve gray panels, speech bubble outlines, illustrations, and layout.",
+        "negative_prompt": "",
+        "resolution": 0
+      }
+    },
+    {
+      "id": 20,
+      "type": "QwenImage21Cache",
+      "pos": [
+        2100,
+        1050
+      ],
+      "size": [
+        270,
+        82
+      ],
+      "flags": {},
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 23
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            27
+          ]
+        }
+      ],
+      "title": "QwenImage21Cache",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.39.2",
+        "Node name for S&R": "QwenImage21Cache"
+      },
+      "widgets_values": [
+        "gpu",
+        "default"
+      ],
+      "widgets_values_named": {
+        "device": "gpu",
+        "dtype": "default"
+      }
+    },
+    {
+      "id": 21,
+      "type": "KSamplerSelect",
+      "pos": [
+        2520,
+        1150
+      ],
+      "size": [
+        270,
+        58
+      ],
+      "flags": {},
+      "order": 20,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "SAMPLER",
+          "type": "SAMPLER",
+          "links": [
+            30
+          ]
+        }
+      ],
+      "title": "KSamplerSelect",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.39.2",
+        "Node name for S&R": "KSamplerSelect"
+      },
+      "widgets_values": [
+        "euler"
+      ],
+      "widgets_values_named": {
+        "sampler_name": "euler"
+      }
+    },
+    {
+      "id": 22,
+      "type": "ManualSigmas",
+      "pos": [
+        2520,
+        1350
+      ],
+      "size": [
+        270,
+        58
+      ],
+      "flags": {},
+      "order": 21,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "SIGMAS",
+          "type": "SIGMAS",
+          "links": [
+            31
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.39.2",
+        "Node name for S&R": "ManualSigmas"
+      },
+      "widgets_values": [
+        "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0.0"
+      ],
+      "widgets_values_named": {
+        "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0.0"
+      }
+    },
+    {
+      "id": 23,
+      "type": "SamplerCustom",
+      "pos": [
+        2940,
+        650
+      ],
+      "size": [
+        270,
+        230
+      ],
+      "flags": {},
+      "order": 22,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 27
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 28
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 29
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 30
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 31
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 32
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "LATENT",
+          "links": [
+            33
+          ]
+        },
+        {
+          "name": "denoised_output",
+          "type": "LATENT",
+          "links": []
+        }
+      ],
+      "title": "SamplerCustom",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.39.2",
+        "Node name for S&R": "SamplerCustom"
+      },
+      "widgets_values": [
+        true,
+        0,
+        "fixed",
+        1
+      ],
+      "widgets_values_named": {
+        "add_noise": true,
+        "noise_seed": 0,
+        "control_after_generate": "fixed",
+        "cfg": 1
+      }
+    },
+    {
+      "id": 24,
+      "type": "VAEDecode",
+      "pos": [
+        3360,
+        650
+      ],
+      "size": [
+        140,
+        46
+      ],
+      "flags": {},
+      "order": 23,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 33
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 34
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            35
+          ]
+        }
+      ],
+      "title": "VAEDecode",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.39.2",
+        "Node name for S&R": "VAEDecode"
+      }
+    },
+    {
+      "id": 25,
+      "type": "ImageScale",
+      "pos": [
+        3780,
+        650
+      ],
+      "size": [
+        330,
+        180
+      ],
+      "flags": {},
+      "order": 24,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 35
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "link": 36,
+          "widget": {
+            "name": "width"
+          }
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": 37,
+          "widget": {
+            "name": "height"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            39
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ImageScale"
+      },
+      "widgets_values": [
+        "lanczos",
+        512,
+        256,
+        "disabled"
+      ],
+      "widgets_values_named": {
+        "upscale_method": "lanczos",
+        "width": 512,
+        "height": 256,
+        "crop": "disabled"
+      },
+      "title": "타일 원래 크기 복원 · 기본 ImageScale"
+    },
+    {
+      "id": 26,
+      "type": "ImageCompositeMasked",
+      "pos": [
+        4200,
+        650
+      ],
+      "size": [
+        330,
+        150
+      ],
+      "flags": {},
+      "order": 25,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "destination",
+          "type": "IMAGE",
+          "link": 38
+        },
+        {
+          "name": "source",
+          "type": "IMAGE",
+          "link": 39
+        },
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 40
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            42
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ImageCompositeMasked"
+      },
+      "widgets_values": [
+        0,
+        0,
+        false
+      ],
+      "widgets_values_named": {
+        "x": 0,
+        "y": 0,
+        "resize_source": false
+      },
+      "title": "타일 소유 마스크 합성 · 기본 노드"
+    },
+    {
+      "id": 27,
+      "type": "MangaInpaintAssemble",
+      "pos": [
+        4620,
+        650
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 26,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "plan",
+          "type": "MANGA_INPAINT_PLAN",
+          "link": 41
+        },
+        {
+          "name": "generated",
+          "type": "IMAGE",
+          "link": 42
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cleaned_page",
+          "type": "IMAGE",
+          "links": [
+            47,
+            51
+          ]
+        },
+        {
+          "name": "cleanup_report",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaInpaintAssemble"
+      },
+      "widgets_values": [
+        true
+      ],
+      "widgets_values_named": {
+        "strict_cleanup": true
+      },
+      "title": "⑨ 전체 좌표 복원 · 잔존 원문 검사"
+    },
+    {
+      "id": 28,
+      "type": "MangaLetterPrepare",
+      "pos": [
+        4620,
+        50
+      ],
+      "size": [
+        330,
+        120
+      ],
+      "flags": {},
+      "order": 27,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "original",
+          "type": "IMAGE",
+          "link": 43
+        },
+        {
+          "name": "translated_json",
+          "type": "STRING",
+          "link": 44
+        },
+        {
+          "name": "text_pixel_mask",
+          "type": "MASK",
+          "link": 45
+        }
+      ],
+      "outputs": [
+        {
+          "name": "식자_영역_JSON",
+          "type": "STRING",
+          "links": [
+            48
+          ]
+        },
+        {
+          "name": "원문_스타일_참조_마스크",
+          "type": "MASK",
+          "links": [
+            49
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaLetterPrepare"
+      },
+      "widgets_values": [
+        12,
+        "{}"
+      ],
+      "widgets_values_named": {
+        "region_padding": 12,
+        "region_options_json": "{}"
+      },
+      "title": "⑩ 번역문과 원문 스타일 연결"
+    },
+    {
+      "id": 29,
+      "type": "MangaLetterPage",
+      "pos": [
+        5040,
+        50
+      ],
+      "size": [
+        330,
+        150
+      ],
+      "flags": {},
+      "order": 28,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "original",
+          "type": "IMAGE",
+          "link": 46
+        },
+        {
+          "name": "cleaned",
+          "type": "IMAGE",
+          "link": 47
+        },
+        {
+          "name": "source_mask",
+          "type": "MASK",
+          "link": 49
+        },
+        {
+          "name": "regions_json",
+          "type": "STRING",
+          "link": 48,
+          "widget": {
+            "name": "regions_json"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "최종_페이지",
+          "type": "IMAGE",
+          "links": [
+            50
+          ]
+        },
+        {
+          "name": "새_글자_알파",
+          "type": "MASK",
+          "links": []
+        },
+        {
+          "name": "영역별_보고서",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaLetterPage"
+      },
+      "widgets_values": [
+        "{\"schema\":1,\"coordinate_format\":\"xywh\",\"page_size\":[1024,768],\"regions\":[{\"id\":\"1\",\"bbox\":[80,80,400,160],\"text\":\"번역문\"}]}",
+        "NanumGothic-Bold.ttf",
+        1.0
+      ],
+      "widgets_values_named": {
+        "regions_json": "{\"schema\":1,\"coordinate_format\":\"xywh\",\"page_size\":[1024,768],\"regions\":[{\"id\":\"1\",\"bbox\":[80,80,400,160],\"text\":\"번역문\"}]}",
+        "default_font": "NanumGothic-Bold.ttf",
+        "texture_strength": 1.0
+      },
+      "title": "⑪ 영역별 식자 · 외곽선 행간 확보"
+    },
+    {
+      "id": 30,
+      "type": "SaveImage",
+      "pos": [
+        5460,
+        50
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 29,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 50
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "manga_translator/integrated_tiles"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "manga_translator/integrated_tiles"
+      },
+      "title": "⑫ 통합 결과 저장"
+    },
+    {
+      "id": 31,
+      "type": "PreviewImage",
+      "pos": [
+        5040,
+        650
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 30,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 51
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "검수 · 식자 직전 전체 배경"
+    },
+    {
+      "id": 32,
+      "type": "MaskToImage",
+      "pos": [
+        1260,
+        1050
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 31,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 52
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            53
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MaskToImage"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "마스크 → 이미지 · 기본 노드"
+    },
+    {
+      "id": 33,
+      "type": "PreviewImage",
+      "pos": [
+        1260,
+        1250
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 32,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 53
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "검수 · 제거 대상 마스크"
+    },
+    {
+      "id": 34,
+      "type": "Note",
+      "pos": [
+        3360,
+        1150
+      ],
+      "size": [
+        500,
+        270
+      ],
+      "flags": {},
+      "order": 33,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "한 번 실행: 검출→줄별 OCR→번역→타일별 제거→좌표 복원→식자.\nQwen은 512px 코어+128px 문맥 타일만 처리합니다. 단색 배경은 보수적 색 채우기를 먼저 시도합니다.\n이미지 크롭/크기 복원/마스크 확대/타일 합성/미리보기/저장은 기본 노드입니다.\n원문이 거의 그대로인 타일은 식자 전에 중단합니다. 픽셀 검사이며 OCR 품질 보증은 아닙니다.\n마스크 밖 누락 글씨는 자동 삭제되지 않습니다. 마스크 미리보기와 OCR JSON으로 확인하세요.\n통합 모의 실행 결과와 실제 GPU 품질 검증은 구분합니다."
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      3,
+      0,
+      "IMAGE"
+    ],
+    [
+      2,
+      2,
+      0,
+      3,
+      1,
+      "MANGA_DETECTOR_MODEL"
+    ],
+    [
+      3,
+      3,
+      0,
+      4,
+      0,
+      "MANGA_DETECTION"
+    ],
+    [
+      4,
+      3,
+      0,
+      5,
+      0,
+      "MANGA_DETECTION"
+    ],
+    [
+      5,
+      5,
+      0,
+      6,
+      0,
+      "MASK"
+    ],
+    [
+      6,
+      1,
+      0,
+      7,
+      0,
+      "IMAGE"
+    ],
+    [
+      7,
+      4,
+      0,
+      7,
+      1,
+      "STRING"
+    ],
+    [
+      8,
+      7,
+      0,
+      9,
+      0,
+      "IMAGE"
+    ],
+    [
+      9,
+      8,
+      0,
+      9,
+      1,
+      "MANGA_OCR_MODEL"
+    ],
+    [
+      10,
+      9,
+      0,
+      10,
+      0,
+      "STRING"
+    ],
+    [
+      11,
+      7,
+      1,
+      10,
+      1,
+      "STRING"
+    ],
+    [
+      12,
+      10,
+      0,
+      11,
+      0,
+      "STRING"
+    ],
+    [
+      13,
+      11,
+      0,
+      12,
+      0,
+      "STRING"
+    ],
+    [
+      14,
+      12,
+      0,
+      13,
+      0,
+      "STRING"
+    ],
+    [
+      15,
+      1,
+      0,
+      14,
+      0,
+      "IMAGE"
+    ],
+    [
+      16,
+      5,
+      0,
+      14,
+      1,
+      "MASK"
+    ],
+    [
+      17,
+      6,
+      0,
+      14,
+      2,
+      "MASK"
+    ],
+    [
+      18,
+      14,
+      0,
+      15,
+      0,
+      "IMAGE"
+    ],
+    [
+      19,
+      14,
+      1,
+      15,
+      1,
+      "INT"
+    ],
+    [
+      20,
+      14,
+      2,
+      15,
+      2,
+      "INT"
+    ],
+    [
+      21,
+      14,
+      3,
+      15,
+      3,
+      "INT"
+    ],
+    [
+      22,
+      14,
+      4,
+      15,
+      4,
+      "INT"
+    ],
+    [
+      23,
+      16,
+      0,
+      20,
+      0,
+      "MODEL"
+    ],
+    [
+      24,
+      17,
+      0,
+      19,
+      0,
+      "CLIP"
+    ],
+    [
+      25,
+      18,
+      0,
+      19,
+      4,
+      "VAE"
+    ],
+    [
+      26,
+      15,
+      0,
+      19,
+      1,
+      "IMAGE"
+    ],
+    [
+      27,
+      20,
+      0,
+      23,
+      0,
+      "MODEL"
+    ],
+    [
+      28,
+      19,
+      0,
+      23,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      29,
+      19,
+      1,
+      23,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      30,
+      21,
+      0,
+      23,
+      3,
+      "SAMPLER"
+    ],
+    [
+      31,
+      22,
+      0,
+      23,
+      4,
+      "SIGMAS"
+    ],
+    [
+      32,
+      19,
+      2,
+      23,
+      5,
+      "LATENT"
+    ],
+    [
+      33,
+      23,
+      0,
+      24,
+      0,
+      "LATENT"
+    ],
+    [
+      34,
+      18,
+      0,
+      24,
+      1,
+      "VAE"
+    ],
+    [
+      35,
+      24,
+      0,
+      25,
+      0,
+      "IMAGE"
+    ],
+    [
+      36,
+      14,
+      3,
+      25,
+      1,
+      "INT"
+    ],
+    [
+      37,
+      14,
+      4,
+      25,
+      2,
+      "INT"
+    ],
+    [
+      38,
+      15,
+      0,
+      26,
+      0,
+      "IMAGE"
+    ],
+    [
+      39,
+      25,
+      0,
+      26,
+      1,
+      "IMAGE"
+    ],
+    [
+      40,
+      14,
+      5,
+      26,
+      2,
+      "MASK"
+    ],
+    [
+      41,
+      14,
+      6,
+      27,
+      0,
+      "MANGA_INPAINT_PLAN"
+    ],
+    [
+      42,
+      26,
+      0,
+      27,
+      1,
+      "IMAGE"
+    ],
+    [
+      43,
+      1,
+      0,
+      28,
+      0,
+      "IMAGE"
+    ],
+    [
+      44,
+      13,
+      0,
+      28,
+      1,
+      "STRING"
+    ],
+    [
+      45,
+      5,
+      0,
+      28,
+      2,
+      "MASK"
+    ],
+    [
+      46,
+      1,
+      0,
+      29,
+      0,
+      "IMAGE"
+    ],
+    [
+      47,
+      27,
+      0,
+      29,
+      1,
+      "IMAGE"
+    ],
+    [
+      48,
+      28,
+      0,
+      29,
+      3,
+      "STRING"
+    ],
+    [
+      49,
+      28,
+      1,
+      29,
+      2,
+      "MASK"
+    ],
+    [
+      50,
+      29,
+      0,
+      30,
+      0,
+      "IMAGE"
+    ],
+    [
+      51,
+      27,
+      0,
+      31,
+      0,
+      "IMAGE"
+    ],
+    [
+      52,
+      6,
+      0,
+      32,
+      0,
+      "MASK"
+    ],
+    [
+      53,
+      32,
+      0,
+      33,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.55,
+      "offset": [
+        20,
+        20
+      ]
+    },
+    "frontendVersion": "1.53.10"
+  },
+  "version": 0.4
+}

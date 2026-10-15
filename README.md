@@ -1,5 +1,7 @@
 # ComfyUI-Manga-Translator
 
+**현재 기본 워크플로: [08 통합 타일 제거·식자](lettering/example_workflows/08-integrated-tiled-cleanup-lettering.json).** 검출·줄별 OCR·번역·마스크 기반 타일 Qwen·좌표 복원·잔존 원문 검사·식자를 한 번에 연결한다. 이미지 크롭/복원/마스크 합성/저장은 기본 노드를 사용한다. 설치 후 ComfyUI를 재시작하고 08 JSON을 새로 불러온다. [통합 기능·모의 실행·검증 한계](docs/integrated-workflow.md)를 먼저 참고한다. 모의 실행의 모델 응답은 대역이며 실제 GPU 품질 실증과 구분한다.
+
 ComfyUI에서 원문 검출 → OCR → 번역 → 이미지 모델 편집 → 최종 저장을 연결하는 초기 커스텀 노드 패키지. 첫 예제는 RF-DETR, Hayai OCR v2, 기존 번역 LLM 서버, Qwen Image 2.1 Turbo를 사용한다. Koharu 실행파일과 Rust 렌더러는 필요하지 않다.
 
 **현재 상태: 초기 버전. ComfyUI 프런트엔드 1.53.10에서 예제 8개의 가져오기·설정 복원·저장 후 재불러오기·API 직렬화를 모델 백엔드 대역으로 검사했다. 실제 GPU OCR/검출, 번역 서버, 이미지 편집 결과는 미검증이다.** 검증 범위는 [VALIDATION.md](VALIDATION.md)에 기록한다. 선행 프로젝트와 엔진 비교는 [조사 문서](docs/reference-research.md)에 있다.

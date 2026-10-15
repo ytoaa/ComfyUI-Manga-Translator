@@ -1,0 +1,444 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": ""
+    }
+  },
+  "2": {
+    "class_type": "MangaDetectorLoader",
+    "inputs": {
+      "model_name": "koharu-layout-rfdetr-seg-2xl-1152"
+    }
+  },
+  "3": {
+    "class_type": "MangaDetectorDetail",
+    "inputs": {
+      "text": 0.25,
+      "onomatopoeia": 0.2,
+      "bubble": 0.5,
+      "panel": 0.5,
+      "detail_mode": "auto",
+      "detail_overlap": 64,
+      "images": [
+        "1",
+        0
+      ],
+      "model": [
+        "2",
+        0
+      ]
+    }
+  },
+  "4": {
+    "class_type": "MangaDetectionRegions",
+    "inputs": {
+      "include_sfx": false,
+      "dedupe_iou": 0.75,
+      "reading_order": "top_to_bottom",
+      "result": [
+        "3",
+        0
+      ]
+    }
+  },
+  "5": {
+    "class_type": "MangaDetectionMask",
+    "inputs": {
+      "include_sfx": false,
+      "result": [
+        "3",
+        0
+      ]
+    }
+  },
+  "6": {
+    "class_type": "GrowMask",
+    "inputs": {
+      "expand": 8,
+      "tapered_corners": true,
+      "mask": [
+        "5",
+        0
+      ]
+    }
+  },
+  "7": {
+    "class_type": "MangaRegionCrops",
+    "inputs": {
+      "layout_json": [
+        "4",
+        0
+      ],
+      "ocr_padding": 4,
+      "edit_margin": 12,
+      "images": [
+        "1",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "MangaOCRLoader",
+    "inputs": {
+      "model_name": "hayai-ocr-v2"
+    }
+  },
+  "9": {
+    "class_type": "MangaOCRAdaptive",
+    "inputs": {
+      "max_new_tokens": 256,
+      "base_patches": 512,
+      "small_text_patches": 1024,
+      "small_text_px": 48,
+      "line_split": true,
+      "tight_crop": false,
+      "repetition_penalty": 1.0,
+      "retry_on_repetition": true,
+      "images": [
+        "7",
+        0
+      ],
+      "model": [
+        "8",
+        0
+      ]
+    }
+  },
+  "10": {
+    "class_type": "MangaCollectOCR",
+    "inputs": {
+      "text": [
+        "9",
+        0
+      ],
+      "manifest_json": [
+        "7",
+        1
+      ]
+    }
+  },
+  "11": {
+    "class_type": "MangaSaveReview",
+    "inputs": {
+      "filename_prefix": "manga_translator/ocr",
+      "translated_json": [
+        "10",
+        0
+      ]
+    }
+  },
+  "12": {
+    "class_type": "MangaTranslate",
+    "inputs": {
+      "base_url": "http://127.0.0.1:8000/v1",
+      "model": "",
+      "target_language": "Korean",
+      "api_key_env": "MANGA_LLM_API_KEY",
+      "max_tokens": 4096,
+      "timeout": 300,
+      "translated_override_json": "",
+      "ocr_json": [
+        "11",
+        0
+      ]
+    }
+  },
+  "13": {
+    "class_type": "MangaSaveReview",
+    "inputs": {
+      "filename_prefix": "manga_translator/translation",
+      "translated_json": [
+        "12",
+        0
+      ]
+    }
+  },
+  "14": {
+    "class_type": "MangaInpaintPlan",
+    "inputs": {
+      "tile_size": 512,
+      "context": 128,
+      "max_tiles": 64,
+      "uniform_fill": true,
+      "original": [
+        "1",
+        0
+      ],
+      "source_mask": [
+        "5",
+        0
+      ],
+      "cleanup_mask": [
+        "6",
+        0
+      ]
+    }
+  },
+  "15": {
+    "class_type": "ImageCrop",
+    "inputs": {
+      "width": [
+        "14",
+        3
+      ],
+      "height": [
+        "14",
+        4
+      ],
+      "x": [
+        "14",
+        1
+      ],
+      "y": [
+        "14",
+        2
+      ],
+      "image": [
+        "14",
+        0
+      ]
+    }
+  },
+  "16": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "17": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    }
+  },
+  "18": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    }
+  },
+  "19": {
+    "class_type": "TextEncodeQwenImage21",
+    "inputs": {
+      "prompt": "Remove all visible text and lettering from <image1>, including titles, names, small captions, labels, and every line of fine print. Completely erase lettering and text remnants. Reconstruct the background beneath the removed text to match the surrounding color, shading, and texture. Preserve gray panels, speech bubble outlines, illustrations, and layout.",
+      "negative_prompt": "",
+      "resolution": 0,
+      "clip": [
+        "17",
+        0
+      ],
+      "vae": [
+        "18",
+        0
+      ],
+      "images.image_1": [
+        "15",
+        0
+      ]
+    }
+  },
+  "20": {
+    "class_type": "QwenImage21Cache",
+    "inputs": {
+      "device": "gpu",
+      "dtype": "default",
+      "model": [
+        "16",
+        0
+      ]
+    }
+  },
+  "21": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    }
+  },
+  "22": {
+    "class_type": "ManualSigmas",
+    "inputs": {
+      "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0.0"
+    }
+  },
+  "23": {
+    "class_type": "SamplerCustom",
+    "inputs": {
+      "add_noise": true,
+      "noise_seed": 0,
+      "cfg": 1,
+      "model": [
+        "20",
+        0
+      ],
+      "positive": [
+        "19",
+        0
+      ],
+      "negative": [
+        "19",
+        1
+      ],
+      "sampler": [
+        "21",
+        0
+      ],
+      "sigmas": [
+        "22",
+        0
+      ],
+      "latent_image": [
+        "19",
+        2
+      ]
+    }
+  },
+  "24": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "23",
+        0
+      ],
+      "vae": [
+        "18",
+        0
+      ]
+    }
+  },
+  "25": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "upscale_method": "lanczos",
+      "width": [
+        "14",
+        3
+      ],
+      "height": [
+        "14",
+        4
+      ],
+      "crop": "disabled",
+      "image": [
+        "24",
+        0
+      ]
+    }
+  },
+  "26": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "destination": [
+        "15",
+        0
+      ],
+      "source": [
+        "25",
+        0
+      ],
+      "mask": [
+        "14",
+        5
+      ]
+    }
+  },
+  "27": {
+    "class_type": "MangaInpaintAssemble",
+    "inputs": {
+      "strict_cleanup": true,
+      "plan": [
+        "14",
+        6
+      ],
+      "generated": [
+        "26",
+        0
+      ]
+    }
+  },
+  "28": {
+    "class_type": "MangaLetterPrepare",
+    "inputs": {
+      "region_padding": 12,
+      "region_options_json": "{}",
+      "original": [
+        "1",
+        0
+      ],
+      "translated_json": [
+        "13",
+        0
+      ],
+      "text_pixel_mask": [
+        "5",
+        0
+      ]
+    }
+  },
+  "29": {
+    "class_type": "MangaLetterPage",
+    "inputs": {
+      "regions_json": [
+        "28",
+        0
+      ],
+      "default_font": "NanumGothic-Bold.ttf",
+      "texture_strength": 1.0,
+      "original": [
+        "1",
+        0
+      ],
+      "cleaned": [
+        "27",
+        0
+      ],
+      "source_mask": [
+        "28",
+        1
+      ]
+    }
+  },
+  "30": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "manga_translator/integrated_tiles",
+      "images": [
+        "29",
+        0
+      ]
+    }
+  },
+  "31": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "27",
+        0
+      ]
+    }
+  },
+  "32": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "6",
+        0
+      ]
+    }
+  },
+  "33": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "32",
+        0
+      ]
+    }
+  }
+}

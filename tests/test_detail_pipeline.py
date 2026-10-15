@@ -56,6 +56,16 @@ def test_tight_ocr_crop_removes_blank_margin():
     assert crop.height >= 26
 
 
+def test_tight_crop_preserves_small_trailing_punctuation():
+    import numpy as np
+    image=Image.new('RGB',(1022,78),'white')
+    draw=ImageDraw.Draw(image)
+    for x in range(25,900,25): draw.rectangle((x,30,x+10,49),fill='black')
+    draw.rectangle((1000,40,1001,42),fill='black')
+    crop=M._tight_ocr_image(image)
+    assert np.all(np.asarray(crop)==0,axis=2).sum() == np.all(np.asarray(image)==0,axis=2).sum()
+
+
 def test_adaptive_ocr_uses_larger_patch_budget_for_small_text(monkeypatch):
     source=Image.new('RGB',(100,100),'white')
     small=Image.new('RGB',(160,32),'white')

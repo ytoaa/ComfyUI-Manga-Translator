@@ -107,6 +107,13 @@ def test_invalid_or_control_text_rejected(text):
         core.clean_text(text)
 
 
+def test_multiline_korean_reserves_outline_space_between_rows(fixture):
+    style = core.adjust_style(fixture[3], outline_width=8, shadow_x=0, shadow_y=0)
+    _, alpha, _ = core.render_text('가가가\n가가가', style, max_font=48)
+    occupied = np.flatnonzero((alpha > .1).any(axis=1))
+    assert np.diff(occupied).max() >= 4, 'Outlined text rows collided'
+
+
 def test_region_and_mask_mismatch_rejected(fixture):
     original, clean, mask, _ = fixture
     with pytest.raises(ValueError, match='outside'):
@@ -217,7 +224,7 @@ def test_existing_translation_json_bridges_to_lettering(fixture, monkeypatch):
 
 def test_all_example_workflow_links_api_and_new_node_schemas():
     files = sorted((PACKAGE/'example_workflows').glob('*.api.json'))
-    assert len(files) == 6
+    assert len(files) == 8
     for path in files:
         prompt = json.loads(path.read_text())
         ui = json.loads(path.with_name(path.name.replace('.api.json', '.json')).read_text())
@@ -236,8 +243,9 @@ def test_all_example_workflow_links_api_and_new_node_schemas():
                 assert link[0] in graph[str(link[1])]['outputs'][link[2]]['links']
             cls = nodes.NODE_CLASS_MAPPINGS.get(api['class_type'])
             if cls:
-                fields = cls.INPUT_TYPES()['required']
-                assert set(fields) <= set(api['inputs']), (path.name, identifier)
+                schema = cls.INPUT_TYPES()
+                fields = {**schema['required'], **schema.get('optional', {})}
+                assert set(schema['required']) <= set(api['inputs']), (path.name, identifier)
                 for field, value in api['inputs'].items():
                     if isinstance(value, list) and len(value) == 2 and isinstance(value[0], str):
                         source, port = value
