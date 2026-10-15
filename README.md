@@ -94,3 +94,14 @@ Qwen-VL은 추후 영역 분석·문맥 판단용 선택 사항이다. Qwen Edit
 ## 출처와 라이선스
 
 새 연결 코드와 전체 출처는 [LICENSE](LICENSE), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [provenance.json](provenance.json)에 기록한다. 포함된 RF-DETR/Hayai 어댑터는 기존 공개 프로젝트에서 가져와 고지를 보존한다. 모델 가중치는 포함하지 않으며 각 배포자의 별도 조건이 적용된다.
+
+
+## 기존 Koharu Qwen 제거 설정 복원
+
+05/06 통합 예제는 `ytoaa/koharu-remote`의 `ee6d9dd` 기준 인페인트 그래프와 같은
+직접 제거 지시문 및 `resolution=0`을 기본 Qwen TextEncode 노드에 사용한다.
+기존에 성공한 모델/샘플러를 유지하면서 달라졌던 제거 지시와 해상도부터 맞추는 수정이다.
+좌표·OCR JSON 기반 MangaCleanupPrompt는 기본 예제에서 제거했다. OCR/번역 JSON은
+식자 영역과 번역문 연결에 계속 사용한다. 제공된 05/06 일반 JSON을 다시 가져온다.
+기존의 정밀 글자 마스크 및 국소 색 보정까지 동일하게 이식한 것은 아니며,
+이번 복원 설정으로 실제 GPU에서 원문 제거가 개선되는지는 재실행으로 확인해야 한다.

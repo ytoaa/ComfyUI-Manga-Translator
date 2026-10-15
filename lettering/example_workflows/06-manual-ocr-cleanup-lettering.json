@@ -1,8 +1,8 @@
 {
   "id": "77f697fc-4b55-5998-a7b7-f93d63faf3cb",
   "revision": 1,
-  "last_node_id": 27,
-  "last_link_id": 36,
+  "last_node_id": 26,
+  "last_link_id": 34,
   "nodes": [
     {
       "id": 1,
@@ -24,7 +24,7 @@
           "name": "MODEL",
           "type": "MODEL",
           "links": [
-            5
+            4
           ]
         }
       ],
@@ -63,7 +63,7 @@
           "name": "CLIP",
           "type": "CLIP",
           "links": [
-            2
+            1
           ]
         }
       ],
@@ -104,8 +104,8 @@
           "name": "VAE",
           "type": "VAE",
           "links": [
-            4,
-            13
+            3,
+            12
           ]
         }
       ],
@@ -140,13 +140,13 @@
         {
           "name": "clip",
           "type": "CLIP",
-          "link": 2
+          "link": 1
         },
         {
           "name": "images.image_1",
           "shape": 7,
           "type": "IMAGE",
-          "link": 3
+          "link": 2
         },
         {
           "name": "images.image_2",
@@ -164,15 +164,7 @@
           "name": "vae",
           "shape": 7,
           "type": "VAE",
-          "link": 4
-        },
-        {
-          "name": "prompt",
-          "type": "STRING",
-          "link": 1,
-          "widget": {
-            "name": "prompt"
-          }
+          "link": 3
         }
       ],
       "outputs": [
@@ -180,21 +172,21 @@
           "name": "positive",
           "type": "CONDITIONING",
           "links": [
-            7
+            6
           ]
         },
         {
           "name": "negative",
           "type": "CONDITIONING",
           "links": [
-            8
+            7
           ]
         },
         {
           "name": "latent",
           "type": "LATENT",
           "links": [
-            11
+            10
           ]
         }
       ],
@@ -204,14 +196,14 @@
         "Node name for S&R": "TextEncodeQwenImage21"
       },
       "widgets_values": [
+        "Remove all visible text and lettering from <image1>, including titles, names, small captions, labels, and every line of fine print. Completely erase lettering and text remnants. Reconstruct the background beneath the removed text to match the surrounding color, shading, and texture. Preserve gray panels, speech bubble outlines, illustrations, and layout.",
         "",
-        "",
-        1024
+        0
       ],
       "widgets_values_named": {
-        "prompt": "",
+        "prompt": "Remove all visible text and lettering from <image1>, including titles, names, small captions, labels, and every line of fine print. Completely erase lettering and text remnants. Reconstruct the background beneath the removed text to match the surrounding color, shading, and texture. Preserve gray panels, speech bubble outlines, illustrations, and layout.",
         "negative_prompt": "",
-        "resolution": 1024
+        "resolution": 0
       },
       "title": "⑥ Qwen 2.1 글자 교체"
     },
@@ -233,7 +225,7 @@
         {
           "name": "model",
           "type": "MODEL",
-          "link": 5
+          "link": 4
         }
       ],
       "outputs": [
@@ -241,7 +233,7 @@
           "name": "MODEL",
           "type": "MODEL",
           "links": [
-            6
+            5
           ]
         }
       ],
@@ -280,7 +272,7 @@
           "name": "SAMPLER",
           "type": "SAMPLER",
           "links": [
-            9
+            8
           ]
         }
       ],
@@ -317,7 +309,7 @@
           "name": "SIGMAS",
           "type": "SIGMAS",
           "links": [
-            10
+            9
           ]
         }
       ],
@@ -352,32 +344,32 @@
         {
           "name": "model",
           "type": "MODEL",
-          "link": 6
+          "link": 5
         },
         {
           "name": "positive",
           "type": "CONDITIONING",
-          "link": 7
+          "link": 6
         },
         {
           "name": "negative",
           "type": "CONDITIONING",
-          "link": 8
+          "link": 7
         },
         {
           "name": "sampler",
           "type": "SAMPLER",
-          "link": 9
+          "link": 8
         },
         {
           "name": "sigmas",
           "type": "SIGMAS",
-          "link": 10
+          "link": 9
         },
         {
           "name": "latent_image",
           "type": "LATENT",
-          "link": 11
+          "link": 10
         }
       ],
       "outputs": [
@@ -385,7 +377,7 @@
           "name": "output",
           "type": "LATENT",
           "links": [
-            12
+            11
           ]
         },
         {
@@ -431,12 +423,12 @@
         {
           "name": "samples",
           "type": "LATENT",
-          "link": 12
+          "link": 11
         },
         {
           "name": "vae",
           "type": "VAE",
-          "link": 13
+          "link": 12
         }
       ],
       "outputs": [
@@ -444,8 +436,8 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            26,
-            29
+            24,
+            27
           ]
         }
       ],
@@ -474,7 +466,7 @@
         {
           "name": "image",
           "type": "IMAGE",
-          "link": 14
+          "link": 13
         }
       ],
       "outputs": [
@@ -482,7 +474,7 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            3
+            2
           ]
         }
       ],
@@ -525,12 +517,12 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
+            13,
             14,
-            15,
-            25,
-            30,
-            31,
-            33
+            23,
+            28,
+            29,
+            31
           ]
         },
         {
@@ -565,7 +557,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 15
+          "link": 14
         }
       ],
       "outputs": [
@@ -573,22 +565,22 @@
           "name": "ocr_crops",
           "type": "IMAGE",
           "links": [
-            16,
-            18
+            15,
+            17
           ]
         },
         {
           "name": "manifest_json",
           "type": "STRING",
           "links": [
-            20
+            19
           ]
         },
         {
           "name": "edit_region_mask",
           "type": "MASK",
           "links": [
-            27
+            25
           ]
         }
       ],
@@ -627,7 +619,7 @@
           "name": "MANGA_OCR_MODEL",
           "type": "MANGA_OCR_MODEL",
           "links": [
-            17
+            16
           ]
         }
       ],
@@ -660,12 +652,12 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 16
+          "link": 15
         },
         {
           "name": "model",
           "type": "MANGA_OCR_MODEL",
-          "link": 17
+          "link": 16
         }
       ],
       "outputs": [
@@ -673,7 +665,7 @@
           "name": "STRING",
           "type": "STRING",
           "links": [
-            19
+            18
           ]
         }
       ],
@@ -683,13 +675,13 @@
       "widgets_values": [
         512,
         1024,
-        1.0,
+        1,
         true
       ],
       "widgets_values_named": {
         "max_new_tokens": 512,
         "max_patches": 1024,
-        "repetition_penalty": 1.0,
+        "repetition_penalty": 1,
         "retry_on_repetition": true
       },
       "pos": [
@@ -712,7 +704,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 18
+          "link": 17
         }
       ],
       "outputs": [
@@ -747,12 +739,12 @@
         {
           "name": "text",
           "type": "STRING",
-          "link": 19
+          "link": 18
         },
         {
           "name": "manifest_json",
           "type": "STRING",
-          "link": 20
+          "link": 19
         }
       ],
       "outputs": [
@@ -760,7 +752,7 @@
           "name": "ocr_json",
           "type": "STRING",
           "links": [
-            21
+            20
           ]
         }
       ],
@@ -789,7 +781,7 @@
         {
           "name": "translated_json",
           "type": "STRING",
-          "link": 21
+          "link": 20
         }
       ],
       "outputs": [
@@ -797,7 +789,7 @@
           "name": "translated_json",
           "type": "STRING",
           "links": [
-            22
+            21
           ]
         }
       ],
@@ -830,7 +822,7 @@
         {
           "name": "ocr_json",
           "type": "STRING",
-          "link": 22
+          "link": 21
         }
       ],
       "outputs": [
@@ -838,7 +830,7 @@
           "name": "translated_json",
           "type": "STRING",
           "links": [
-            23
+            22
           ]
         }
       ],
@@ -883,7 +875,7 @@
         {
           "name": "translated_json",
           "type": "STRING",
-          "link": 23
+          "link": 22
         }
       ],
       "outputs": [
@@ -891,8 +883,7 @@
           "name": "translated_json",
           "type": "STRING",
           "links": [
-            24,
-            32
+            30
           ]
         }
       ],
@@ -914,47 +905,6 @@
     },
     {
       "id": 20,
-      "type": "MangaCleanupPrompt",
-      "size": [
-        410,
-        280
-      ],
-      "flags": {},
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "translated_json",
-          "type": "STRING",
-          "link": 24
-        }
-      ],
-      "outputs": [
-        {
-          "name": "edit_prompt",
-          "type": "STRING",
-          "links": [
-            1
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "MangaCleanupPrompt"
-      },
-      "widgets_values": [
-        "Preserve original artwork, speech bubble borders, screen tones, colors, gradients and texture. Do not add lettering or a solid replacement background."
-      ],
-      "widgets_values_named": {
-        "instructions": "Preserve original artwork, speech bubble borders, screen tones, colors, gradients and texture. Do not add lettering or a solid replacement background."
-      },
-      "pos": [
-        2880,
-        0
-      ],
-      "order": 19,
-      "title": "이미지 모델 · 원문만 제거"
-    },
-    {
-      "id": 21,
       "type": "ImageCompositeMasked",
       "size": [
         330,
@@ -966,17 +916,17 @@
         {
           "name": "destination",
           "type": "IMAGE",
-          "link": 25
+          "link": 23
         },
         {
           "name": "source",
           "type": "IMAGE",
-          "link": 26
+          "link": 24
         },
         {
           "name": "mask",
           "type": "MASK",
-          "link": 27
+          "link": 25
         }
       ],
       "outputs": [
@@ -984,7 +934,7 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            34
+            32
           ]
         }
       ],
@@ -1005,11 +955,11 @@
         2700,
         1000
       ],
-      "order": 20,
+      "order": 19,
       "title": "편집 영역만 원본에 반영"
     },
     {
-      "id": 22,
+      "id": 21,
       "type": "SaveImage",
       "size": [
         330,
@@ -1021,7 +971,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 28
+          "link": 26
         }
       ],
       "outputs": [
@@ -1044,11 +994,11 @@
         3070,
         1000
       ],
-      "order": 21,
+      "order": 20,
       "title": "⑦ 최종 이미지 저장"
     },
     {
-      "id": 23,
+      "id": 22,
       "type": "PreviewImage",
       "size": [
         320,
@@ -1060,7 +1010,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 29
+          "link": 27
         }
       ],
       "outputs": [
@@ -1079,11 +1029,11 @@
         2340,
         1260
       ],
-      "order": 22,
+      "order": 21,
       "title": "Qwen 생성 원본 · 검수"
     },
     {
-      "id": 24,
+      "id": 23,
       "type": "PreviewImage",
       "size": [
         320,
@@ -1095,7 +1045,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 30
+          "link": 28
         }
       ],
       "outputs": [
@@ -1114,11 +1064,11 @@
         0,
         250
       ],
-      "order": 23,
+      "order": 22,
       "title": "원본 비교"
     },
     {
-      "id": 25,
+      "id": 24,
       "type": "MangaLetterPrepare",
       "pos": [
         2450,
@@ -1129,18 +1079,18 @@
         120
       ],
       "flags": {},
-      "order": 24,
+      "order": 23,
       "mode": 0,
       "inputs": [
         {
           "name": "original",
           "type": "IMAGE",
-          "link": 31
+          "link": 29
         },
         {
           "name": "translated_json",
           "type": "STRING",
-          "link": 32
+          "link": 30
         },
         {
           "name": "text_pixel_mask",
@@ -1153,14 +1103,14 @@
           "name": "식자_영역_JSON",
           "type": "STRING",
           "links": [
-            35
+            33
           ]
         },
         {
           "name": "원문_스타일_참조_마스크",
           "type": "MASK",
           "links": [
-            36
+            34
           ]
         }
       ],
@@ -1178,7 +1128,7 @@
       "title": "기존 번역 JSON → 스타일 식자"
     },
     {
-      "id": 26,
+      "id": 25,
       "type": "MangaLetterPage",
       "pos": [
         2900,
@@ -1189,28 +1139,28 @@
         150
       ],
       "flags": {},
-      "order": 25,
+      "order": 24,
       "mode": 0,
       "inputs": [
         {
           "name": "original",
           "type": "IMAGE",
-          "link": 33
+          "link": 31
         },
         {
           "name": "cleaned",
           "type": "IMAGE",
-          "link": 34
+          "link": 32
         },
         {
           "name": "source_mask",
           "type": "MASK",
-          "link": 36
+          "link": 34
         },
         {
           "name": "regions_json",
           "type": "STRING",
-          "link": 35,
+          "link": 33,
           "widget": {
             "name": "regions_json"
           }
@@ -1221,7 +1171,7 @@
           "name": "최종_페이지",
           "type": "IMAGE",
           "links": [
-            28
+            26
           ]
         },
         {
@@ -1241,17 +1191,17 @@
       "widgets_values": [
         "{\"schema\":1,\"coordinate_format\":\"xywh\",\"page_size\":[1024,768],\"regions\":[{\"id\":\"1\",\"bbox\":[80,80,400,160],\"text\":\"번역문\"}]}",
         "NanumGothic-Bold.ttf",
-        1.0
+        1
       ],
       "widgets_values_named": {
         "regions_json": "{\"schema\":1,\"coordinate_format\":\"xywh\",\"page_size\":[1024,768],\"regions\":[{\"id\":\"1\",\"bbox\":[80,80,400,160],\"text\":\"번역문\"}]}",
         "default_font": "NanumGothic-Bold.ttf",
-        "texture_strength": 1.0
+        "texture_strength": 1
       },
       "title": "페이지 스타일 식자 · Manga"
     },
     {
-      "id": 27,
+      "id": 26,
       "type": "Note",
       "pos": [
         2900,
@@ -1262,7 +1212,7 @@
         270
       ],
       "flags": {},
-      "order": 26,
+      "order": 25,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -1275,14 +1225,6 @@
   "links": [
     [
       1,
-      20,
-      0,
-      4,
-      5,
-      "STRING"
-    ],
-    [
-      2,
       2,
       0,
       4,
@@ -1290,7 +1232,7 @@
       "CLIP"
     ],
     [
-      3,
+      2,
       10,
       0,
       4,
@@ -1298,7 +1240,7 @@
       "IMAGE"
     ],
     [
-      4,
+      3,
       3,
       0,
       4,
@@ -1306,7 +1248,7 @@
       "VAE"
     ],
     [
-      5,
+      4,
       1,
       0,
       5,
@@ -1314,7 +1256,7 @@
       "MODEL"
     ],
     [
-      6,
+      5,
       5,
       0,
       8,
@@ -1322,7 +1264,7 @@
       "MODEL"
     ],
     [
-      7,
+      6,
       4,
       0,
       8,
@@ -1330,7 +1272,7 @@
       "CONDITIONING"
     ],
     [
-      8,
+      7,
       4,
       1,
       8,
@@ -1338,7 +1280,7 @@
       "CONDITIONING"
     ],
     [
-      9,
+      8,
       6,
       0,
       8,
@@ -1346,7 +1288,7 @@
       "SAMPLER"
     ],
     [
-      10,
+      9,
       7,
       0,
       8,
@@ -1354,7 +1296,7 @@
       "SIGMAS"
     ],
     [
-      11,
+      10,
       4,
       2,
       8,
@@ -1362,7 +1304,7 @@
       "LATENT"
     ],
     [
-      12,
+      11,
       8,
       0,
       9,
@@ -1370,7 +1312,7 @@
       "LATENT"
     ],
     [
-      13,
+      12,
       3,
       0,
       9,
@@ -1378,7 +1320,7 @@
       "VAE"
     ],
     [
-      14,
+      13,
       11,
       0,
       10,
@@ -1386,7 +1328,7 @@
       "IMAGE"
     ],
     [
-      15,
+      14,
       11,
       0,
       12,
@@ -1394,7 +1336,7 @@
       "IMAGE"
     ],
     [
-      16,
+      15,
       12,
       0,
       14,
@@ -1402,7 +1344,7 @@
       "IMAGE"
     ],
     [
-      17,
+      16,
       13,
       0,
       14,
@@ -1410,7 +1352,7 @@
       "MANGA_OCR_MODEL"
     ],
     [
-      18,
+      17,
       12,
       0,
       15,
@@ -1418,7 +1360,7 @@
       "IMAGE"
     ],
     [
-      19,
+      18,
       14,
       0,
       16,
@@ -1426,7 +1368,7 @@
       "STRING"
     ],
     [
-      20,
+      19,
       12,
       1,
       16,
@@ -1434,7 +1376,7 @@
       "STRING"
     ],
     [
-      21,
+      20,
       16,
       0,
       17,
@@ -1442,76 +1384,84 @@
       "STRING"
     ],
     [
-      22,
+      21,
       17,
       0,
       18,
+      0,
+      "STRING"
+    ],
+    [
+      22,
+      18,
+      0,
+      19,
       0,
       "STRING"
     ],
     [
       23,
-      18,
-      0,
-      19,
-      0,
-      "STRING"
-    ],
-    [
-      24,
-      19,
-      0,
-      20,
-      0,
-      "STRING"
-    ],
-    [
-      25,
       11,
       0,
-      21,
+      20,
       0,
       "IMAGE"
     ],
     [
-      26,
+      24,
       9,
       0,
-      21,
+      20,
       1,
       "IMAGE"
     ],
     [
-      27,
+      25,
       12,
       2,
-      21,
+      20,
       2,
       "MASK"
     ],
     [
-      28,
       26,
+      25,
+      0,
+      21,
+      0,
+      "IMAGE"
+    ],
+    [
+      27,
+      9,
       0,
       22,
+      0,
+      "IMAGE"
+    ],
+    [
+      28,
+      11,
+      0,
+      23,
       0,
       "IMAGE"
     ],
     [
       29,
-      9,
-      0,
-      23,
-      0,
-      "IMAGE"
-    ],
-    [
-      30,
       11,
       0,
       24,
       0,
       "IMAGE"
+    ],
+    [
+      30,
+      19,
+      0,
+      24,
+      1,
+      "STRING"
     ],
     [
       31,
@@ -1523,41 +1473,25 @@
     ],
     [
       32,
-      19,
+      20,
       0,
       25,
       1,
-      "STRING"
+      "IMAGE"
     ],
     [
       33,
-      11,
+      24,
       0,
-      26,
-      0,
-      "IMAGE"
-    ],
-    [
-      34,
-      21,
-      0,
-      26,
-      1,
-      "IMAGE"
-    ],
-    [
-      35,
       25,
-      0,
-      26,
       3,
       "STRING"
     ],
     [
-      36,
-      25,
+      34,
+      24,
       1,
-      26,
+      25,
       2,
       "MASK"
     ]

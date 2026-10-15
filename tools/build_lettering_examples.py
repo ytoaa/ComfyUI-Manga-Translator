@@ -291,7 +291,7 @@ def integrated_workflow(manual=False):
     mapping = {}
     for item in ui['nodes']:
         old = str(item['id'])
-        if old not in api:
+        if old not in api or old == '55':
             continue
         new = deepcopy(item)
         new_id = len(g.nodes)+1
@@ -302,18 +302,22 @@ def integrated_workflow(manual=False):
         g.nodes.append(new)
         g.prompt[str(new_id)] = deepcopy(api[old])
     for old, node in api.items():
+        if old == '55':
+            continue
         for field, value in node['inputs'].items():
+            if old == '5' and field == 'prompt':
+                continue
             if isinstance(value, list) and len(value) == 2 and isinstance(value[0], str):
                 g.connect(mapping[value[0]], value[1], mapping[old], field)
-    prompt_id = mapping['55']
-    g.prompt[str(prompt_id)]['class_type'] = 'MangaCleanupPrompt'
-    instructions = 'Preserve original artwork, speech bubble borders, screen tones, colors, gradients and texture. Do not add lettering or a solid replacement background.'
-    g.prompt[str(prompt_id)]['inputs']['instructions'] = instructions
-    prompt_ui = g.nodes[prompt_id-1]
-    prompt_ui['type'], prompt_ui['title'] = 'MangaCleanupPrompt', '이미지 모델 · 원문만 제거'
-    prompt_ui['properties'] = {'Node name for S&R': 'MangaCleanupPrompt'}
-    prompt_ui['widgets_values'] = [instructions]
-    prompt_ui['widgets_values_named'] = {'instructions': instructions}
+    # Match the working Koharu inpainting graph: native Qwen prompt, original resolution.
+    # Do not pass OCR/source JSON as editing instructions to the image model.
+    cleanup_prompt = "Remove all visible text and lettering from <image1>, including titles, names, small captions, labels, and every line of fine print. Completely erase lettering and text remnants. Reconstruct the background beneath the removed text to match the surrounding color, shading, and texture. Preserve gray panels, speech bubble outlines, illustrations, and layout."
+    qwen_id = mapping['5']
+    g.prompt[str(qwen_id)]['inputs'].update(prompt=cleanup_prompt, resolution=0)
+    qwen_ui = g.nodes[qwen_id-1]
+    qwen_ui['inputs'] = [item for item in qwen_ui['inputs'] if item['name'] != 'prompt']
+    qwen_ui['widgets_values_named'].update(prompt=cleanup_prompt, resolution=0)
+    qwen_ui['widgets_values'] = [cleanup_prompt, qwen_ui['widgets_values_named']['negative_prompt'], 0]
     prepare = g.add('MangaLetterPrepare', pos=(2450, 900))
     g.connect(mapping['19'], 0, prepare, 'original')
     g.connect(mapping['54'], 0, prepare, 'translated_json')

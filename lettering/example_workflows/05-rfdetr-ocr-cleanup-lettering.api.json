@@ -23,12 +23,9 @@
   "4": {
     "class_type": "TextEncodeQwenImage21",
     "inputs": {
-      "prompt": [
-        "20",
-        0
-      ],
+      "prompt": "Remove all visible text and lettering from <image1>, including titles, names, small captions, labels, and every line of fine print. Completely erase lettering and text remnants. Reconstruct the background beneath the removed text to match the surrounding color, shading, and texture. Preserve gray panels, speech bubble outlines, illustrations, and layout.",
       "negative_prompt": "",
-      "resolution": 1024,
+      "resolution": 0,
       "clip": [
         "2",
         0
@@ -138,7 +135,7 @@
         0
       ],
       "layout_json": [
-        "27",
+        "26",
         0
       ],
       "ocr_padding": 4,
@@ -164,7 +161,7 @@
       ],
       "max_new_tokens": 512,
       "max_patches": 1024,
-      "repetition_penalty": 1.0,
+      "repetition_penalty": 1,
       "retry_on_repetition": true
     }
   },
@@ -227,16 +224,6 @@
     }
   },
   "20": {
-    "class_type": "MangaCleanupPrompt",
-    "inputs": {
-      "translated_json": [
-        "19",
-        0
-      ],
-      "instructions": "Preserve original artwork, speech bubble borders, screen tones, colors, gradients and texture. Do not add lettering or a solid replacement background."
-    }
-  },
-  "21": {
     "class_type": "ImageCompositeMasked",
     "inputs": {
       "destination": [
@@ -256,17 +243,17 @@
       "resize_source": true
     }
   },
-  "22": {
+  "21": {
     "class_type": "SaveImage",
     "inputs": {
       "images": [
-        "29",
+        "28",
         0
       ],
       "filename_prefix": "manga_translator/style_lettering"
     }
   },
-  "23": {
+  "22": {
     "class_type": "PreviewImage",
     "inputs": {
       "images": [
@@ -275,7 +262,7 @@
       ]
     }
   },
-  "24": {
+  "23": {
     "class_type": "PreviewImage",
     "inputs": {
       "images": [
@@ -284,13 +271,13 @@
       ]
     }
   },
-  "25": {
+  "24": {
     "class_type": "MangaDetectorLoader",
     "inputs": {
       "model_name": "koharu-layout-rfdetr-seg-2xl-1152"
     }
   },
-  "26": {
+  "25": {
     "class_type": "MangaDetector",
     "inputs": {
       "images": [
@@ -298,7 +285,7 @@
         0
       ],
       "model": [
-        "25",
+        "24",
         0
       ],
       "text": 0.25,
@@ -307,11 +294,11 @@
       "panel": 0.5
     }
   },
-  "27": {
+  "26": {
     "class_type": "MangaDetectionRegions",
     "inputs": {
       "result": [
-        "26",
+        "25",
         0
       ],
       "include_sfx": false,
@@ -319,7 +306,7 @@
       "reading_order": "top_to_bottom"
     }
   },
-  "28": {
+  "27": {
     "class_type": "MangaLetterPrepare",
     "inputs": {
       "region_padding": 12,
@@ -334,25 +321,25 @@
       ]
     }
   },
-  "29": {
+  "28": {
     "class_type": "MangaLetterPage",
     "inputs": {
       "regions_json": [
-        "28",
+        "27",
         0
       ],
       "default_font": "NanumGothic-Bold.ttf",
-      "texture_strength": 1.0,
+      "texture_strength": 1,
       "original": [
         "11",
         0
       ],
       "cleaned": [
-        "21",
+        "20",
         0
       ],
       "source_mask": [
-        "28",
+        "27",
         1
       ]
     }

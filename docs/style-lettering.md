@@ -52,7 +52,7 @@ python3 tools/install_lettering_demo.py --comfy-root /실제/ComfyUI
 
 ## 기존 그래프와 연결하는 지점
 
-기존 OCR/번역까지는 유지한다. `MangaEditPrompt`를 새 `MangaCleanupPrompt`로 바꾸면 Qwen은 **원문 제거와 배경 복원만** 한다. 번역문을 쓰는 요청은 보내지 않는다.
+기존 OCR/번역까지는 유지한다. 05/06의 기본 Qwen `TextEncodeQwenImage21`에 기존 Koharu와 같은 직접 제거 지시문을 넣고 `resolution=0`으로 실행한다. Qwen은 **원문 제거와 배경 복원만** 맡으며 번역문은 뒤의 식자 노드가 그린다. OCR 좌표/문자열 JSON을 이미지 모델 프롬프트로 전달하지 않는다. `MangaCleanupPrompt`는 이전 그래프 호환을 위해 유지하지만 기본 05/06에서는 사용하지 않는다.
 
 `MangaTranslate` 또는 번역 검수 저장의 JSON을 `MangaLetterPrepare`에 연결한다. 이 노드는 기존 0–1000 정규화 xyxy 좌표를 원본 페이지의 xywh로 변환한다. 기존 `edit_bbox_pixels`가 있으면 그 편집 범위를 사용하며, ID·페이지 크기·문자열을 검사한다.
 

@@ -23,12 +23,9 @@
   "4": {
     "class_type": "TextEncodeQwenImage21",
     "inputs": {
-      "prompt": [
-        "20",
-        0
-      ],
+      "prompt": "Remove all visible text and lettering from <image1>, including titles, names, small captions, labels, and every line of fine print. Completely erase lettering and text remnants. Reconstruct the background beneath the removed text to match the surrounding color, shading, and texture. Preserve gray panels, speech bubble outlines, illustrations, and layout.",
       "negative_prompt": "",
-      "resolution": 1024,
+      "resolution": 0,
       "clip": [
         "2",
         0
@@ -161,7 +158,7 @@
       ],
       "max_new_tokens": 512,
       "max_patches": 1024,
-      "repetition_penalty": 1.0,
+      "repetition_penalty": 1,
       "retry_on_repetition": true
     }
   },
@@ -224,16 +221,6 @@
     }
   },
   "20": {
-    "class_type": "MangaCleanupPrompt",
-    "inputs": {
-      "translated_json": [
-        "19",
-        0
-      ],
-      "instructions": "Preserve original artwork, speech bubble borders, screen tones, colors, gradients and texture. Do not add lettering or a solid replacement background."
-    }
-  },
-  "21": {
     "class_type": "ImageCompositeMasked",
     "inputs": {
       "destination": [
@@ -253,17 +240,17 @@
       "resize_source": true
     }
   },
-  "22": {
+  "21": {
     "class_type": "SaveImage",
     "inputs": {
       "images": [
-        "26",
+        "25",
         0
       ],
       "filename_prefix": "manga_translator/style_lettering"
     }
   },
-  "23": {
+  "22": {
     "class_type": "PreviewImage",
     "inputs": {
       "images": [
@@ -272,7 +259,7 @@
       ]
     }
   },
-  "24": {
+  "23": {
     "class_type": "PreviewImage",
     "inputs": {
       "images": [
@@ -281,7 +268,7 @@
       ]
     }
   },
-  "25": {
+  "24": {
     "class_type": "MangaLetterPrepare",
     "inputs": {
       "region_padding": 12,
@@ -296,25 +283,25 @@
       ]
     }
   },
-  "26": {
+  "25": {
     "class_type": "MangaLetterPage",
     "inputs": {
       "regions_json": [
-        "25",
+        "24",
         0
       ],
       "default_font": "NanumGothic-Bold.ttf",
-      "texture_strength": 1.0,
+      "texture_strength": 1,
       "original": [
         "11",
         0
       ],
       "cleaned": [
-        "21",
+        "20",
         0
       ],
       "source_mask": [
-        "25",
+        "24",
         1
       ]
     }

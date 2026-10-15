@@ -263,7 +263,10 @@ def test_native_integrated_workflows_use_cleanup_then_exact_lettering():
     for filename in ('05-rfdetr-ocr-cleanup-lettering', '06-manual-ocr-cleanup-lettering'):
         graph = json.loads((PACKAGE/'example_workflows'/(filename+'.api.json')).read_text())
         kinds = {n['class_type'] for n in graph.values()}
-        assert 'MangaCleanupPrompt' in kinds and 'MangaEditPrompt' not in kinds
+        assert 'MangaCleanupPrompt' not in kinds and 'MangaEditPrompt' not in kinds
+        encoder = next(n for n in graph.values() if n['class_type'] == 'TextEncodeQwenImage21')
+        assert encoder['inputs']['resolution'] == 0
+        assert encoder['inputs']['prompt'] == "Remove all visible text and lettering from <image1>, including titles, names, small captions, labels, and every line of fine print. Completely erase lettering and text remnants. Reconstruct the background beneath the removed text to match the surrounding color, shading, and texture. Preserve gray panels, speech bubble outlines, illustrations, and layout."
         page_id = next(i for i, n in graph.items() if n['class_type'] == 'MangaLetterPage')
         saved = next(n for n in graph.values() if n['class_type'] == 'SaveImage')
         assert saved['inputs']['images'] == [page_id, 0]

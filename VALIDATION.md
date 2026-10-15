@@ -93,3 +93,23 @@ python -m compileall -q lettering tools tests
   잘림 구분, 추가 텍스트/다중 JSON 거부, 한글·개행·백틱 보존, 영역 ID 누락/중복,
   1회 재시도 상한, length/content_filter/error 및 답변 누락 거부.
 - 실제 사용자 번역 서버의 해당 응답과 재실행 성공 여부는 이 로컬 검증에 포함하지 않는다.
+
+
+## 기존 Koharu 인페인트 그래프와의 설정 대조
+
+- 비교 기준: `ytoaa/koharu-remote` commit `ee6d9ddc82d9bfc4718383272f0e4797f805e2cd`,
+  `comfyui/koharu_nodes/workflows/inpainting.api.json`의 prompt.
+- 모델 본체/인코더/VAE, Euler, 8-step sigma, CFG 1, add_noise 및 기본 seed는 동일하다.
+  기존도 Qwen에 마스크를 직접 조건으로 전달하지 않았다. 직접 마스크 입력이 없다는
+  사실만으로 새 결과의 실패 원인이라고 판단할 수 없다.
+- 05/06에서 달라졌던 원문 제거 지시를 기존의 모든 글자 제거 직접 지시로 되돌리고,
+  `resolution` 기본값을 1024에서 기존의 0으로 복원했다. 기본 Qwen 노드에서 설정하며
+  좌표/OCR JSON 지시를 생성하던 중간 노드는 이 예제들에서 제외한다.
+- 두 API/GUI 예제를 JSON으로 파싱해 모든 연결·입출력 슬롯 대응, 중간 노드 제거,
+  직접 prompt 및 resolution, 기존 모델/샘플러 값 보존을 확인했다.
+- 실행 환경 연결 장애로 이번 변경의 Python 테스트·생성 스크립트·실제 프런트엔드 및
+  GPU 재실행은 수행하지 못했다. 앞선 91 passed는 이전 번역 JSON 수정 시점의 결과다.
+- 기존의 SAM 기반 글자 마스크/마스크 정제/국소 색 보정과 현재 사각형 마스크에는 아직
+  차이가 있다. 이번 수정은 제거 지시와 해상도 설정 복원이며 전체 인페인트 동작 동등성이나
+  실제 이미지 품질을 확인했다는 의미가 아니다. analyze_style의 8-pixel 조건은 스타일
+  측정용 최소 변화량 검사이며 원문 제거 성공을 판정하는 조건이 아니다.
