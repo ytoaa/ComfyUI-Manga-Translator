@@ -312,7 +312,7 @@ def _offset_alpha(alpha, dx, dy):
 
 def render_text(text, style, font_name='NanumGothic-Bold.ttf', direction='horizontal',
                 alignment='center', min_font=10, max_font=256, padding=8,
-                line_spacing=1., tracking=0., rotation=0., shear=0., supersample=2, max_lines=0, vertical_policy='simple'):
+                line_spacing=1., tracking=0., rotation=0., shear=0., supersample=2, max_lines=0, vertical_policy='simple', wrap_policy='greedy'):
     text = clean_text(text)
     if wrap_policy not in ('greedy', 'balanced'):
         raise ValueError('Invalid wrap_policy')
