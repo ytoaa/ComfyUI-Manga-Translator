@@ -406,7 +406,11 @@
       "min_font": 10,
       "min_scale": 0.55,
       "padding": 2,
-      "region_options_json": "{}"
+      "region_options_json": "{}",
+      "detection_result": [
+        "3",
+        0
+      ]
     }
   },
   "30": {

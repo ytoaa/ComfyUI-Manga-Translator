@@ -71,6 +71,7 @@ def build():
     typography = g.add('MangaLetterPlan', pos=(5040, 50), title='⑪ 원문 크기·방향 보존 · 축소 우선 계획')
     g.connect(original, 0, typography, 'original'); g.connect(assemble, 0, typography, 'cleaned')
     g.connect(prepare, 1, typography, 'source_mask'); g.connect(prepare, 0, typography, 'regions_json')
+    g.connect(detector, 0, typography, 'detection_result')
     lettering = g.add('MangaLetterApply', pos=(5460, 50), title='⑫ 방향별 식자 · 비례 스타일 · 충돌 검사')
     g.connect(typography, 0, lettering, 'plan')
     save = g.add('SaveImage', {'filename_prefix': 'manga_translator/integrated_tiles'}, (5880, 50), '⑬ 통합 결과 저장')

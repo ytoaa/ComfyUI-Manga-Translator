@@ -143,3 +143,42 @@ def test_new_nodes_are_registered_and_shipped_graph_uses_them():
     assert kinds.count('MangaLetterPlan')==kinds.count('MangaLetterApply')==1
     assert 'ImageCrop' in kinds and 'ImageCompositeMasked' in kinds
     assert plugin.NODE_CLASS_MAPPINGS['MangaLetterPlan'].INPUT_TYPES()['required']['regions_json'][1]['forceInput']
+
+
+def test_korean_source_disconnected_strokes_keep_plausible_size():
+    original,clean,mask,doc=fixture('번역문',source='선생님',font_size=32)
+    plan,_,_=hybrid.build_plan(original,clean,mask,doc)
+    assert 24<=plan['regions'][0]['cap']<=42
+
+
+def test_vertical_source_direction_uses_ink_instead_of_crop_aspect_ratio():
+    original,clean,mask,doc=fixture('번역문',width=180,height=300,source='가',font_size=30)
+    picture=Image.fromarray((clean*255).round().astype('uint8'));draw=ImageDraw.Draw(picture)
+    font=ImageFont.truetype(core.font_path('NanumGothic-Bold.ttf','가나다라'),30)
+    for i,char in enumerate('가나다라'):
+        draw.text((75,25+50*i),char,font=font,fill='black')
+    original=np.asarray(picture,np.float32)/255
+    mask=(np.max(np.abs(original-clean),axis=2)>.03).astype(np.float32)
+    plan,_,_=hybrid.build_plan(original,clean,mask,doc)
+    assert plan['regions'][0]['options']['direction']=='vertical_rtl'
+
+
+def test_actual_detector_bubble_mask_is_reused_without_manual_mask():
+    values=fixture('원본보다 긴 번역문을 말풍선 안에 다시 배치합니다',width=400,height=240,font_size=26,box=[140,85,120,70],source='TEST')
+    yy,xx=np.mgrid[:240,:400]
+    binary=(((xx-200)/170)**2+((yy-120)/100)**2<1).ravel().astype(np.uint8)
+    edges=np.flatnonzero(np.diff(binary))+1
+    runs=np.diff(np.r_[0,edges,len(binary)]).tolist()
+    if binary[0]: runs.insert(0,0)
+    result={'protocol':1,'image_width':400,'image_height':240,'detections':[
+        {'label':'bubble','mask':{'x':0,'y':0,'width':400,'height':240,'runs':runs}}]}
+    _,_,alpha,report,_,_=run(values,mode='bubble',min_scale=.8,detection_result=result)
+    assert report['regions'][0]['fit_phase']=='bubble'
+    assert not np.any((alpha>.01)&(~binary.reshape(240,400).astype(bool)))
+
+
+def test_missing_vertical_punctuation_does_not_drop_requested_characters():
+    values=fixture('가(나) 12 TEST!',width=200,height=320,font_size=32)
+    _,_,alpha,report,_,_=run(values,direction='vertical_rtl',min_scale=.3)
+    assert report['regions'][0]['render']['text']=='가(나) 12 TEST!'
+    assert alpha.sum()>50

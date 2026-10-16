@@ -2,7 +2,7 @@
   "id": "6489a8d0-adb0-54db-baf9-5a11c43d9dd8",
   "revision": 1,
   "last_node_id": 36,
-  "last_link_id": 55,
+  "last_link_id": 56,
   "nodes": [
     {
       "id": 1,
@@ -117,7 +117,8 @@
           "type": "MANGA_DETECTION",
           "links": [
             3,
-            4
+            4,
+            56
           ]
         }
       ],
@@ -1510,6 +1511,11 @@
           "name": "bubble_mask",
           "type": "MASK",
           "link": null
+        },
+        {
+          "name": "detection_result",
+          "type": "MANGA_DETECTION",
+          "link": 56
         }
       ],
       "outputs": [
@@ -2222,6 +2228,14 @@
       35,
       0,
       "IMAGE"
+    ],
+    [
+      56,
+      3,
+      0,
+      29,
+      5,
+      "MANGA_DETECTION"
     ]
   ],
   "groups": [],

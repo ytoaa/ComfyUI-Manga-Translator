@@ -21,8 +21,8 @@ def profile(reference, cleaned, support, font_name):
     if ink.sum()<8:
         raise ValueError('Too few source ink pixels to estimate typography')
     ys,xs = np.where(ink)
-    rows = bands(ink.sum(axis=1) >= max(1,ink.shape[1]*.002))
-    cols = bands(ink.sum(axis=0) >= max(1,ink.shape[0]*.002))
+    rows = bands(ndimage.binary_closing(ink.sum(axis=1) >= max(1,ink.shape[1]*.002),structure=np.ones(3),border_value=0))
+    cols = bands(ndimage.binary_closing(ink.sum(axis=0) >= max(1,ink.shape[0]*.002),structure=np.ones(3),border_value=0))
     width,height = int(xs.max()-xs.min()+1),int(ys.max()-ys.min()+1)
     vertical = height>width*1.8 and len(rows)>=2 and len(cols)<len(rows)
     direction = 'vertical_rtl' if vertical else 'horizontal'
@@ -92,6 +92,28 @@ def bubble_rect(mask, source, shape, padding):
     return best
 
 
+def detected_bubble_rect(result, source, shape, padding):
+    """Use a single actual RF-DETR bubble mask; never a box or union of neighbours."""
+    from ..mask_nodes import _decode_mask
+    x,y,w,h=source
+    candidates=[]
+    for item in result['detections']:
+        if item.get('label')!='bubble' or not isinstance(item.get('mask'),dict): continue
+        raw=item['mask']
+        a,b,c,d=(raw.get(k) for k in ('x','y','width','height'))
+        if any(type(v) is not int for v in (a,b,c,d)): raise ValueError('Invalid detected bubble bounds')
+        if a<=x and b<=y and a+c>=x+w and b+d>=y+h:
+            candidates.append(raw)
+    if len(candidates)>64: raise ValueError('Too many enclosing bubble masks')
+    for raw in sorted(candidates,key=lambda m:m['width']*m['height']):
+        local,(a,b,c,d)=_decode_mask(raw,shape[1],shape[0])
+        page=np.zeros(shape[:2],np.float32)
+        page[b:b+d,a:a+c]=local
+        rect=bubble_rect(page,source,shape,padding)
+        if rect is not None: return rect
+    return None
+
+
 def _curve(layer,alpha,bend):
     if not bend:
         return layer,alpha
@@ -108,7 +130,7 @@ def _curve(layer,alpha,bend):
 
 def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-Bold.ttf',
                mode='source',direction='auto',min_font=10,min_scale=.55,padding=2,
-               region_options_json='{}',bubble_mask=None):
+               region_options_json='{}',bubble_mask=None,detection_result=None):
     original,cleaned=core.rgb(original),core.rgb(cleaned)
     if original.shape!=cleaned.shape: raise ValueError('Original and cleaned dimensions differ')
     support=core.mask_array(source_mask,original.shape[:2])
@@ -122,6 +144,11 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
     ids={r['id'] for r in data['regions']}
     if not isinstance(overrides,dict) or set(overrides)-ids: raise ValueError('Overrides need existing region IDs')
     if bubble_mask is not None: bubble_mask=core.mask_array(bubble_mask,original.shape[:2])
+    if detection_result is not None:
+        if not isinstance(detection_result,dict) or detection_result.get('protocol')!=1 or not isinstance(detection_result.get('detections'),list):
+            raise ValueError('Invalid bubble detection response')
+        if (detection_result.get('image_width'),detection_result.get('image_height'))!=(original.shape[1],original.shape[0]):
+            raise ValueError('Bubble detections belong to a different page size')
     plan={'version':1,'cleaned':cleaned.copy(),'regions':[]}
     reports=[]
     preview=Image.fromarray((original*255).round().astype('uint8'))
@@ -156,6 +183,8 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         bubble=None
         if selected_mode=='bubble' and bubble_mask is not None:
             bubble=bubble_rect(bubble_mask,source,original.shape,pad)
+        if selected_mode=='bubble' and bubble_mask is None and detection_result is not None:
+            bubble=detected_bubble_rect(detection_result,source,original.shape,pad)
         warning=None
         if selected_mode=='bubble' and bubble is None: warning='No enclosing bubble mask; source frame retained'
         curve=opts.get('bend',0.);core.finite(curve,-256,256,'bend')
