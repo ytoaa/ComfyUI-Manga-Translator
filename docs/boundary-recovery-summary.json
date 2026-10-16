@@ -1,0 +1,444 @@
+{
+  "uniform-and-qwen": {
+    "simulation_only": true,
+    "model_inference": "fixture test doubles; NOT RF-DETR/Hayai/vLLM/Qwen GPU results",
+    "execution": "shipped API graph, real custom nodes, PyTorch CPU and native-equivalent image operations",
+    "selected_regions": 6,
+    "detector_calls": 11,
+    "boundary_recovery": {
+      "clipped_regions": 21,
+      "recovery_calls": 2,
+      "recovered_regions": 1,
+      "windows": [
+        [
+          396,
+          211,
+          1152,
+          414
+        ],
+        [
+          396,
+          211,
+          1600,
+          414
+        ]
+      ],
+      "unresolved_regions": 0
+    },
+    "ocr_line_calls": 8,
+    "qwen_tile_calls": 1,
+    "calls": {
+      "LoadImage": 1,
+      "MangaDetectorLoader": 1,
+      "MangaDetectorDetail": 1,
+      "MangaDetectionRegions": 1,
+      "MangaRegionCrops": 1,
+      "MangaOCRLoader": 1,
+      "MangaOCRAdaptive": 6,
+      "MangaCollectOCR": 1,
+      "MangaSaveReview": 2,
+      "MangaTranslate": 1,
+      "MangaDetectionMask": 1,
+      "MangaLetterPrepare": 1,
+      "GrowMask": 1,
+      "MangaInpaintPlan": 1,
+      "ImageCrop": 1,
+      "UNETLoader": 1,
+      "QwenImage21Cache": 1,
+      "CLIPLoader": 1,
+      "VAELoader": 1,
+      "TextEncodeQwenImage21": 1,
+      "KSamplerSelect": 1,
+      "ManualSigmas": 1,
+      "SamplerCustom": 1,
+      "VAEDecode": 1,
+      "ImageScale": 1,
+      "ImageCompositeMasked": 1,
+      "MangaInpaintAssemble": 1,
+      "MangaLetterPage": 1,
+      "SaveImage": 1,
+      "PreviewImage": 2,
+      "MaskToImage": 1
+    },
+    "cleanup": {
+      "schema": 1,
+      "method": "bounded_mask_tiles",
+      "page_size": [
+        1600,
+        640
+      ],
+      "tile_core": 512,
+      "context": 128,
+      "tile_count": 1,
+      "source_components": 6,
+      "uniform_filled_components": 5,
+      "source_mask_pixels": 18863,
+      "cleanup_mask_pixels": 69114,
+      "qwen_mask_pixels": 4186,
+      "tile_boxes": [
+        [
+          758,
+          0,
+          1145,
+          180
+        ]
+      ],
+      "coverage": "each pending mask pixel owned exactly once",
+      "limitation": "undetected text outside the source mask is not automatically certified or erased",
+      "tile_checks": [
+        {
+          "tile": 1,
+          "source_ink_samples": 1045,
+          "changed_ink_fraction": 0.9961722488038277,
+          "unchanged_source_warning": false
+        }
+      ],
+      "outside_mask_unchanged": true,
+      "quality_check": "unchanged source-ink heuristic; not a guarantee of text-free output"
+    },
+    "outside_mask_unchanged": true,
+    "all_fixture_ink_masked": true,
+    "final_saved": true,
+    "full_page_qwen_was_called": false
+  },
+  "all-bounded-qwen": {
+    "simulation_only": true,
+    "model_inference": "fixture test doubles; NOT RF-DETR/Hayai/vLLM/Qwen GPU results",
+    "execution": "shipped API graph, real custom nodes, PyTorch CPU and native-equivalent image operations",
+    "selected_regions": 6,
+    "detector_calls": 11,
+    "boundary_recovery": {
+      "clipped_regions": 21,
+      "recovery_calls": 2,
+      "recovered_regions": 1,
+      "windows": [
+        [
+          396,
+          211,
+          1152,
+          414
+        ],
+        [
+          396,
+          211,
+          1600,
+          414
+        ]
+      ],
+      "unresolved_regions": 0
+    },
+    "ocr_line_calls": 8,
+    "qwen_tile_calls": 5,
+    "calls": {
+      "LoadImage": 1,
+      "MangaDetectorLoader": 1,
+      "MangaDetectorDetail": 1,
+      "MangaDetectionRegions": 1,
+      "MangaRegionCrops": 1,
+      "MangaOCRLoader": 1,
+      "MangaOCRAdaptive": 6,
+      "MangaCollectOCR": 1,
+      "MangaSaveReview": 2,
+      "MangaTranslate": 1,
+      "MangaDetectionMask": 1,
+      "MangaLetterPrepare": 1,
+      "GrowMask": 1,
+      "MangaInpaintPlan": 1,
+      "ImageCrop": 5,
+      "UNETLoader": 1,
+      "QwenImage21Cache": 1,
+      "CLIPLoader": 1,
+      "VAELoader": 1,
+      "TextEncodeQwenImage21": 5,
+      "KSamplerSelect": 1,
+      "ManualSigmas": 1,
+      "SamplerCustom": 5,
+      "VAEDecode": 5,
+      "ImageScale": 5,
+      "ImageCompositeMasked": 5,
+      "MangaInpaintAssemble": 1,
+      "MangaLetterPage": 1,
+      "SaveImage": 1,
+      "PreviewImage": 2,
+      "MaskToImage": 1
+    },
+    "cleanup": {
+      "schema": 1,
+      "method": "bounded_mask_tiles",
+      "page_size": [
+        1600,
+        640
+      ],
+      "tile_core": 512,
+      "context": 128,
+      "tile_count": 5,
+      "source_components": 6,
+      "uniform_filled_components": 0,
+      "source_mask_pixels": 18863,
+      "cleanup_mask_pixels": 69114,
+      "qwen_mask_pixels": 69114,
+      "tile_boxes": [
+        [
+          758,
+          0,
+          1145,
+          180
+        ],
+        [
+          0,
+          8,
+          281,
+          306
+        ],
+        [
+          328,
+          58,
+          909,
+          640
+        ],
+        [
+          329,
+          142,
+          1097,
+          469
+        ],
+        [
+          841,
+          142,
+          1218,
+          438
+        ]
+      ],
+      "coverage": "each pending mask pixel owned exactly once",
+      "limitation": "undetected text outside the source mask is not automatically certified or erased",
+      "tile_checks": [
+        {
+          "tile": 1,
+          "source_ink_samples": 1045,
+          "changed_ink_fraction": 0.9961722488038277,
+          "unchanged_source_warning": false
+        },
+        {
+          "tile": 2,
+          "source_ink_samples": 650,
+          "changed_ink_fraction": 1.0,
+          "unchanged_source_warning": false
+        },
+        {
+          "tile": 3,
+          "source_ink_samples": 8141,
+          "changed_ink_fraction": 0.9958236088932564,
+          "unchanged_source_warning": false
+        },
+        {
+          "tile": 4,
+          "source_ink_samples": 6180,
+          "changed_ink_fraction": 0.9980582524271845,
+          "unchanged_source_warning": false
+        },
+        {
+          "tile": 5,
+          "source_ink_samples": 839,
+          "changed_ink_fraction": 0.9964243146603099,
+          "unchanged_source_warning": false
+        }
+      ],
+      "outside_mask_unchanged": true,
+      "quality_check": "unchanged source-ink heuristic; not a guarantee of text-free output"
+    },
+    "outside_mask_unchanged": true,
+    "all_fixture_ink_masked": true,
+    "final_saved": true,
+    "full_page_qwen_was_called": false
+  },
+  "uniform-bypass": {
+    "simulation_only": true,
+    "model_inference": "fixture test doubles; NOT RF-DETR/Hayai/vLLM/Qwen GPU results",
+    "execution": "shipped API graph, real custom nodes, PyTorch CPU and native-equivalent image operations",
+    "selected_regions": 6,
+    "detector_calls": 11,
+    "boundary_recovery": {
+      "clipped_regions": 21,
+      "recovery_calls": 2,
+      "recovered_regions": 1,
+      "windows": [
+        [
+          396,
+          211,
+          1152,
+          414
+        ],
+        [
+          396,
+          211,
+          1600,
+          414
+        ]
+      ],
+      "unresolved_regions": 0
+    },
+    "ocr_line_calls": 8,
+    "qwen_tile_calls": 0,
+    "calls": {
+      "LoadImage": 1,
+      "MangaDetectorLoader": 1,
+      "MangaDetectorDetail": 1,
+      "MangaDetectionRegions": 1,
+      "MangaRegionCrops": 1,
+      "MangaOCRLoader": 1,
+      "MangaOCRAdaptive": 6,
+      "MangaCollectOCR": 1,
+      "MangaSaveReview": 2,
+      "MangaTranslate": 1,
+      "MangaDetectionMask": 1,
+      "MangaLetterPrepare": 1,
+      "GrowMask": 1,
+      "MangaInpaintPlan": 1,
+      "MangaInpaintAssemble": 1,
+      "MangaLetterPage": 1,
+      "SaveImage": 1,
+      "PreviewImage": 2,
+      "MaskToImage": 1
+    },
+    "cleanup": {
+      "schema": 1,
+      "method": "bounded_mask_tiles",
+      "page_size": [
+        1600,
+        640
+      ],
+      "tile_core": 512,
+      "context": 128,
+      "tile_count": 0,
+      "source_components": 6,
+      "uniform_filled_components": 6,
+      "source_mask_pixels": 18863,
+      "cleanup_mask_pixels": 69114,
+      "qwen_mask_pixels": 0,
+      "tile_boxes": [],
+      "coverage": "each pending mask pixel owned exactly once",
+      "limitation": "undetected text outside the source mask is not automatically certified or erased",
+      "tile_checks": [],
+      "outside_mask_unchanged": true,
+      "quality_check": "unchanged source-ink heuristic; not a guarantee of text-free output"
+    },
+    "outside_mask_unchanged": true,
+    "all_fixture_ink_masked": true,
+    "final_saved": true,
+    "full_page_qwen_was_called": false
+  },
+  "seam-recovery": {
+    "simulation_only": true,
+    "model_inference": "fixture test doubles; NOT RF-DETR/Hayai/vLLM/Qwen GPU results",
+    "execution": "shipped API graph, real custom nodes, PyTorch CPU and native-equivalent image operations",
+    "selected_regions": 6,
+    "detector_calls": 11,
+    "boundary_recovery": {
+      "clipped_regions": 18,
+      "recovery_calls": 2,
+      "recovered_regions": 4,
+      "windows": [
+        [
+          398,
+          121,
+          1152,
+          612
+        ],
+        [
+          398,
+          121,
+          1600,
+          612
+        ]
+      ],
+      "unresolved_regions": 0
+    },
+    "ocr_line_calls": 8,
+    "qwen_tile_calls": 1,
+    "calls": {
+      "LoadImage": 1,
+      "MangaDetectorLoader": 1,
+      "MangaDetectorDetail": 1,
+      "MangaDetectionRegions": 1,
+      "MangaRegionCrops": 1,
+      "MangaOCRLoader": 1,
+      "MangaOCRAdaptive": 6,
+      "MangaCollectOCR": 1,
+      "MangaSaveReview": 2,
+      "MangaTranslate": 1,
+      "MangaDetectionMask": 1,
+      "MangaLetterPrepare": 1,
+      "GrowMask": 1,
+      "MangaInpaintPlan": 1,
+      "ImageCrop": 1,
+      "UNETLoader": 1,
+      "QwenImage21Cache": 1,
+      "CLIPLoader": 1,
+      "VAELoader": 1,
+      "TextEncodeQwenImage21": 1,
+      "KSamplerSelect": 1,
+      "ManualSigmas": 1,
+      "SamplerCustom": 1,
+      "VAEDecode": 1,
+      "ImageScale": 1,
+      "ImageCompositeMasked": 1,
+      "MangaInpaintAssemble": 1,
+      "MangaLetterPage": 1,
+      "SaveImage": 1,
+      "PreviewImage": 2,
+      "MaskToImage": 1
+    },
+    "cleanup": {
+      "schema": 1,
+      "method": "bounded_mask_tiles",
+      "page_size": [
+        1600,
+        640
+      ],
+      "tile_core": 512,
+      "context": 128,
+      "tile_count": 1,
+      "source_components": 6,
+      "uniform_filled_components": 5,
+      "source_mask_pixels": 18863,
+      "cleanup_mask_pixels": 69114,
+      "qwen_mask_pixels": 4186,
+      "tile_boxes": [
+        [
+          758,
+          0,
+          1145,
+          180
+        ]
+      ],
+      "coverage": "each pending mask pixel owned exactly once",
+      "limitation": "undetected text outside the source mask is not automatically certified or erased",
+      "tile_checks": [
+        {
+          "tile": 1,
+          "source_ink_samples": 1045,
+          "changed_ink_fraction": 0.9961722488038277,
+          "unchanged_source_warning": false
+        }
+      ],
+      "outside_mask_unchanged": true,
+      "quality_check": "unchanged source-ink heuristic; not a guarantee of text-free output"
+    },
+    "outside_mask_unchanged": true,
+    "all_fixture_ink_masked": true,
+    "final_saved": true,
+    "full_page_qwen_was_called": false
+  },
+  "unresolved-seam-stopped": {
+    "expected_stop": true,
+    "message": "검출 타일 경계 복구 실패 (unresolved clipped text) bbox=[462.0, 185.0, 576.0, 548.0], edges=['right']; 잘린 영역의 OCR/번역을 중단했습니다. 상세 검출을 조정해 다시 실행하세요.",
+    "final_saved": false,
+    "ocr_line_calls": 0,
+    "qwen_tile_calls": 0
+  },
+  "unchanged-qwen-stopped": {
+    "expected_stop": true,
+    "message": "Cleanup tile 1 retained nearly all source ink; lettering was stopped. Inspect the tile or change the native sampler seed. This is a pixel check, not OCR certification.",
+    "final_saved": false
+  }
+}

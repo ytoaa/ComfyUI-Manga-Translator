@@ -43,7 +43,10 @@ class MangaDetectionMask:
             raise ValueError('include_sfx must be boolean')
         labels={'text','onomatopoeia'} if include_sfx else {'text'}
         page=np.zeros((height,width),dtype=np.float32)
-        for item in result['detections']:
+        fragments = result.get('mask_fragments', [])
+        if not isinstance(fragments, list):
+            raise ValueError('Invalid detector mask fragments')
+        for item in result['detections'] + fragments:
             if item.get('label') not in labels:
                 continue
             raw=item.get('mask')

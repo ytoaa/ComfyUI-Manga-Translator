@@ -125,3 +125,13 @@ python -m compileall -q lettering tools tests
   차이가 있다. 이번 수정은 제거 지시와 해상도 설정 복원이며 전체 인페인트 동작 동등성이나
   실제 이미지 품질을 확인했다는 의미가 아니다. analyze_style의 8-pixel 조건은 스타일
   측정용 최소 변화량 검사이며 원문 제거 성공을 판정하는 조건이 아니다.
+
+
+## 2026-10-16 검출 타일 경계 복구 v0.2.1
+
+- 기준 `a85edaf`에서 576px 경계의 여러 행 세로 조각과 반쪽 본문을 재현했다.
+  기존 7영역이 새 코드에서 6영역으로 복구되며, 미해결 조각은 OCR 전에 중단한다.
+- 전체 검사 **144 passed**, 통합 모의 실행 성공 4경로·예상 중단 2경로.
+- 조각 segmentation 픽셀 보존, 모든 fixture 글자 마스크 포함, 마스크 밖 픽셀 불변을 확인했다.
+- 실제 사용자 이미지의 RF-DETR/Hayai/Qwen GPU 품질과 실제 ComfyUI executor는 미검증이다.
+- 변경·실행 환경·재현 방법·정확한 보증 범위: [검증 보고서](docs/boundary-recovery-validation.md).

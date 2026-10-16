@@ -87,6 +87,9 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
             raise ValueError('Invalid region selection options')
 
         labels = {'text', 'onomatopoeia'} if include_sfx else {'text'}
+        if any(item.get('tile_provenance', {}).get('clipped_edges')
+               for item in result['detections'] if item.get('label') in labels):
+            raise ValueError('Unresolved clipped text cannot enter OCR; run detail boundary recovery first')
         candidates = [_detector_region(item, width, height)
                       for item in result['detections'] if item.get('label') in labels]
         selected = merge_detector_regions(candidates, dedupe_iou)
@@ -107,6 +110,7 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
                             'resolved_regions': len(selected),
                             'dedupe_iou': dedupe_iou,
                             'containment_overlap': _CONTAINMENT_OVERLAP,
+                            'boundary_recovery': result.get('detail_detection', {}).get('boundary_recovery'),
                         }})
         layout(value)
         return (value,)

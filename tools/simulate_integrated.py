@@ -87,24 +87,28 @@ def fixture(patterned_header=True):
 
 
 class DetectorOracle:
-    def __init__(self, records):
+    def __init__(self, records, original, seam_case=False, failed_recovery=False):
         self.records, self.calls, self.windows = records, 0, []
+        self.original, self.seam_case, self.failed_recovery = original, seam_case, failed_recovery
+        self.crops = {fingerprint(original): (0, 0, 1600, 640)}
         for tile in (1152, 576):
             for y0, y1 in P._sliding_windows(640, tile, 64):
                 for x0, x1 in P._sliding_windows(1600, tile, 64):
                     box = [x0, x1, y0, y1]
                     if box not in self.windows: self.windows.append(box)
+                    self.register_crop((x0,y0,x1,y1))
+    def register_crop(self, window):
+        self.crops[fingerprint(self.original.crop(window))] = tuple(window)
     def detect(self, image, thresholds):
-        if self.calls == 0:
-            x0, x1, y0, y1 = 0, 1600, 0, 640
-        else:
-            x0, x1, y0, y1 = self.windows[self.calls-1]
-        full = self.calls == 0
+        x0,y0,x1,y1 = self.crops[fingerprint(image)]
+        full, initial = self.calls == 0, self.calls < 9
         self.calls += 1
         assert image.size == (x1-x0, y1-y0)
         found = []
-        for record in self.records:
-            if record.get('miss_full') and (full or image.width > 576): continue
+        records = [] if self.failed_recovery and not initial else self.records
+        for index, record in enumerate(records):
+            if record.get('miss_full') and initial and (full or image.width > 576): continue
+            if self.seam_case and initial and (x0,y0,x1)==(0,0,576) and index >= 2: continue
             a, b, c, d = record['bbox']
             a, b, c, d = max(a, x0), max(b, y0), min(c, x1), min(d, y1)
             if a >= c or b >= d: continue
@@ -114,8 +118,18 @@ class DetectorOracle:
                           'bbox': [a-x0, b-y0, c-x0, d-y0],
                           'mask': {'x': a-x0, 'y': b-y0, 'width': c-a, 'height': d-b,
                                    'runs': rle(local)}})
-        return {'protocol': 1, 'image_width': image.width, 'image_height': image.height,
-                'model': 'SIMULATION-detector-oracle', 'revision': 'fixture', 'detections': found}
+        if self.seam_case and initial and (x0,y0,x1)==(0,0,576):
+            # Reproduce a cross-row vertical strip whose right edge is exactly
+            # 576px, rather than always returning oracle-quality paragraphs.
+            ink = np.logical_or.reduce([r['mask'] for r in self.records[2:]])[185:548,462:576]
+            found.append({'label':'text','score':.99,'bbox':[462,185,576,548],
+                          'mask':{'x':462,'y':185,'width':114,'height':363,'runs':rle(ink)}})
+        response = {'protocol': 1, 'image_width': image.width, 'image_height': image.height,
+                    'model': 'SIMULATION-detector-oracle', 'revision': 'fixture', 'detections': found}
+        for fragment in P._window_detections(response,(x0,y0,x1,y1),1600,640,'detail'):
+            if fragment['tile_provenance']['clipped_edges']:
+                for attempt in range(3): self.register_crop(P._recovery_window(fragment,1600,640,attempt))
+        return response
 
 
 class OCROracle:
@@ -137,12 +151,13 @@ class OCROracle:
 
 
 class GraphRunner:
-    def __init__(self, destination, uniform_fill=True, failed_qwen=False, patterned_header=True):
+    def __init__(self, destination, uniform_fill=True, failed_qwen=False, patterned_header=True,
+                 seam_case=False, failed_recovery=False):
         self.original, self.clean, self.raw, self.records = fixture(patterned_header)
         self.graph = json.loads((ROOT/'lettering/example_workflows/08-integrated-tiled-cleanup-lettering.api.json').read_text(encoding='utf-8'))
         self.cache, self.calls, self.destination = {}, Counter(), Path(destination)
         self.destination.mkdir(parents=True, exist_ok=True)
-        self.detector = DetectorOracle(self.records)
+        self.detector = DetectorOracle(self.records, self.original, seam_case, failed_recovery)
         self.ocr = OCROracle(self.original, self.records)
         self.failed_qwen = failed_qwen
         self.qwen_calls = 0
@@ -256,6 +271,7 @@ class GraphRunner:
         cleaned = self.cache[finish_id][0][0]
         selected = json.loads(self.cache[regions_id][0][0])
         assert len(selected['regions']) == len(self.records), 'Lost or duplicated logical regions'
+        assert np.all(plan['source_mask'][self.raw]), 'Detected source ink was lost from cleanup mask'
         outside = ~plan['cleanup_mask']
         assert np.array_equal(cleaned[0].numpy()[outside], np.asarray(self.original, np.float32)[outside]/255)
         assert self.saved, 'No final image reached the shipped save node'
@@ -266,9 +282,10 @@ class GraphRunner:
         report = {'simulation_only': True, 'model_inference': 'fixture test doubles; NOT RF-DETR/Hayai/vLLM/Qwen GPU results',
                   'execution': 'shipped API graph, real custom nodes, PyTorch CPU and native-equivalent image operations',
                   'selected_regions': len(selected['regions']), 'detector_calls': self.detector.calls,
+                  'boundary_recovery': selected['region_resolution']['boundary_recovery'],
                   'ocr_line_calls': self.ocr.calls, 'qwen_tile_calls': self.qwen_calls,
                   'calls': dict(self.calls), 'cleanup': json.loads(self.cache[finish_id][1][0]),
-                  'outside_mask_unchanged': True, 'final_saved': True,
+                  'outside_mask_unchanged': True, 'all_fixture_ink_masked': True, 'final_saved': True,
                   'full_page_qwen_was_called': False}
         (self.destination/'simulation-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
         return report
@@ -280,6 +297,18 @@ def simulate(destination):
     for name, fill, pattern in [('uniform-and-qwen', True, True), ('all-bounded-qwen', False, True),
                                 ('uniform-bypass', True, False)]:
         reports[name] = GraphRunner(destination/name, uniform_fill=fill, patterned_header=pattern).execute()
+    reports['seam-recovery'] = GraphRunner(destination/'seam-recovery', seam_case=True).execute()
+    failed_detection = GraphRunner(destination/'unresolved-seam-stopped', seam_case=True, failed_recovery=True)
+    try:
+        failed_detection.execute()
+    except ValueError as exc:
+        assert 'unresolved clipped text' in str(exc)
+        assert not failed_detection.saved and failed_detection.ocr.calls == 0
+        assert failed_detection.qwen_calls == 0
+        reports['unresolved-seam-stopped'] = {'expected_stop': True, 'message': str(exc),
+                                            'final_saved': False, 'ocr_line_calls': 0, 'qwen_tile_calls': 0}
+    else:
+        raise AssertionError('Unresolved seam reached OCR')
     failed = GraphRunner(destination/'unchanged-qwen-stopped', uniform_fill=False, failed_qwen=True)
     try:
         failed.execute()

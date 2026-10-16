@@ -17,7 +17,7 @@ def test_complete_api_graph_preserves_regions_and_unmasked_pixels(tmp_path, fill
     report = S.GraphRunner(tmp_path, uniform_fill=fill).execute()
     assert report['simulation_only'] is True
     assert report['selected_regions'] == 6 and report['ocr_line_calls'] == 8
-    assert report['detector_calls'] == 9
+    assert report['detector_calls'] == 9 + report['boundary_recovery']['recovery_calls']
     assert report['qwen_tile_calls'] == (1 if fill else 5)
     assert report['final_saved'] and not report['full_page_qwen_was_called']
     assert report['outside_mask_unchanged']
@@ -36,3 +36,24 @@ def test_uniform_page_bypasses_the_entire_qwen_branch(tmp_path):
     report = S.GraphRunner(tmp_path, patterned_header=False).execute()
     assert report['qwen_tile_calls'] == 0 and report['final_saved']
     assert 'UNETLoader' not in report['calls']
+
+
+def test_full_graph_recovers_cross_row_strip_before_ocr(tmp_path):
+    report = S.GraphRunner(tmp_path, seam_case=True).execute()
+    assert report['boundary_recovery']['recovery_calls'] > 0
+    assert report['boundary_recovery']['unresolved_regions'] == 0
+    assert report['selected_regions'] == 6 and report['ocr_line_calls'] == 8
+    assert report['outside_mask_unchanged'] and report['final_saved']
+    source = __import__('json').loads(next((tmp_path/'manga_translator').glob('ocr*.json')).read_text())
+    assert len(source['regions']) == 6
+    assert all(row['bbox'][2]-row['bbox'][0] > row['bbox'][3]-row['bbox'][1]
+               for row in source['regions'][2:])
+
+
+def test_unresolved_seam_stops_full_graph_before_ocr_translation_qwen_and_save(tmp_path):
+    runner = S.GraphRunner(tmp_path, seam_case=True, failed_recovery=True)
+    with pytest.raises(ValueError, match='unresolved clipped text'):
+        runner.execute()
+    assert runner.ocr.calls == runner.qwen_calls == 0 and not runner.saved
+    assert not runner.calls['MangaTranslate']
+    assert not list((tmp_path/'manga_translator').glob('*.json'))

@@ -41,7 +41,7 @@ def test_auto_detail_keeps_both_overlapping_tile_results_for_resolver():
                 'image_height': height,
                 'detections': [{
                     'label': 'text', 'score': .9,
-                    'bbox': [max(0, width - 700), 100, width - 50, 150],
+                    'bbox': [max(10, width - 700), 100, width - 50, 150],
                 }],
             }
 
