@@ -3,6 +3,12 @@
 08 워크플로의 제거·좌표 복원 뒤에 `MangaLetterPlan`과 `MangaLetterApply`를 연결했다.
 기존 01~07 예제와 기존 식자 노드는 호환을 위해 유지한다.
 
+v0.3.2의 새 08은 `line_breaks=reflow`가 기본이다. 단일 줄바꿈을 풀고 원래 프레임의
+가용 폭에서 크기 상한부터 배치한다. 입력의 물리적 줄바꿈 때문에 불필요하게 축소되는 것을 줄인다.
+빈 줄로 나눈 문단, 세로쓰기, strict 모드의 줄바꿈은 유지한다. 영역별
+`{"r1":{"line_breaks":"preserve"}}` 또는 노드 전체 preserve로 수동 줄바꿈을 고정할 수 있다.
+기존 그래프/함수 기본은 preserve이며 아래의 행 수 우선 축소 경로는 preserve에 해당한다.
+
 ## 사용
 
 저장소를 업데이트하고 ComfyUI를 재시작한 뒤 **08-integrated-tiled-cleanup-lettering.json을 새로 가져온다**.

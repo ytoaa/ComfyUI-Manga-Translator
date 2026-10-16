@@ -1,6 +1,7 @@
 """Source-capped lettering plans. CPU only; no image model rewrites characters."""
 import json
 import math
+import re
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
@@ -8,6 +9,21 @@ from . import core
 
 MODES = ('source', 'bubble', 'strict')
 DIRECTIONS = ('auto', 'horizontal', 'vertical_rtl', 'vertical_ltr')
+LINE_BREAKS = ('preserve','reflow')
+
+
+def reflow_text(text):
+    """Treat single newlines as physical wraps; retain blank-line paragraphs."""
+    def separator(match):
+        left,right=match.string[:match.start()].rstrip(),match.string[match.end():].lstrip()
+        if not left or not right:
+            return ''
+        # Japanese/CJK source-like runs need no extra word separator. Korean
+        # and Latin translated prose retain a word boundary across soft wraps.
+        cjk=lambda c: '\u3040' <= c <= '\u30ff' or '\u3400' <= c <= '\u9fff'
+        return '' if cjk(left[-1]) and cjk(right[0]) else ' '
+    return '\n\n'.join(re.sub(r'[ \t]*\n[ \t]*',separator,paragraph).strip()
+                        for paragraph in re.split(r'\n[ \t]*\n+',text.strip()))
 
 
 def bands(values):
@@ -31,6 +47,10 @@ def profile(reference, cleaned, support, font_name, foreground=None):
     direction = 'vertical_rtl' if vertical else 'horizontal'
     runs = cols if vertical else rows
     lengths = [b-a for a,b in runs if b-a>=3]
+    # A disconnected period/antialias fragment is source ink, but must not
+    # become another text row or halve the estimated glyph height.
+    significant = [(a,b) for a,b in runs if b-a >= max(3,max(lengths,default=3)*.45)]
+    lengths = [b-a for a,b in significant]
     visible = float(np.median(lengths)) if lengths else float(min(width,height))
     sample = ImageFont.truetype(core.font_path(font_name,'가'),100)
     box = sample.getbbox('가')
@@ -45,7 +65,7 @@ def profile(reference, cleaned, support, font_name, foreground=None):
         variation = [float(np.std(v)) for v in (starts,centers,ends)]
         alignment = ('left','center','right')[int(np.argmin(variation))]
     return {'font_cap':em,'visible_height':round(visible,2),'direction':direction,
-            'alignment':alignment,'line_count':max(1,len(runs)),
+            'alignment':alignment,'line_count':max(1,len(significant)),
             'confidence':'heuristic; override ambiguous or rotated source',
             'ink_bbox':[int(xs.min()),int(ys.min()),width,height]}, ink
 
@@ -133,12 +153,13 @@ def _curve(layer,alpha,bend):
 
 def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-Bold.ttf',
                mode='source',direction='auto',min_font=10,min_scale=.55,padding=2,
-               region_options_json='{}',bubble_mask=None,detection_result=None):
+               region_options_json='{}',bubble_mask=None,detection_result=None,line_breaks='preserve'):
     original,cleaned=core.rgb(original),core.rgb(cleaned)
     if original.shape!=cleaned.shape: raise ValueError('Original and cleaned dimensions differ')
     support=core.mask_array(source_mask,original.shape[:2])
     data=core.parse_regions(document,original.shape)
     if mode not in MODES or direction not in DIRECTIONS: raise ValueError('Invalid lettering mode/direction')
+    if line_breaks not in LINE_BREAKS: raise ValueError('Invalid line break policy')
     core.integer(min_font,4,128,'min_font');core.finite(min_scale,.2,1,'min_scale')
     core.integer(padding,0,32,'padding')
     if not isinstance(region_options_json,str) or len(region_options_json.encode('utf-8'))>262144:
@@ -159,7 +180,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
     total_area=0
     for item in data['regions']:
         ident=item['id'];opts=overrides.get(ident,{})
-        allowed={'font','mode','direction','font_cap','min_font','min_scale','alignment','rotation','shear','bend','padding','max_lines','line_spacing','tracking'}
+        allowed={'font','mode','direction','font_cap','min_font','min_scale','alignment','rotation','shear','bend','padding','max_lines','line_spacing','tracking','line_breaks'}
         if not isinstance(opts,dict) or set(opts)-allowed: raise ValueError(f'{ident}: unknown typography override')
         font=opts.get('font',item.get('font',default_font))
         core.font_path(font,item['text'])
@@ -180,6 +201,10 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         if floor>cap: raise ValueError(f'{ident}: source size {cap}px is below readability minimum {floor}px; review typography')
         selected_mode=opts.get('mode',mode)
         if selected_mode not in MODES: raise ValueError(f'{ident}: invalid mode')
+        breaks=opts.get('line_breaks',line_breaks)
+        if breaks not in LINE_BREAKS: raise ValueError(f'{ident}: invalid line break policy')
+        flow=breaks=='reflow' and actual_direction=='horizontal' and selected_mode!='strict'
+        rendered_text=reflow_text(item['text']) if flow else item['text']
         source=list(item['bbox'])
         bounds=source
         pad=opts.get('padding',layout.pop('padding',padding));core.integer(pad,0,32,'padding')
@@ -193,16 +218,18 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         curve=opts.get('bend',0.);core.finite(curve,-256,256,'bend')
         render_options={'direction':actual_direction,
                         'alignment':opts.get('alignment',layout.pop('alignment',measured['alignment'])),
-                        'padding':pad,'supersample':2,'vertical_policy':'typographic','wrap_policy':'balanced',**layout}
+                        'padding':pad,'supersample':2,'vertical_policy':'typographic',
+                        'wrap_policy':'greedy' if flow else 'balanced',**layout}
         for key in ('rotation','shear','line_spacing','tracking'):
             if key in opts: render_options[key]=opts[key]
         original_lines=min(64,measured['line_count'])
         forced_lines=opts.get('max_lines',render_options.pop('max_lines',0))
         core.integer(forced_lines,0,64,'max_lines')
-        phases=[(source,forced_lines or original_lines,'source-lines')]
-        if selected_mode!='strict' and not forced_lines: phases.append((source,0,'reflow'))
+        phases=[(source,forced_lines or (0 if flow else original_lines),'source-flow' if flow else 'source-lines')]
+        if selected_mode!='strict' and not forced_lines and not flow: phases.append((source,0,'reflow'))
         if bubble and bubble!=source: phases.append((bubble,forced_lines,'bubble'))
-        prepared={'id':ident,'text':item['text'],'font':font,'style':style,'source':source,
+        prepared={'id':ident,'text':rendered_text,'original_text':item['text'],'line_breaks':breaks,
+                  'font':font,'style':style,'source':source,
                   'phases':phases,'cap':cap,'floor':floor,'options':render_options,'bend':curve,
                   'profile':measured,'analysis':json.loads(analysis),'warning':warning}
         # Bound repeated search work and plan memory, including optional expanded rectangles.
@@ -216,7 +243,8 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
             draw.rectangle((x,y,x+w-1,y+h-1),outline=(0,200,220),width=2)
         reports.append({'id':ident,'source':source,'source_profile':measured,'font':font,
                         'font_cap':cap,'min_font':floor,'mode':selected_mode,
-                        'direction':actual_direction,'warning':warning})
+                        'direction':actual_direction,'line_breaks':breaks,'soft_wraps_reflowed':flow,
+                        'warning':warning})
     report={'schema':1,'regions':reports,'preview':'orange=source frame; cyan=verified bubble rectangle',
             'font_identity':'selected font; source size/direction/alignment are measured estimates',
             'curves':'manual bend only; no automatic curve reconstruction'}
@@ -266,6 +294,7 @@ def render_plan(plan):
         occupied |= ndimage.binary_dilation(changed>.01,iterations=2)
         reports.append({'id':region['id'],'source_profile':region['profile'],'bbox':bounds,
                         'fit_phase':phase,'scale':round(scale,4),'render':render,
+                        'original_text':region['original_text'],'line_breaks':region['line_breaks'],
                         'outline_width':style['outline_width'],'bend':region['bend'],'warning':region['warning']})
     return result,page_alpha,json.dumps({'schema':1,'regions':reports,
         'quality_scope':'geometry/style approximation; OCR, translation and GPU cleanup require separate review'},

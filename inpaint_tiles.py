@@ -35,12 +35,63 @@ def _ring_color(original, selected):
     return color if spread <= .018 else None
 
 
-def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, max_tiles=64, uniform_fill=True):
+def _recover_uniform_regions(original, raw, pending, document):
+    """Recover sparse missed glyph pixels only inside declared text rectangles.
+
+    This is deliberately not a page-wide brightness filter: both the external
+    background ring and the region interior must support one flat color, with
+    existing detector ink providing substantial corroborating evidence.
+    """
+    from .nodes import layout, pixel_box
+    height,width=raw.shape
+    data=layout(document)
+    if (data.get('image_width'),data.get('image_height')) != (width,height):
+        raise ValueError('Uniform cleanup regions belong to a different page size')
+    base=original.copy(); recovered=raw.copy(); remaining=pending.copy(); permitted=pending.copy()
+    reports=[]
+    for row in data['regions']:
+        if row.get('kind','text') != 'text':
+            continue
+        x0,y0,x1,y1=pixel_box(row['bbox'],width,height,2)
+        left,top,right,bottom=max(0,x0-10),max(0,y0-10),min(width,x1+10),min(height,y1+10)
+        ring=np.ones((bottom-top,right-left),bool)
+        ring[y0-top:y1-top,x0-left:x1-left]=False
+        ring &= ~pending[top:bottom,left:right]
+        samples=original[top:bottom,left:right][ring]
+        report={'id':row['id'],'bbox':[x0,y0,x1,y1],'accepted':False}
+        if len(samples)<32:
+            report['reason']='too_few_background_samples';reports.append(report);continue
+        color=np.median(samples,axis=0)
+        if np.quantile(np.max(np.abs(samples-color),axis=1),.98)>.018:
+            report['reason']='nonuniform_surroundings';reports.append(report);continue
+        local=original[y0:y1,x0:x1]
+        delta=np.max(np.abs(local-color),axis=2)
+        contrast=delta>.035
+        support=raw[y0:y1,x0:x1] & contrast
+        if np.mean(delta<=.025)<.65 or support.sum()<8 or support.sum()<contrast.sum()*.15:
+            report['reason']='insufficient_uniform_or_detector_support';reports.append(report);continue
+        selected=ndimage.binary_dilation(contrast,iterations=1) | pending[y0:y1,x0:x1]
+        missing=contrast & ~raw[y0:y1,x0:x1]
+        expanded=selected & ~permitted[y0:y1,x0:x1]
+        recovered[y0:y1,x0:x1] |= contrast
+        permitted[y0:y1,x0:x1] |= selected
+        base[y0:y1,x0:x1][selected]=color
+        remaining[y0:y1,x0:x1][selected]=False
+        report.update(accepted=True,background_color=color.tolist(),
+                      recovered_ink_pixels=int(missing.sum()),expanded_cleanup_pixels=int(expanded.sum()),
+                      filled_pixels=int(selected.sum()))
+        reports.append(report)
+    return base,recovered,remaining,permitted,reports
+
+
+def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, max_tiles=64, uniform_fill=True,
+              regions_json=None,recover_uniform_ink=False):
     if type(tile_size) is not int or not 64 <= tile_size <= 512:
         raise ValueError('Cleanup core size must be 64..512 pixels')
     if type(context) is not int or not 16 <= context <= 256:
         raise ValueError('Cleanup context must be 16..256 pixels')
-    if type(max_tiles) is not int or not 1 <= max_tiles <= 256 or type(uniform_fill) is not bool:
+    if (type(max_tiles) is not int or not 1 <= max_tiles <= 256 or type(uniform_fill) is not bool
+            or type(recover_uniform_ink) is not bool):
         raise ValueError('Invalid cleanup planning options')
     height, width = original.shape[:2]
     if width*height > 16*1024*1024 or source_mask.shape != (height, width) or cleanup_mask.shape != (height, width):
@@ -52,6 +103,12 @@ def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, m
     if np.any(raw & ~pending):
         raise ValueError('Cleanup mask must cover every source-mask pixel')
     base = original.copy()
+    permitted=pending.copy()
+    recovery=[]
+    if recover_uniform_ink and uniform_fill:
+        if regions_json is None:
+            raise ValueError('Connect text regions before recovering uniform-background ink')
+        base,raw,pending,permitted,recovery=_recover_uniform_regions(original,raw,pending,regions_json)
     labels, count = ndimage.label(pending, structure=np.ones((3, 3), bool))
     if count > 4096:
         raise ValueError('Cleanup mask has too many disconnected components; refine the mask or split the page')
@@ -67,10 +124,16 @@ def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, m
         left, top = max(0, box[0]-8), max(0, box[1]-8)
         right, bottom = min(width, box[2]+8), min(height, box[3]+8)
         selected = labels[top:bottom, left:right] == label
-        color = _ring_color(original[top:bottom, left:right], selected) if uniform_fill else None
+        color = _ring_color(base[top:bottom, left:right], selected) if uniform_fill else None
         if color is not None:
             reference = raw[top:bottom, left:right] & selected
             contrast = np.max(np.abs(original[top:bottom, left:right]-color), axis=2)
+            # After verified region filling, the old GrowMask halo can be an
+            # empty flat-color component. It requires no model generation.
+            if not reference.any() and np.all(contrast[selected] <= .018):
+                pending[top:bottom, left:right][selected] = False
+                filled += 1
+                continue
             # Require actual contrasting source ink, not an empty/background mask.
             if np.count_nonzero(reference & (contrast > .08)) >= 8:
                 base[top:bottom, left:right][selected] = color
@@ -124,11 +187,13 @@ def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, m
               'tile_core': tile_size, 'context': context, 'tile_count': len(tiles),
               'source_components': count, 'uniform_filled_components': filled,
               'source_mask_pixels': int(raw.sum()), 'cleanup_mask_pixels': int((cleanup_mask > .5).sum()),
+              'effective_cleanup_mask_pixels':int(permitted.sum()),
+              'uniform_region_recovery':recovery,
               'qwen_mask_pixels': int(pending.sum()), 'tile_boxes': [t['crop'] for t in tiles],
               'coverage': 'each pending mask pixel owned exactly once',
               'limitation': 'undetected text outside the source mask is not automatically certified or erased'}
     return {'version': 1, 'original': original.copy(), 'base': base, 'source_mask': raw,
-            'cleanup_mask': cleanup_mask > .5, 'tiles': tiles, 'report': report}
+            'cleanup_mask': permitted, 'tiles': tiles, 'report': report}
 
 
 def assemble(plan, generated, strict_cleanup=True):
@@ -174,10 +239,14 @@ class MangaInpaintPlan:
             'tile_size': ('INT', {'default': 512, 'min': 64, 'max': 512}),
             'context': ('INT', {'default': 128, 'min': 16, 'max': 256}),
             'max_tiles': ('INT', {'default': 64, 'min': 1, 'max': 256}),
-            'uniform_fill': ('BOOLEAN', {'default': True})}}
-    RETURN_TYPES = ('IMAGE', 'INT', 'INT', 'INT', 'INT', 'MASK', 'MANGA_INPAINT_PLAN', 'STRING')
-    RETURN_NAMES = ('base_page', 'x', 'y', 'width', 'height', 'owned_tile_masks', 'plan', 'plan_report')
-    OUTPUT_IS_LIST = (False, True, True, True, True, True, False, False)
+            'uniform_fill': ('BOOLEAN', {'default': True})},
+            'optional':{'regions_json':('STRING',{'forceInput':True}),
+                        'recover_uniform_ink':('BOOLEAN',{'default':False,
+                            'tooltip':'주변/내부의 단색 조건과 기존 검출 획이 확인된 text 영역에서 누락된 획/잔점을 보완합니다. 실효 마스크를 검수하세요.'})}}
+    RETURN_TYPES = ('IMAGE', 'INT', 'INT', 'INT', 'INT', 'MASK', 'MANGA_INPAINT_PLAN', 'STRING','MASK','MASK')
+    RETURN_NAMES = ('base_page', 'x', 'y', 'width', 'height', 'owned_tile_masks', 'plan', 'plan_report',
+                    'effective_cleanup_mask','recovered_source_mask')
+    OUTPUT_IS_LIST = (False, True, True, True, True, True, False, False,False,False)
     FUNCTION = 'prepare'
     CATEGORY = 'Manga Translator/Cleanup'
     def prepare(self, original, source_mask, cleanup_mask, **options):
@@ -186,7 +255,8 @@ class MangaInpaintPlan:
         return (tensor(plan['base']), [b[0] for b in boxes], [b[1] for b in boxes],
                 [b[2]-b[0] for b in boxes], [b[3]-b[1] for b in boxes],
                 [tensor(t['mask']) for t in plan['tiles']], plan,
-                json.dumps(plan['report'], ensure_ascii=False, indent=2))
+                json.dumps(plan['report'], ensure_ascii=False, indent=2),
+                tensor(plan['cleanup_mask']),tensor(plan['source_mask']))
 
 
 class MangaInpaintAssemble:

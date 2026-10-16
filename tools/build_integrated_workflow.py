@@ -38,9 +38,10 @@ def build():
     target_save = g.add('MangaSaveReview', {'filename_prefix': 'manga_translator/translation'}, (3360, 50), '번역 JSON 저장')
     g.connect(translate, 0, target_save, 'translated_json')
 
-    plan = g.add('MangaInpaintPlan', pos=(1680, 650), title='⑦ 제거 타일 계획 · 512+128px')
+    plan = g.add('MangaInpaintPlan', {'recover_uniform_ink':True}, pos=(1680, 650), title='⑦ 단색 잔상 보완 · 제거 타일 계획')
     g.connect(original, 0, plan, 'original'); g.connect(raw_mask, 0, plan, 'source_mask')
     g.connect(grown, 0, plan, 'cleanup_mask')
+    g.connect(regions, 0, plan, 'regions_json')
     tile_crop = g.add('ImageCrop', pos=(2100, 650), title='영역 자르기 · 기본 ImageCrop')
     g.connect(plan, 0, tile_crop, 'image')
     for field, slot in [('x', 1), ('y', 2), ('width', 3), ('height', 4)]:
@@ -69,8 +70,8 @@ def build():
     g.connect(plan, 6, assemble, 'plan'); g.connect(local_comp, 0, assemble, 'generated')
     prepare = g.add('MangaLetterPrepare', pos=(4620, 50), title='⑩ 번역문과 원문 스타일 연결')
     g.connect(original, 0, prepare, 'original'); g.connect(target_save, 0, prepare, 'translated_json')
-    g.connect(raw_mask, 0, prepare, 'text_pixel_mask')
-    typography = g.add('MangaLetterPlan', pos=(5040, 50), title='⑪ 원문 크기·방향 보존 · 축소 우선 계획')
+    g.connect(plan, 9, prepare, 'text_pixel_mask')
+    typography = g.add('MangaLetterPlan', {'line_breaks':'reflow'}, pos=(5040, 50), title='⑪ 원문 크기·폭 활용 · 불필요한 줄바꿈 해제')
     g.connect(original, 0, typography, 'original'); g.connect(assemble, 0, typography, 'cleaned')
     g.connect(prepare, 1, typography, 'source_mask'); g.connect(prepare, 0, typography, 'regions_json')
     g.connect(detector, 0, typography, 'detection_result')
@@ -81,7 +82,7 @@ def build():
     clean_preview = g.add('PreviewImage', pos=(5040, 650), title='검수 · 식자 직전 전체 배경')
     g.connect(assemble, 0, clean_preview, 'images')
     mask_image = g.add('MaskToImage', pos=(1260, 1050), title='마스크 → 이미지 · 기본 노드')
-    g.connect(grown, 0, mask_image, 'mask')
+    g.connect(plan, 8, mask_image, 'mask')
     preview = g.add('PreviewImage', pos=(1260, 1250), title='검수 · 제거 대상 마스크')
     g.connect(mask_image, 0, preview, 'images')
     typography_preview = g.add('PreviewImage', pos=(5460, 650), title='검수 · 원문 프레임과 확장 가능 공간')
@@ -90,7 +91,9 @@ def build():
     g.connect(ocr, 2, ocr_preview, 'images')
     original_crops = g.add('PreviewImage', pos=(1260,-550), title='검수 · OCR 전 원본 영역 크롭')
     g.connect(crops, 0, original_crops, 'images')
-    g.note('원문 크기 상한 → 축소 → 재배치 → 검증된 말풍선 확장. source/bubble/strict 모드.\n'
+    g.note('원문 크기 상한에서 가용 폭을 먼저 사용. 단일 줄바꿈은 자동 재배치하고 빈 줄 문단은 유지합니다.\n'
+           'line_breaks=preserve로 수동 줄바꿈 유지. strict/세로쓰기에서는 원래 줄바꿈을 유지합니다.\n'
+           '단색이 확인된 OCR 영역 안에서 누락된 획/잔점을 제거 범위에 보완합니다. 실효 마스크를 미리보기로 확인하세요.\n'
            'bubble은 검출된 실제 말풍선 마스크 또는 직접 연결한 내부 마스크에서 확장합니다. 겹침/최소 크기 실패는 저장 전에 중단합니다.\n'
            '영역별 폰트·방향·회전·수동 곡선은 식자 계획 노드의 JSON으로 지정합니다.\n'
            '효과음은 검출·영역·마스크 세 노드에서 함께 설정합니다. 기본은 제외.\n'

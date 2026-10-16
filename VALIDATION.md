@@ -191,3 +191,16 @@ RF-DETR, Hayai, vLLM and Qwen responses in these simulations are explicit test d
 No actual GPU recognition accuracy, user-image quality improvement, live ComfyUI browser execution or Qwen residual-dot fix is claimed.
 The input changes and heuristic rejection rules need real-image comparison using the new 08 workflow.
 See [usage and limits](docs/ocr-boundary-v0.3.1.md).
+
+# v0.3.2 uniform cleanup / width-first flow — 2026-10-16
+
+Base: `491f1254222f4263c39c3c21562096178c816be1`. Full CPU regression: **212 passed**.
+Eleven added cases cover disconnected white source pixels missing from segmentation, exact preservation outside
+the effective cleanup mask, unrelated bright art, patterned/unsupported-region rejection, Qwen comparison mode,
+single-newline reflow, blank paragraphs, strict/per-region preservation, frame bounds and punctuation-safe size estimation.
+The shipped 08 graph removes a deliberately omitted 3×3 white fleck before lettering in an explicit fixture.
+Font/pixel rendering reproduces 23px/two rows with preserve versus source-capped 27px/one row with reflow in the same frame.
+Five successful and two expected-stop full graph simulations retain their prior detector/OCR/Qwen counts.
+Workflow generation, widget/API contracts, compilation, ZIP import/integrity and source SHA256 are checked locally.
+Real user-image RF-DETR/Hayai/Qwen GPU output and live ComfyUI frontend execution remain unverified.
+See [settings and limits](docs/uniform-cleanup-flow-v0.3.2.md).

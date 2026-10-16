@@ -169,6 +169,7 @@
       "context": 128,
       "max_tiles": 64,
       "uniform_fill": true,
+      "recover_uniform_ink": true,
       "original": [
         "1",
         0
@@ -179,6 +180,10 @@
       ],
       "cleanup_mask": [
         "6",
+        0
+      ],
+      "regions_json": [
+        "4",
         0
       ]
     }
@@ -384,8 +389,8 @@
         0
       ],
       "text_pixel_mask": [
-        "5",
-        0
+        "14",
+        9
       ]
     }
   },
@@ -399,6 +404,7 @@
       "min_scale": 0.55,
       "padding": 2,
       "region_options_json": "{}",
+      "line_breaks": "reflow",
       "original": [
         "1",
         0
@@ -453,8 +459,8 @@
     "class_type": "MaskToImage",
     "inputs": {
       "mask": [
-        "6",
-        0
+        "14",
+        8
       ]
     }
   },

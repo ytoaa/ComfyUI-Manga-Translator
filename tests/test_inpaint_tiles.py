@@ -91,3 +91,65 @@ def test_lazy_assembler_demands_generated_tiles_only_when_needed():
     plan = T.make_plan(original, raw, raw, uniform_fill=False)
     assert T.MangaInpaintAssemble().check_lazy_status([plan], [True]) == ['generated']
     assert T.MangaInpaintAssemble().check_lazy_status([plan], [True], (None,)) == ['generated']
+
+
+def uniform_residue_fixture(patterned=False):
+    original=np.full((100,220,3),.47,np.float32)
+    raw=np.zeros((100,220),np.float32)
+    for x in (30,55,80,105):
+        original[35:55,x:x+8]=1
+        raw[35:55,x:x+8]=1
+    # Real source pixels omitted by the segmentation, beyond its grown mask.
+    original[45:48,145:148]=1
+    original[51:53,165:167]=.8
+    if patterned:
+        original[::3]=.25
+    document=__import__('json').dumps({'image_width':220,'image_height':100,'regions':[
+        {'id':'r1','kind':'text','bbox':[25/220*1000,30/100*1000,175/220*1000,60/100*1000]}]})
+    return original,raw,document
+
+
+def test_confirmed_uniform_region_removes_disconnected_white_residue_before_lettering():
+    original,raw,document=uniform_residue_fixture()
+    old=T.make_plan(original,raw,raw)
+    assert np.all(old['base'][45:48,145:148] == 1)
+    plan=T.make_plan(original,raw,raw,regions_json=document,recover_uniform_ink=True)
+    output,report=T.assemble(plan,[])
+    assert np.all(output[45:48,145:148] == np.float32(.47))
+    assert np.all(output[51:53,165:167] == np.float32(.47))
+    assert plan['report']['uniform_region_recovery'][0]['recovered_ink_pixels'] == 13
+    assert plan['cleanup_mask'].sum() > raw.sum()
+    assert np.array_equal(output[~plan['cleanup_mask']],original[~plan['cleanup_mask']])
+
+
+def test_uniform_recovery_never_erases_identical_bright_art_outside_text_region():
+    original,raw,document=uniform_residue_fixture()
+    original[80:90,180:190]=1
+    plan=T.make_plan(original,raw,raw,regions_json=document,recover_uniform_ink=True)
+    output,_=T.assemble(plan,[])
+    assert np.array_equal(output[80:90,180:190],original[80:90,180:190])
+    assert not plan['cleanup_mask'][80:90,180:190].any()
+
+
+def test_patterned_background_is_rejected_by_uniform_recovery():
+    original,raw,document=uniform_residue_fixture(patterned=True)
+    plan=T.make_plan(original,raw,raw,regions_json=document,recover_uniform_ink=True)
+    assert not plan['report']['uniform_region_recovery'][0]['accepted']
+    assert np.array_equal(plan['cleanup_mask'],raw>.5)
+    assert np.all(plan['base'][45:48,145:148][1:] == 1)
+
+
+def test_uniform_recovery_requires_matching_page_and_substantial_existing_ink():
+    original,raw,document=uniform_residue_fixture()
+    data=__import__('json').loads(document);data['image_width']=221
+    with pytest.raises(ValueError,match='different page size'):
+        T.make_plan(original,raw,raw,regions_json=__import__('json').dumps(data),recover_uniform_ink=True)
+    plan=T.make_plan(original,raw*0,raw,regions_json=document,recover_uniform_ink=True)
+    assert not plan['report']['uniform_region_recovery'][0]['accepted']
+
+
+def test_uniform_fill_off_keeps_qwen_path_and_original_masks():
+    original,raw,document=uniform_residue_fixture()
+    plan=T.make_plan(original,raw,raw,uniform_fill=False,regions_json=document,recover_uniform_ink=True)
+    assert plan['tiles'] and plan['report']['uniform_region_recovery'] == []
+    assert np.array_equal(plan['cleanup_mask'],raw>.5)

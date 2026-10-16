@@ -115,6 +115,40 @@ def test_explicit_newlines_are_kept():
     assert report['regions'][0]['render']['line_count']>=2
 
 
+def test_reflow_uses_existing_width_before_shrinking_for_an_input_soft_wrap():
+    values=fixture('가로 공간이 넓습니다\n한 줄로 표시합니다',width=900,height=100,
+                   font_size=32,box=[10,20,880,60])
+    _,_,_,old,_,_=run(values,min_scale=.3,min_font=8)
+    plan,_,alpha,new,_,_=run(values,line_breaks='reflow',min_scale=.3,min_font=8)
+    row=new['regions'][0]
+    assert row['render']['line_count'] == 1
+    assert row['render']['font_size'] == plan['regions'][0]['cap']
+    assert row['render']['font_size'] > old['regions'][0]['render']['font_size']
+    assert row['fit_phase'] == 'source-flow' and alpha.sum() > 0
+    assert row['original_text'] == '가로 공간이 넓습니다\n한 줄로 표시합니다'
+
+
+def test_reflow_preserves_real_paragraphs_and_strict_manual_breaks():
+    assert hybrid.reflow_text('첫 줄\n이어서\n\n다음 문단\n내용') == '첫 줄 이어서\n\n다음 문단 내용'
+    assert hybrid.reflow_text('原文\n確認') == '原文確認'
+    plan,_,_=hybrid.build_plan(*fixture('첫 줄\n둘째 줄'),line_breaks='reflow',mode='strict',min_scale=.3)
+    assert plan['regions'][0]['text'] == '첫 줄\n둘째 줄'
+
+
+def test_region_override_can_keep_one_manual_break_with_global_reflow():
+    plan,_,_=hybrid.build_plan(*fixture('첫 줄\n둘째 줄'),line_breaks='reflow',
+                              region_options_json='{"r1":{"line_breaks":"preserve"}}')
+    assert plan['regions'][0]['text'] == '첫 줄\n둘째 줄'
+
+
+def test_reflow_does_not_expand_into_unrelated_page_space():
+    _,_,alpha,report,_,_=run(fixture('너비에 맞춰 표시합니다',width=600,height=160,
+                                      box=[100,30,400,100]),line_breaks='reflow',min_scale=.3)
+    assert not alpha[:30].any() and not alpha[130:].any()
+    assert not alpha[:,:100].any() and not alpha[:,500:].any()
+    assert report['regions'][0]['bbox'] == [100,30,400,100]
+
+
 def test_rotation_shear_and_manual_curve_keep_alpha_inside_frame():
     options=json.dumps({'r1':{'rotation':12,'shear':.1,'bend':8}})
     _,_,alpha,report,_,_=run(fixture('효과음',width=400,height=180,font_size=48),region_options_json=options,min_scale=.3)
@@ -196,3 +230,12 @@ def test_source_font_cap_is_not_inflated_by_outline_thickness():
     plain,_,_=hybrid.build_plan(*fixture('번역',font_size=42,stroke=0))
     outlined,_,_=hybrid.build_plan(*fixture('번역',font_size=42,stroke=4))
     assert abs(plain['regions'][0]['cap']-outlined['regions'][0]['cap'])<=2
+
+
+def test_disconnected_small_punctuation_does_not_shrink_source_font_estimate():
+    original,clean,mask,doc=fixture('번역문',font_size=32)
+    plain,_,_=hybrid.build_plan(original,clean,mask,doc)
+    original[92:95,200:203]=0;mask[92:95,200:203]=1
+    punctuated,_,_=hybrid.build_plan(original,clean,mask,doc)
+    assert abs(plain['regions'][0]['cap']-punctuated['regions'][0]['cap']) <= 1
+    assert punctuated['regions'][0]['profile']['line_count'] == 1

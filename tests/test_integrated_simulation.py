@@ -49,6 +49,23 @@ def test_short_repeating_ocr_stops_before_translation_cleanup_and_final_save(tmp
     assert not runner.calls['MangaTranslate'] and runner.qwen_calls == 0 and not runner.saved
 
 
+def test_shipped_graph_removes_white_residue_missing_from_detector_mask(tmp_path):
+    runner=S.GraphRunner(tmp_path)
+    # An explicit omitted source fleck inside the detected gray paragraph.
+    # Detector segmentation deliberately lacks these pixels; models are doubles.
+    for y in range(211,214):
+        for x in range(1000,1003):runner.original.putpixel((x,y),(255,255,255))
+    runner.detector=S.DetectorOracle(runner.records,runner.original)
+    runner.ocr=S.OCROracle(runner.original,runner.records)
+    report=runner.execute()
+    assert report['final_saved']
+    plan_id=next(k for k,n in runner.graph.items() if n['class_type']=='MangaInpaintPlan')
+    plan=runner.cache[plan_id][6][0]
+    assert plan['source_mask'][211:214,1000:1003].all()
+    cleaned=S.Image.open(tmp_path/'cleaned.png')
+    assert cleaned.getpixel((1001,212)) == runner.clean.getpixel((1001,212))
+
+
 def test_uniform_page_bypasses_the_entire_qwen_branch(tmp_path):
     report = S.GraphRunner(tmp_path, patterned_header=False).execute()
     assert report['qwen_tile_calls'] == 0 and report['final_saved']
