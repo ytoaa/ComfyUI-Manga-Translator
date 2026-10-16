@@ -246,13 +246,14 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
                         'direction':actual_direction,'line_breaks':breaks,'soft_wraps_reflowed':flow,
                         'warning':warning})
     report={'schema':1,'regions':reports,'preview':'orange=source frame; cyan=verified bubble rectangle',
+            **({'page_status':'no_text_detected','lettering_skipped':True} if not reports else {}),
             'font_identity':'selected font; source size/direction/alignment are measured estimates',
             'curves':'manual bend only; no automatic curve reconstruction'}
     return plan,np.asarray(preview,np.float32)/255,json.dumps(report,ensure_ascii=False,indent=2)
 
 
 def render_plan(plan):
-    if not isinstance(plan,dict) or plan.get('version')!=1 or not plan.get('regions'):
+    if not isinstance(plan,dict) or plan.get('version')!=1 or not isinstance(plan.get('regions'),list):
         raise ValueError('Expected MangaLetterPlan output')
     result=core.rgb(plan['cleaned']).copy()
     page_alpha=np.zeros(result.shape[:2],np.float32)
@@ -297,5 +298,6 @@ def render_plan(plan):
                         'original_text':region['original_text'],'line_breaks':region['line_breaks'],
                         'outline_width':style['outline_width'],'bend':region['bend'],'warning':region['warning']})
     return result,page_alpha,json.dumps({'schema':1,'regions':reports,
+        **({'page_status':'no_text_detected','lettering_skipped':True} if not reports else {}),
         'quality_scope':'geometry/style approximation; OCR, translation and GPU cleanup require separate review'},
         ensure_ascii=False,indent=2)

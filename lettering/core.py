@@ -479,8 +479,8 @@ def parse_regions(document, shape):
     if data.get('page_size') != [shape[1], shape[0]]:
         raise ValueError('Regions page_size does not match input; restore original coordinates first')
     regions = data.get('regions')
-    if not isinstance(regions, list) or not 1 <= len(regions) <= 64:
-        raise ValueError('Expected 1–64 translated regions')
+    if not isinstance(regions, list) or not 0 <= len(regions) <= 64:
+        raise ValueError('Expected 0–64 translated regions')
     ids = set()
     for item in regions:
         if not isinstance(item, dict) or not isinstance(item.get('id'), str) or not item['id'] or item['id'] in ids:

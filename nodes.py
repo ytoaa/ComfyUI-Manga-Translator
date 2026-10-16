@@ -75,8 +75,8 @@ def translation_response(response):
 def layout(value):
     result = decode(value)
     rows = result.get('regions') if isinstance(result, dict) else None
-    if not isinstance(rows, list) or not 1 <= len(rows) <= 128:
-        raise ValueError('Provide 1–128 regions in {"regions":[...]}')
+    if not isinstance(rows, list) or not 0 <= len(rows) <= 128:
+        raise ValueError('Provide 0–128 regions in {"regions":[...]}')
     ids = set()
     for row in rows:
         if not isinstance(row, dict):
@@ -222,7 +222,8 @@ class MangaDetectionRegions:
         rows = [{'id':f'r{i+1}','kind':'sfx' if item['label']=='onomatopoeia' else 'text',
                  'bbox':[item['bbox'][0]/width*1000,item['bbox'][1]/height*1000,item['bbox'][2]/width*1000,item['bbox'][3]/height*1000]}
                 for i,item in enumerate(selected)]
-        value = encode({'regions':rows,'origin':'rfdetr','image_width':width,'image_height':height})
+        value = encode({'regions':rows,'origin':'rfdetr','image_width':width,'image_height':height,
+                        **({'page_status':'no_text_detected'} if not rows else {})})
         layout(value)
         return (value,)
 
@@ -232,24 +233,36 @@ class MangaRegionCrops:
     def INPUT_TYPES(cls):
         return {'required': {'images': ('IMAGE',), 'layout_json': ('STRING', {'multiline': True, 'default': '{"regions":[{"id":"r1","bbox":[0,0,1000,1000]}]}'}),
                              'ocr_padding': ('INT', {'default': 4, 'min': 0, 'max': 128}),
-                             'edit_margin': ('INT', {'default': 12, 'min': 0, 'max': 256})}}
+                             'edit_margin': ('INT', {'default': 12, 'min': 0, 'max': 256})},
+                'optional': {'allow_empty_page': ('BOOLEAN', {'default': False,
+                    'tooltip': '새 08 전용: 0개 영역이면 원본을 미리보기로 전달합니다. OCR에 manifest_json도 연결해야 합니다.'})}}
     RETURN_TYPES = ('IMAGE', 'STRING', 'MASK')
     RETURN_NAMES = ('ocr_crops', 'manifest_json', 'edit_region_mask')
     OUTPUT_IS_LIST = (True, False, False)
     FUNCTION = 'crop'
     CATEGORY = 'Manga Translator/Regions'
 
-    def crop(self, images, layout_json, ocr_padding=4, edit_margin=12):
+    def crop(self, images, layout_json, ocr_padding=4, edit_margin=12, allow_empty_page=False):
         import torch
         if images.ndim != 4 or images.shape[0] != 1 or images.shape[-1] != 3:
             raise ValueError('Load one RGB page at a time')
         if type(ocr_padding) is not int or not 0 <= ocr_padding <= 128 or type(edit_margin) is not int or not 0 <= edit_margin <= 256:
             raise ValueError('Invalid crop padding or edit margin')
         data = layout(layout_json)
+        if type(allow_empty_page) is not bool:
+            raise ValueError('Invalid empty-page switch')
+        if not data['regions'] and not allow_empty_page:
+            raise ValueError('No selected text regions; load the updated 08 workflow for unchanged-page output')
         height, width = images.shape[1:3]
         if data.get('origin')=='rfdetr' and (data.get('image_width'),data.get('image_height'))!=(width,height):
             raise ValueError('Detector coordinates belong to a different image size')
         mask = torch.zeros((1,height,width),dtype=images.dtype,device=images.device)
+        if not data['regions']:
+            logging.getLogger(__name__).info('Manga page: no_text_detected; preserving original page')
+            # One real image keeps native previews/list mapping valid. This is
+            # explicitly a page preview, never an OCR region or invented text.
+            return ([images], encode({**data,'image_width':width,'image_height':height,
+                    'page_status':'no_text_detected','crop_passthrough':True}), mask)
         crops, rows = [], []
         for row in data['regions']:
             box = pixel_box(row['bbox'],width,height,ocr_padding)
@@ -275,6 +288,15 @@ class MangaCollectOCR:
         if len(manifest_json)!=1:
             raise ValueError('Expected one page manifest')
         data = layout(manifest_json[0])
+        if not data['regions']:
+            if text not in ([], ['']):
+                raise ValueError('Unexpected OCR text for a page with no regions')
+            if ocr_report_json is not None:
+                reports = [decode(value) for value in ocr_report_json]
+                if len(reports)>1 or any(not isinstance(r,dict) or r.get('status')!='no_text_detected'
+                                        or r.get('ocr_skipped') is not True for r in reports):
+                    raise ValueError('Unexpected OCR diagnostics for a page with no regions')
+            return (encode({**data,'page_status':'no_text_detected','ocr_skipped':True}),)
         if len(text)!=len(data['regions']):
             raise ValueError('OCR result count differs from the region count')
         if any(not isinstance(t,str) or not t.strip() or len(t)>16_000 for t in text):
@@ -307,6 +329,9 @@ class MangaTranslate:
 
     def translate(self, ocr_json, base_url, model, target_language, api_key_env, max_tokens, timeout, translated_override_json=''):
         source = layout(ocr_json)
+        if not source['regions']:
+            logging.getLogger(__name__).info('Manga translation skipped: no_text_detected')
+            return (encode({**source,'page_status':'no_text_detected','translation_skipped':True}),)
         if any(not isinstance(row.get('source'),str) or not row['source'].strip() for row in source['regions']):
             raise ValueError('Connect collected OCR text before translation')
         if translated_override_json.strip():

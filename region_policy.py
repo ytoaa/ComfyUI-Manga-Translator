@@ -171,6 +171,7 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
                  **({'line_bboxes_pixels': item['line_bboxes']} if 'line_bboxes' in item else {})}
                 for i, item in enumerate(selected)]
         value = encode({'regions': rows, 'origin': 'rfdetr',
+                        **({'page_status':'no_text_detected'} if not rows else {}),
                         'image_width': width, 'image_height': height,
                         'region_resolution': {
                             'input_regions': len(candidates),

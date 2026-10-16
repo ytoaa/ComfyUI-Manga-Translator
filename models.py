@@ -405,11 +405,25 @@ class MangaOCR:
         return (text,)
 
 
+def _empty_ocr_page(images, manifest_json):
+    if manifest_json is None:
+        return False
+    from .nodes import layout
+    data = layout(manifest_json)
+    if data['regions']:
+        return False
+    if (data.get('crop_passthrough') is not True or images.ndim != 4 or images.shape[0] != 1
+            or images.shape[-1] != 3
+            or (data.get('image_width'),data.get('image_height')) != (images.shape[2],images.shape[1])):
+        raise ValueError('Empty-page OCR requires the matching MangaRegionCrops manifest and page preview')
+    return True
+
+
 class MangaOCRAdaptive:
     DESCRIPTION = '영역을 행/열로 분리하고 여백을 줄인 뒤 작은 글씨에 더 큰 Hayai patch budget을 자동 배정합니다.'
     @classmethod
     def INPUT_TYPES(cls):
-        return {'required': {'images':('IMAGE',),'model':('MANGA_OCR_MODEL',),
+        return {'required': {'images':('IMAGE',),'model':('MANGA_OCR_MODEL',{'lazy':True}),
             'max_new_tokens':('INT',{'default':256,'min':1,'max':2048}),
             'base_patches':([256,512,1024],{'default':512}),
             'small_text_patches':([512,1024],{'default':1024}),
@@ -419,6 +433,8 @@ class MangaOCRAdaptive:
             'repetition_penalty':('FLOAT',{'default':1.,'min':1.,'max':2.,'step':0.01}),
             'retry_on_repetition':('BOOLEAN',{'default':True})},
             'optional': {
+                'manifest_json': ('STRING', {'forceInput':True,
+                    'tooltip':'MangaRegionCrops의 페이지 명세. 0개 영역은 OCR 모델을 로드하지 않고 건너뜁니다.'}),
                 'split_long_lines': ('BOOLEAN', {'default':False, 'tooltip':'긴 가로 행을 글자 사이 빈 공간에서만 나눠 읽습니다. 기존 그래프는 원래 입력을 유지합니다.'}),
                 'quality_guard': ('BOOLEAN', {'default':False, 'tooltip':'짧은 반복·과도한 누락 의심 시 다른 patch 설정으로 1회 재시도. 계속 의심되면 번역 전에 중단. 정확도 보증은 아닙니다.'}),
                 'text_direction': (['auto','horizontal','vertical_rtl','vertical_ltr'], {'default':'auto',
@@ -430,9 +446,19 @@ class MangaOCRAdaptive:
     OUTPUT_IS_LIST=(False,False,True)
     FUNCTION='read'
     CATEGORY='Manga Translator/OCR'
-    def read(self,images,model,max_new_tokens=256,base_patches=512,small_text_patches=1024,small_text_px=48,
+    def check_lazy_status(self, images, model=None, manifest_json=None, **options):
+        if _empty_ocr_page(images,manifest_json):
+            return []
+        return ['model'] if model is None else []
+
+    def read(self,images,model=None,max_new_tokens=256,base_patches=512,small_text_patches=1024,small_text_px=48,
              line_split=True,tight_crop=False,repetition_penalty=1.,retry_on_repetition=True,
-             split_long_lines=False,quality_guard=False,text_direction='auto',retry_on_token_limit=False):
+             split_long_lines=False,quality_guard=False,text_direction='auto',retry_on_token_limit=False,
+             manifest_json=None):
+        if _empty_ocr_page(images,manifest_json):
+            LOG.info('Adaptive OCR skipped: no_text_detected')
+            return ('',json.dumps({'status':'no_text_detected','ocr_skipped':True,
+                                  'preview':'unchanged_page_not_ocr_input'}),[images])
         from .adapters.options import OcrOptions
         from .ocr_policy import plan_line, text_problem, join_chunks
         from .adapters.hayai import preprocess_size

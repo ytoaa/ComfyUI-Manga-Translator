@@ -218,3 +218,18 @@ The existing five successful and two expected-stop complete graph simulations re
 Workflow widget/API serialization, regeneration, compilation, package import/integrity and source checksums are checked locally.
 Actual Chinese OCR accuracy and resolution of the user's GPU run remain unverified.
 See [cause, options and scope](docs/ocr-direction-budget-v0.3.3.md).
+
+# v0.3.4 no-text page passthrough — 2026-10-17
+
+Base: `c07ca562d9c906399cbd02fb583e5389154e2d7f`. Full CPU regression: **230 passed**.
+Eight added cases exercise all shipped 08 output endpoints for no text, bubble-only and excluded-effect-only pages;
+assert no Hayai/Qwen loader execution, OCR/Qwen inference or translation HTTP request; and compare saved PNG pixels
+exactly with the input. OCR and translation review JSON files contain empty regions and `no_text_detected`.
+Additional checks reject wrong-page manifests, unexpected OCR text, detector exceptions, missing regions and
+missing detection lists in either full-page or detail responses. Existing empty OCR on actual text remains an error.
+The simulation runner now maps scalar lazy checks like ComfyUI, while INPUT_IS_LIST checks keep list arguments.
+Complete graph simulations cover six successful paths (including the new no-text page) and two expected stops.
+Legacy examples serialize `allow_empty_page=false`; only refreshed 08 enables the passthrough and connects its manifest.
+Workflow widget/API contracts, stable regeneration, compilation, package integrity/import and source checksums are checked locally.
+Model responses are test doubles; actual user ComfyUI/GPU execution remains unverified.
+See [behavior and update requirements](docs/no-text-pages-v0.3.4.md).

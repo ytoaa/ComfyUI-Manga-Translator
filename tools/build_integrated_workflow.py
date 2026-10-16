@@ -22,7 +22,7 @@ def build():
     g.connect(detector, 0, raw_mask, 'result')
     grown = g.add('GrowMask', pos=(1260, 400), title='제거 여유 · 기본 GrowMask')
     g.connect(raw_mask, 0, grown, 'mask')
-    crops = g.add('MangaRegionCrops', pos=(1260, 50), title='④ OCR 영역 · 좌표 유지')
+    crops = g.add('MangaRegionCrops', {'allow_empty_page':True}, pos=(1260, 50), title='④ OCR 영역 · 글자 없으면 원본 통과')
     g.connect(original, 0, crops, 'images'); g.connect(regions, 0, crops, 'layout_json')
     ocr_model = g.import_model_node(template, 13, (1260, -220))
     ocr = g.add('MangaOCRAdaptive', {'tight_crop':False,'base_patches':256,'small_text_patches':512,
@@ -87,11 +87,14 @@ def build():
     g.connect(mask_image, 0, preview, 'images')
     typography_preview = g.add('PreviewImage', pos=(5460, 650), title='검수 · 원문 프레임과 확장 가능 공간')
     g.connect(typography, 1, typography_preview, 'images')
-    ocr_preview = g.add('PreviewImage', pos=(2100,-350), title='검수 · 실제 OCR 입력 행/조각')
+    ocr_preview = g.add('PreviewImage', pos=(2100,-350), title='검수 · OCR 행/조각 (글자 없으면 원본)')
     g.connect(ocr, 2, ocr_preview, 'images')
-    original_crops = g.add('PreviewImage', pos=(1260,-550), title='검수 · OCR 전 원본 영역 크롭')
+    original_crops = g.add('PreviewImage', pos=(1260,-550), title='검수 · OCR 크롭 (글자 없으면 원본)')
     g.connect(crops, 0, original_crops, 'images')
-    g.note('원문 크기 상한에서 가용 폭을 먼저 사용. 단일 줄바꿈은 자동 재배치하고 빈 줄 문단은 유지합니다.\n'
+    g.connect(crops, 1, ocr, 'manifest_json')
+    g.note('선택한 글자 검출이 0개면 no_text_detected로 기록하고 원본 그대로 저장합니다. OCR/번역/Qwen/식자를 생략합니다.\n'
+           '검출 0개는 실제 글자 없음의 보증이 아닙니다. 검출 오류/OCR 실패는 계속 중단합니다.\n'
+           '원문 크기 상한에서 가용 폭을 먼저 사용. 단일 줄바꿈은 자동 재배치하고 빈 줄 문단은 유지합니다.\n'
            'line_breaks=preserve로 수동 줄바꿈 유지. strict/세로쓰기에서는 원래 줄바꿈을 유지합니다.\n'
            '단색이 확인된 OCR 영역 안에서 누락된 획/잔점을 제거 범위에 보완합니다. 실효 마스크를 미리보기로 확인하세요.\n'
            'bubble은 검출된 실제 말풍선 마스크 또는 직접 연결한 내부 마스크에서 확장합니다. 겹침/최소 크기 실패는 저장 전에 중단합니다.\n'

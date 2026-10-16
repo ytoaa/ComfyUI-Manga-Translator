@@ -139,7 +139,8 @@
         0
       ],
       "ocr_padding": 4,
-      "edit_margin": 12
+      "edit_margin": 12,
+      "allow_empty_page": false
     }
   },
   "13": {

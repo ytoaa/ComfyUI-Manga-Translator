@@ -167,8 +167,13 @@ class OCROracle:
 
 class GraphRunner:
     def __init__(self, destination, uniform_fill=True, failed_qwen=False, patterned_header=True,
-                 seam_case=False, failed_recovery=False, require_recovery=False, empty_recovery=False):
+                 seam_case=False, failed_recovery=False, require_recovery=False, empty_recovery=False,
+                 no_text=False):
         self.original, self.clean, self.raw, self.records = fixture(patterned_header)
+        if no_text:
+            self.original = self.clean.copy()
+            self.raw = np.zeros_like(self.raw)
+            self.records = []
         self.graph = json.loads((ROOT/'lettering/example_workflows/08-integrated-tiled-cleanup-lettering.api.json').read_text(encoding='utf-8'))
         self.cache, self.calls, self.destination = {}, Counter(), Path(destination)
         self.destination.mkdir(parents=True, exist_ok=True)
@@ -194,10 +199,17 @@ class GraphRunner:
                 lazy[key] = value
                 values[key] = (None,)  # Match ComfyUI execution.get_input_data.
             else: values[key] = resolve(value)
-        if lazy:
-            wanted = obj.check_lazy_status(**values)
-            for key in wanted: values[key] = resolve(lazy[key])
         input_is_list = bool(getattr(cls, 'INPUT_IS_LIST', False))
+        if lazy:
+            if input_is_list:
+                wanted = obj.check_lazy_status(**values)
+            else:
+                # Comfy maps check_lazy_status over scalar inputs just like
+                # FUNCTION; INPUT_IS_LIST nodes receive the lists themselves.
+                wanted = set()
+                for i in range(max((len(v) for v in values.values()),default=1)):
+                    wanted.update(obj.check_lazy_status(**{k:v[min(i,len(v)-1)] for k,v in values.items()}))
+            for key in wanted: values[key] = resolve(lazy[key])
         outputs = []
         count = 1 if input_is_list else max((len(v) for v in values.values()), default=1)
         if any(not v for v in values.values()): raise ValueError(f'Empty list evaluated on active node {kind}')
@@ -321,6 +333,7 @@ def simulate(destination):
         reports[name] = GraphRunner(destination/name, uniform_fill=fill, patterned_header=pattern).execute()
     reports['seam-recovery'] = GraphRunner(destination/'seam-recovery', seam_case=True,require_recovery=True).execute()
     reports['fragment-stitching'] = GraphRunner(destination/'fragment-stitching',seam_case=True,empty_recovery=True).execute()
+    reports['no-text-page'] = GraphRunner(destination/'no-text-page',no_text=True).execute()
     failed_detection = GraphRunner(destination/'unresolved-seam-stopped', seam_case=True, failed_recovery=True)
     try:
         failed_detection.execute()

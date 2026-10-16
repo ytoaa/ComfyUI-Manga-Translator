@@ -184,6 +184,8 @@ def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, m
     if not np.array_equal(coverage, pending.astype(np.uint8)):
         raise ValueError('Cleanup tile ownership does not cover the pending mask exactly once')
     report = {'schema': 1, 'method': 'bounded_mask_tiles', 'page_size': [width, height],
+              **({'cleanup_skipped':True,'skip_reason':'empty_masks'}
+                 if not raw.any() and not permitted.any() else {}),
               'tile_core': tile_size, 'context': context, 'tile_count': len(tiles),
               'source_components': count, 'uniform_filled_components': filled,
               'source_mask_pixels': int(raw.sum()), 'cleanup_mask_pixels': int((cleanup_mask > .5).sum()),

@@ -282,6 +282,9 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
     ignored_sfx = 0
     def selected(result):
         nonlocal ignored_sfx
+        if (not isinstance(result,dict) or not isinstance(result.get('detections'),list)
+                or any(not isinstance(item,dict) for item in result['detections'])):
+            raise ValueError('Invalid detector response; expected an explicit detections list')
         if include_sfx:
             return result
         detections = result.get('detections', [])
