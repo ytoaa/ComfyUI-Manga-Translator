@@ -204,3 +204,17 @@ Five successful and two expected-stop full graph simulations retain their prior 
 Workflow generation, widget/API contracts, compilation, ZIP import/integrity and source SHA256 are checked locally.
 Real user-image RF-DETR/Hayai/Qwen GPU output and live ComfyUI frontend execution remain unverified.
 See [settings and limits](docs/uniform-cleanup-flow-v0.3.2.md).
+
+# v0.3.3 OCR direction / token recovery — 2026-10-16
+
+Base: `8d61cfb2c6d86131250e633af24c14e94790308c`. Full CPU regression: **222 passed**.
+Ten added cases cover tall horizontal paragraphs, avoiding per-letter vertical splitting of one horizontal row,
+explicit vertical reading order, token-budget retry/disable/cap/persistent failure, combined token/repetition bounds,
+and failure before translation/Qwen/final saving in the shipped 08 graph.
+Local pixel analysis of three 278×446 crops from the attached 1060×1500 scan changes one unsplit input to
+20/16/17 horizontal line crops. These are analysis rectangles, not the unknown actual failing detector ROI.
+No model weights or GPU inference were used for this source-image segmentation check.
+The existing five successful and two expected-stop complete graph simulations remain valid with mocked model responses.
+Workflow widget/API serialization, regeneration, compilation, package import/integrity and source checksums are checked locally.
+Actual Chinese OCR accuracy and resolution of the user's GPU run remain unverified.
+See [cause, options and scope](docs/ocr-direction-budget-v0.3.3.md).

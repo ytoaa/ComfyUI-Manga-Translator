@@ -84,7 +84,7 @@ def _bands(profile, min_gap=4, min_extent=8):
     return [group for group in groups if group[1]-group[0] >= min_extent]
 
 
-def _ocr_line_images(image):
+def _ocr_line_images(image, direction='auto'):
     """Split one detector crop into reading-order line crops like the proven Koharu path.
 
     This stays internal to the OCR node so the workflow does not need custom
@@ -93,7 +93,8 @@ def _ocr_line_images(image):
     from scipy import ndimage
 
     width,height = image.size
-    direction = 'auto'
+    if direction not in ('auto','horizontal','vertical_rtl','vertical_ltr'):
+        raise ValueError('Invalid OCR text direction')
     background_window = 31
     contrast = 16.0
     ink_fraction = 0.002
@@ -106,11 +107,6 @@ def _ocr_line_images(image):
         LOG.info('OCR line segmentation: source=%sx%s, crops=1, direction=unchanged, reason=%s',
                  width,height,reason)
         return [image]
-
-    if width >= height*1.25:
-        direction = 'horizontal'
-    elif height >= width*1.25:
-        direction = 'vertical_rtl'
 
     pixels = np.asarray(image.convert('RGB'),dtype=np.float32)
     if not np.isfinite(pixels).all():
@@ -135,6 +131,17 @@ def _ocr_line_images(image):
         for name,horizontal in [('horizontal',True),('vertical_rtl',False)]:
             proposed = candidate(horizontal)
             if 2 <= len(proposed) <= max_lines:
+                # Shape alone confuses a tall horizontal paragraph with
+                # vertical writing. Require actual elongated text rows/columns.
+                # Individual letters of one horizontal line are not columns.
+                elongated=0
+                for start,end in proposed:
+                    indices=np.flatnonzero(foreground[start:end,:].any(axis=0) if horizontal
+                                           else foreground[:,start:end].any(axis=1))
+                    if len(indices) and indices[-1]-indices[0]+1 >= 3*(end-start):
+                        elongated+=1
+                if elongated < math.ceil(len(proposed)*.75):
+                    continue
                 gaps = sum(right[0]-left[1] for left,right in zip(proposed,proposed[1:]))
                 span = proposed[-1][1]-proposed[0][0]
                 choices.append((gaps/span,name))
@@ -290,18 +297,38 @@ def _detail_detect(image,model,thresholds,detail_mode='auto',detail_overlap=64):
             'detail_detection':{'mode':detail_mode,'grid':[cols,rows],'tiles':tile_count,'detail_regions':len(recovered)}}
 
 
-def _ocr_once(model,image,options,max_patches,repetition_penalty,retry_on_repetition):
-    from .adapters.options import OcrOptions
+def _ocr_once(model,image,options,max_patches,repetition_penalty,retry_on_repetition,
+              retry_on_token_limit=False,diagnostics=None):
     from .adapters.hayai import HayaiOutputError
-    try:
-        return model.ocr(image,options,max_patches=max_patches)['text']
-    except HayaiOutputError as exc:
-        if exc.code!='ocr_repetition_loop' or not retry_on_repetition or repetition_penalty>=2:
-            raise
-        retry_penalty=min(2.,max(1.1,repetition_penalty+0.1))
-        retry=OcrOptions(max_new_tokens=options.max_new_tokens,repetition_penalty=retry_penalty)
-        LOG.warning('Retrying one repeated OCR crop with penalty %.2f',retry_penalty)
-        return model.ocr(image,retry,max_patches=max_patches)['text']
+    used_repetition=used_tokens=False
+    current=options
+    for _ in range(3):
+        record={'max_new_tokens':current.max_new_tokens,'repetition_penalty':current.repetition_penalty}
+        try:
+            text=model.ocr(image,current,max_patches=max_patches)['text']
+        except HayaiOutputError as exc:
+            record['status']=exc.code
+            if diagnostics is not None:diagnostics.append(record)
+            if (exc.code=='ocr_repetition_loop' and retry_on_repetition and not used_repetition
+                    and current.repetition_penalty<2):
+                used_repetition=True
+                penalty=min(2.,max(1.1,current.repetition_penalty+.1))
+                current=current.model_copy(update={'repetition_penalty':penalty})
+                LOG.warning('Retrying one repeated OCR crop with penalty %.2f',penalty)
+            elif (exc.code=='ocr_token_limit' and retry_on_token_limit and not used_tokens
+                  and current.max_new_tokens<2048):
+                used_tokens=True
+                budget=min(2048,current.max_new_tokens*2)
+                LOG.warning('Retrying token-limited OCR crop=%sx%s with tokens=%s->%s',
+                            image.width,image.height,current.max_new_tokens,budget)
+                current=current.model_copy(update={'max_new_tokens':budget})
+            else:
+                raise
+        else:
+            record['status']='accepted'
+            if diagnostics is not None:diagnostics.append(record)
+            return text
+    raise RuntimeError('OCR retry bound exceeded')
 
 
 class MangaDetectorLoader:
@@ -393,7 +420,11 @@ class MangaOCRAdaptive:
             'retry_on_repetition':('BOOLEAN',{'default':True})},
             'optional': {
                 'split_long_lines': ('BOOLEAN', {'default':False, 'tooltip':'긴 가로 행을 글자 사이 빈 공간에서만 나눠 읽습니다. 기존 그래프는 원래 입력을 유지합니다.'}),
-                'quality_guard': ('BOOLEAN', {'default':False, 'tooltip':'짧은 반복·과도한 누락 의심 시 다른 patch 설정으로 1회 재시도. 계속 의심되면 번역 전에 중단. 정확도 보증은 아닙니다.'})}}
+                'quality_guard': ('BOOLEAN', {'default':False, 'tooltip':'짧은 반복·과도한 누락 의심 시 다른 patch 설정으로 1회 재시도. 계속 의심되면 번역 전에 중단. 정확도 보증은 아닙니다.'}),
+                'text_direction': (['auto','horizontal','vertical_rtl','vertical_ltr'], {'default':'auto',
+                    'tooltip':'OCR 행/열 분할 방향. 세로로 긴 가로 본문은 horizontal로 지정할 수 있습니다. 식자 방향과 별도입니다.'}),
+                'retry_on_token_limit': ('BOOLEAN', {'default':False,
+                    'tooltip':'토큰 한도에 닿으면 요청 한도를 2배(최대 2048)로 한 번 재시도합니다. 잘린 결과는 반환하지 않습니다.'})}}
     RETURN_TYPES=('STRING','STRING','IMAGE')
     RETURN_NAMES=('text','ocr_report_json','ocr_inputs')
     OUTPUT_IS_LIST=(False,False,True)
@@ -401,7 +432,7 @@ class MangaOCRAdaptive:
     CATEGORY='Manga Translator/OCR'
     def read(self,images,model,max_new_tokens=256,base_patches=512,small_text_patches=1024,small_text_px=48,
              line_split=True,tight_crop=False,repetition_penalty=1.,retry_on_repetition=True,
-             split_long_lines=False,quality_guard=False):
+             split_long_lines=False,quality_guard=False,text_direction='auto',retry_on_token_limit=False):
         from .adapters.options import OcrOptions
         from .ocr_policy import plan_line, text_problem, join_chunks
         from .adapters.hayai import preprocess_size
@@ -412,11 +443,13 @@ class MangaOCRAdaptive:
             raise ValueError('Invalid small-text OCR patch budget')
         if type(small_text_px) is not int or not 8 <= small_text_px <= 256:
             raise ValueError('Invalid small-text pixel threshold')
-        if any(type(value) is not bool for value in (line_split,tight_crop,retry_on_repetition,split_long_lines,quality_guard)):
+        if any(type(value) is not bool for value in (line_split,tight_crop,retry_on_repetition,split_long_lines,quality_guard,retry_on_token_limit)):
             raise ValueError('Invalid adaptive OCR switches')
+        if text_direction not in ('auto','horizontal','vertical_rtl','vertical_ltr'):
+            raise ValueError('Invalid OCR text direction')
         options=OcrOptions(max_new_tokens=max_new_tokens,repetition_penalty=repetition_penalty)
         source=pil_image(images)
-        crops=_ocr_line_images(source) if line_split else [source]
+        crops=(_ocr_line_images(source) if text_direction=='auto' else _ocr_line_images(source,text_direction)) if line_split else [source]
         if tight_crop:
             crops=[_tight_ocr_image(image) for image in crops]
         texts, records, previews = [], [], []
@@ -432,17 +465,21 @@ class MangaOCRAdaptive:
                 patches=max(base_patches,small_text_patches) if short <= small_text_px else base_patches
                 LOG.info('Adaptive OCR input: line=%s box=%s crop=%sx%s patch_budget=%s',line_index,box,image.width,image.height,patches)
                 previews.append(torch.from_numpy(np.asarray(image,dtype=np.float32)/255)[None])
-                text=_ocr_once(model,image,options,patches,repetition_penalty,retry_on_repetition)
+                generation=[]
+                text=_ocr_once(model,image,options,patches,repetition_penalty,retry_on_repetition,
+                               retry_on_token_limit,generation)
                 issue=text_problem(text,image) if quality_guard else None
                 attempts=[{'patch_budget':patches,'model_size':list(preprocess_size(image.size,patches)),
-                           'characters':len(text),'issue':issue}]
+                           'characters':len(text),'issue':issue,'generation_attempts':generation}]
                 if issue:
                     alternate=256 if patches != 256 else 512
                     LOG.warning('OCR quality retry: reason=%s line=%s box=%s patches=%s->%s',issue,line_index,box,patches,alternate)
-                    text=_ocr_once(model,image,options,alternate,repetition_penalty,retry_on_repetition)
+                    generation=[]
+                    text=_ocr_once(model,image,options,alternate,repetition_penalty,retry_on_repetition,
+                                   retry_on_token_limit,generation)
                     issue=text_problem(text,image)
                     attempts.append({'patch_budget':alternate,'model_size':list(preprocess_size(image.size,alternate)),
-                                     'characters':len(text),'issue':issue})
+                                     'characters':len(text),'issue':issue,'generation_attempts':generation})
                     if issue:
                         raise ValueError(f'OCR 품질 검사 실패 ({issue}); line={line_index}, box={box}, attempts={attempts}. '
                                          '원본 OCR 크롭과 Hayai 로그를 확인하세요. 번역할 원문을 확정하지 않았습니다.')
@@ -452,6 +489,7 @@ class MangaOCRAdaptive:
             texts.append(join_chunks(chunks))
         report={'source_size':list(source.size),'line_count':len(crops),'chunk_count':len(records),
                 'line_split':line_split,'tight_crop':tight_crop,'split_long_lines':split_long_lines,
+                'text_direction':text_direction,'retry_on_token_limit':retry_on_token_limit,
                 'quality_guard':quality_guard,'chunks':records,
                 'quality_scope':'heuristic_checks_only_not_recognition_accuracy'}
         return ('\n'.join(texts),json.dumps(report,ensure_ascii=False),previews)

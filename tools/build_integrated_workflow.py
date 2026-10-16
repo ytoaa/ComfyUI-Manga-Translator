@@ -26,7 +26,7 @@ def build():
     g.connect(original, 0, crops, 'images'); g.connect(regions, 0, crops, 'layout_json')
     ocr_model = g.import_model_node(template, 13, (1260, -220))
     ocr = g.add('MangaOCRAdaptive', {'tight_crop':False,'base_patches':256,'small_text_patches':512,
-        'split_long_lines':True,'quality_guard':True}, (1680, 50), '⑤ 긴 행 분할 OCR · 누락/반복 의심 검사')
+        'split_long_lines':True,'quality_guard':True,'retry_on_token_limit':True}, (1680, 50), '⑤ 행/열 판단 OCR · 토큰 한도 1회 재시도')
     g.connect(crops, 0, ocr, 'images'); g.connect(ocr_model, 0, ocr, 'model')
     collect = g.add('MangaCollectOCR', pos=(2100, 50))
     g.connect(ocr, 0, collect, 'text'); g.connect(crops, 1, collect, 'manifest_json')

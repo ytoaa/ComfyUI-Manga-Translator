@@ -49,6 +49,21 @@ def test_short_repeating_ocr_stops_before_translation_cleanup_and_final_save(tmp
     assert not runner.calls['MangaTranslate'] and runner.qwen_calls == 0 and not runner.saved
 
 
+def test_persistent_ocr_token_limit_never_reaches_translation_or_final_save(tmp_path):
+    from integrated_simulation.adapters.hayai import HayaiOutputError
+    runner=S.GraphRunner(tmp_path)
+    class LimitedOCR:
+        calls=[]
+        def ocr(self,image,options,**kwargs):
+            self.calls.append(options.max_new_tokens)
+            raise HayaiOutputError('ocr_token_limit')
+    runner.ocr=LimitedOCR()
+    with pytest.raises(ValueError,match='ocr_token_limit'):
+        runner.execute()
+    assert runner.ocr.calls == [256,512]
+    assert not runner.calls['MangaTranslate'] and runner.qwen_calls == 0 and not runner.saved
+
+
 def test_shipped_graph_removes_white_residue_missing_from_detector_mask(tmp_path):
     runner=S.GraphRunner(tmp_path)
     # An explicit omitted source fleck inside the detected gray paragraph.

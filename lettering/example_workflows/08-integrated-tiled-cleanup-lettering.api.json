@@ -99,6 +99,8 @@
       "retry_on_repetition": true,
       "split_long_lines": true,
       "quality_guard": true,
+      "text_direction": "auto",
+      "retry_on_token_limit": true,
       "images": [
         "7",
         0

@@ -111,3 +111,78 @@ def test_diagnostics_keep_region_identity_and_translation_does_not_receive_them(
         ('a','先生',[10,10]),('b','TEST',[20,20])]
     with pytest.raises(ValueError,match='diagnostic count'):
         N.MangaCollectOCR().collect(['先生','TEST'],[json.dumps(source)],reports[:1])
+
+
+def test_tall_horizontal_paragraph_uses_rows_instead_of_assuming_vertical_script():
+    source=Image.new('RGB',(278,446),'#d7c7a5')
+    draw=ImageDraw.Draw(source)
+    for y in range(8,430,22):
+        for x in range(10,263,16):
+            draw.rectangle((x,y,x+12,y+13),outline='#202020',width=2)
+            draw.line((x+6,y,x+6,y+13),fill='#202020',width=1)
+    lines=M._ocr_line_images(source)
+    assert len(lines) == 20
+    assert all(line.width == 278 and line.height < 40 for line in lines)
+    assert sum(line.height for line in lines) >= source.height
+
+
+def test_single_horizontal_row_is_not_split_into_vertical_letter_columns():
+    source=long_line()
+    lines=M._ocr_line_images(source)
+    assert len(lines) == 1 and lines[0].size == source.size
+
+
+def test_explicit_vertical_direction_controls_column_reading_order():
+    source=Image.new('RGB',(140,310),'white');draw=ImageDraw.Draw(source)
+    for x in (15,60,105):
+        for y in range(10,280,24):draw.rectangle((x,y,x+15,y+15),fill='black')
+    rtl=M._ocr_line_images(source,'vertical_rtl')
+    ltr=M._ocr_line_images(source,'vertical_ltr')
+    assert len(rtl) == len(ltr) == 3
+    assert [p.tobytes() for p in rtl] == [p.tobytes() for p in reversed(ltr)]
+    assert len(M._ocr_line_images(source)) == 3
+
+
+def test_token_limit_retries_once_with_double_budget_and_records_actual_attempts(monkeypatch):
+    from ocr_quality_tests.adapters.hayai import HayaiOutputError
+    monkeypatch.setattr(M,'pil_image',lambda _:Image.new('RGB',(278,446),'white'))
+    calls=[]
+    class Model:
+        def ocr(self,image,options,max_patches):
+            calls.append(options.max_new_tokens)
+            if len(calls)==1:raise HayaiOutputError('ocr_token_limit')
+            return {'text':'完整正文'}
+    text,raw,_=M.MangaOCRAdaptive().read(object(),Model(),line_split=False,retry_on_token_limit=True)
+    assert text == '完整正文' and calls == [256,512]
+    generations=json.loads(raw)['chunks'][0]['attempts'][0]['generation_attempts']
+    assert [g['status'] for g in generations] == ['ocr_token_limit','accepted']
+    assert [g['max_new_tokens'] for g in generations] == calls
+
+
+@pytest.mark.parametrize('budget,enabled,expected',[(256,True,[256,512]),(1536,True,[1536,2048]),
+                                                  (2048,True,[2048]),(256,False,[256])])
+def test_persistent_token_limit_stops_without_accepting_partial_text(monkeypatch,budget,enabled,expected):
+    from ocr_quality_tests.adapters.hayai import HayaiOutputError
+    monkeypatch.setattr(M,'pil_image',lambda _:Image.new('RGB',(278,446),'white'))
+    calls=[]
+    class Model:
+        def ocr(self,image,options,max_patches):
+            calls.append(options.max_new_tokens)
+            raise HayaiOutputError('ocr_token_limit')
+    with pytest.raises(HayaiOutputError,match='ocr_token_limit'):
+        M.MangaOCRAdaptive().read(object(),Model(),max_new_tokens=budget,line_split=False,retry_on_token_limit=enabled)
+    assert calls == expected
+
+
+def test_token_and_repetition_retries_share_a_three_generation_bound(monkeypatch):
+    from ocr_quality_tests.adapters.hayai import HayaiOutputError
+    monkeypatch.setattr(M,'pil_image',lambda _:Image.new('RGB',(278,446),'white'))
+    calls=[]
+    class Model:
+        def ocr(self,image,options,max_patches):
+            calls.append((options.max_new_tokens,options.repetition_penalty))
+            if len(calls)==1:raise HayaiOutputError('ocr_token_limit')
+            if len(calls)==2:raise HayaiOutputError('ocr_repetition_loop')
+            return {'text':'完整正文'}
+    result=M.MangaOCRAdaptive().read(object(),Model(),line_split=False,retry_on_token_limit=True)
+    assert result[0] == '完整正文' and calls == [(256,1.),(512,1.),(512,1.1)]

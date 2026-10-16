@@ -390,7 +390,7 @@
       ],
       "size": [
         330,
-        360
+        420
       ],
       "flags": {},
       "order": 8,
@@ -443,6 +443,8 @@
         1.0,
         true,
         true,
+        true,
+        "auto",
         true
       ],
       "widgets_values_named": {
@@ -455,9 +457,11 @@
         "repetition_penalty": 1.0,
         "retry_on_repetition": true,
         "split_long_lines": true,
-        "quality_guard": true
+        "quality_guard": true,
+        "text_direction": "auto",
+        "retry_on_token_limit": true
       },
-      "title": "⑤ 긴 행 분할 OCR · 누락/반복 의심 검사"
+      "title": "⑤ 행/열 판단 OCR · 토큰 한도 1회 재시도"
     },
     {
       "id": 10,
