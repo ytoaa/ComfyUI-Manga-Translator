@@ -175,3 +175,19 @@ python tools/build_integrated_workflow.py
 python -m pytest tests/test_workflow_widgets.py tests/test_integrated_simulation.py -q
 python tools/package_style_lettering.py --destination validation/package
 ```
+# v0.3.1 OCR / boundary policy verification — 2026-10-16
+
+Base: `a063ffd1d99ea57d90427e23a0600aebbb0cf7c4`.
+
+- Full CPU regression: **201 passed** (182 baseline + 19 new cases).
+- Reported backpack-region effect false-positive geometry: excluding effects prevents recovery failure and mask leakage; enabling them retains strict failure.
+- Reported r4/r5 line coordinates: one paragraph, surrounding paragraphs retained; distinct bubbles and existing multiline masks remain separate.
+- Reported short loops and four-character omission: bounded alternate-budget retry; persistent suspicious OCR stops the complete graph before translation/Qwen/final saving.
+- Long-line chunks preserve every input pixel, including small punctuation; blank margins do not create empty recognition chunks. Missing safe gaps and vertical inputs stay intact.
+- Shipped 08 graph simulation: five successful paths and two expected failure paths. Successful fixtures keep six logical regions, eight source lines and nine recognition chunks, with exact outside-mask pixel preservation. The source/translation JSON retain per-region OCR diagnostics.
+- Workflow widget/API contracts, Python compilation, installable ZIP imports, archive CRC and per-file SHA256 are checked locally. 08 regeneration preserves the committed bytes.
+
+RF-DETR, Hayai, vLLM and Qwen responses in these simulations are explicit test doubles.
+No actual GPU recognition accuracy, user-image quality improvement, live ComfyUI browser execution or Qwen residual-dot fix is claimed.
+The input changes and heuristic rejection rules need real-image comparison using the new 08 workflow.
+See [usage and limits](docs/ocr-boundary-v0.3.1.md).

@@ -745,6 +745,11 @@
           "name": "manifest_json",
           "type": "STRING",
           "link": 19
+        },
+        {
+          "name": "ocr_report_json",
+          "type": "STRING",
+          "link": null
         }
       ],
       "outputs": [

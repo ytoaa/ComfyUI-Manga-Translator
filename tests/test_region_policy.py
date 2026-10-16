@@ -70,3 +70,36 @@ def test_containment_overlap_handles_nested_boxes_with_low_iou():
     inner = [0, 0, 55, 100]
     assert nodes.iou(outer, inner) == 0.55
     assert policy.containment_overlap(outer, inner) == 1.0
+
+
+def test_reported_split_rows_group_but_neighboring_paragraphs_do_not():
+    boxes=[[465,190,1166,220],[467,278,1494,307],[466,318,745,346],
+           [467,392,1481,463],[467,518,1299,548]]
+    raw={'protocol':1,'image_width':1600,'image_height':640,
+         'detections':[_item(box,.9) for box in boxes]}
+    data=json.loads(policy.MangaDetectionRegionsResolved().convert(raw,merge_adjacent_lines=True)[0])
+    assert len(data['regions']) == 4
+    assert data['region_resolution']['grouped_lines'] == 1
+    assert data['regions'][1]['line_bboxes_pixels'] == boxes[1:3]
+    assert len(json.loads(policy.MangaDetectionRegionsResolved().convert(raw)[0])['regions']) == 5
+
+
+def test_close_rows_in_different_bubbles_stay_separate():
+    rows=[_item([10,10,210,30],.9),_item([10,40,210,60],.9)]
+    bubbles=[{'bbox':[0,0,220,35]},{'bbox':[0,36,220,70]}]
+    assert len(policy.group_adjacent_lines(rows,bubbles)) == 2
+
+
+def test_group_gap_does_not_increase_with_the_accumulated_paragraph_height():
+    rows=[_item([10,y,210,y+20],.9) for y in (10,40,70,110)]
+    assert [len(row['line_bboxes']) for row in policy.group_adjacent_lines(rows,[])] == [3,1]
+
+
+def test_two_multiline_blocks_are_not_joined_as_single_rows():
+    from numpy import zeros
+    from manga_region_policy_tests.adapters.model import rle
+    rows=[]
+    for y in (100,210):
+        pixels=zeros((75,500),bool);pixels[8:28,5:490]=True;pixels[44:64,5:300]=True
+        rows.append({**_item([10,y,510,y+75],.9),'mask':{'x':10,'y':y,'width':500,'height':75,'runs':rle(pixels)}})
+    assert len(policy.group_adjacent_lines(rows,[])) == 2

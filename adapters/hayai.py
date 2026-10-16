@@ -12,11 +12,11 @@ PATCH_SIZE = 16
 LOG = logging.getLogger(__name__)
 
 
-def preprocess(image, max_patches=MAX_PATCHES):
+def preprocess_size(size, max_patches=MAX_PATCHES):
     if type(max_patches) is not int or max_patches not in (256,512,1024):
         raise ValueError("Hayai max_patches must be 256, 512 or 1024")
     # Same binary search as Koharu's Hayai ImageProcessor, including tiny crops.
-    width, height = image.size
+    width, height = size
     if width <= 0 or height <= 0:
         raise ValueError("Empty OCR crop")
     def scaled(scale, size):
@@ -28,7 +28,11 @@ def preprocess(image, max_patches=MAX_PATCHES):
             low = mid
         else:
             high = mid
-    target_h, target_w = scaled(low, height), scaled(low, width)
+    return scaled(low,width), scaled(low,height)
+
+
+def preprocess(image, max_patches=MAX_PATCHES):
+    target_w,target_h = preprocess_size(image.size,max_patches)
     rgb = image.convert("RGB")
     if rgb.size != (target_w, target_h):
         rgb = rgb.resize((target_w, target_h), Image.Resampling.BILINEAR)

@@ -263,14 +263,15 @@ class MangaRegionCrops:
 class MangaCollectOCR:
     @classmethod
     def INPUT_TYPES(cls):
-        return {'required': {'text': ('STRING', {'forceInput': True}), 'manifest_json': ('STRING', {'forceInput': True})}}
+        return {'required': {'text': ('STRING', {'forceInput': True}), 'manifest_json': ('STRING', {'forceInput': True})},
+                'optional': {'ocr_report_json': ('STRING', {'forceInput': True})}}
     INPUT_IS_LIST = True
     RETURN_TYPES = ('STRING',)
     RETURN_NAMES = ('ocr_json',)
     FUNCTION = 'collect'
     CATEGORY = 'Manga Translator/OCR'
 
-    def collect(self, text, manifest_json):
+    def collect(self, text, manifest_json, ocr_report_json=None):
         if len(manifest_json)!=1:
             raise ValueError('Expected one page manifest')
         data = layout(manifest_json[0])
@@ -278,7 +279,16 @@ class MangaCollectOCR:
             raise ValueError('OCR result count differs from the region count')
         if any(not isinstance(t,str) or not t.strip() or len(t)>16_000 for t in text):
             raise ValueError('One region has empty/invalid OCR; inspect crop previews and region boxes')
-        return (encode({**data,'regions':[{**row,'source':value.strip()} for row,value in zip(data['regions'],text)]}),)
+        reports = None
+        if ocr_report_json is not None:
+            if len(ocr_report_json) != len(text):
+                raise ValueError('OCR diagnostic count differs from the region count')
+            reports = [decode(value) for value in ocr_report_json]
+            if any(not isinstance(value,dict) for value in reports):
+                raise ValueError('Invalid OCR diagnostic object')
+        return (encode({**data,'regions':[{**row,'source':value.strip(),
+                **({'ocr_diagnostics':reports[i]} if reports is not None else {})}
+                for i,(row,value) in enumerate(zip(data['regions'],text))]}),)
 
 
 class MangaTranslate:

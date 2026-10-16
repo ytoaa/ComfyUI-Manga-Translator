@@ -20,6 +20,7 @@
       "panel": 0.5,
       "detail_mode": "auto",
       "detail_overlap": 64,
+      "include_sfx": false,
       "images": [
         "1",
         0
@@ -36,6 +37,7 @@
       "include_sfx": false,
       "dedupe_iou": 0.75,
       "reading_order": "top_to_bottom",
+      "merge_adjacent_lines": true,
       "result": [
         "3",
         0
@@ -88,13 +90,15 @@
     "class_type": "MangaOCRAdaptive",
     "inputs": {
       "max_new_tokens": 256,
-      "base_patches": 512,
-      "small_text_patches": 1024,
+      "base_patches": 256,
+      "small_text_patches": 512,
       "small_text_px": 48,
       "line_split": true,
       "tight_crop": false,
       "repetition_penalty": 1.0,
       "retry_on_repetition": true,
+      "split_long_lines": true,
+      "quality_guard": true,
       "images": [
         "7",
         0
@@ -114,6 +118,10 @@
       ],
       "manifest_json": [
         "7",
+        1
+      ],
+      "ocr_report_json": [
+        "9",
         1
       ]
     }
@@ -465,6 +473,24 @@
       "images": [
         "29",
         1
+      ]
+    }
+  },
+  "36": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "9",
+        2
+      ]
+    }
+  },
+  "37": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "7",
+        0
       ]
     }
   }

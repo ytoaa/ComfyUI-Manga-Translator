@@ -1,5 +1,6 @@
 """Standalone ComfyUI model wrappers using attributed local inference adapters."""
 from pathlib import Path
+import json
 import logging
 import math
 import numpy as np
@@ -389,33 +390,71 @@ class MangaOCRAdaptive:
             'line_split':('BOOLEAN',{'default':True}),
             'tight_crop':('BOOLEAN',{'default':False}),
             'repetition_penalty':('FLOAT',{'default':1.,'min':1.,'max':2.,'step':0.01}),
-            'retry_on_repetition':('BOOLEAN',{'default':True})}}
-    RETURN_TYPES=('STRING',)
+            'retry_on_repetition':('BOOLEAN',{'default':True})},
+            'optional': {
+                'split_long_lines': ('BOOLEAN', {'default':False, 'tooltip':'긴 가로 행을 글자 사이 빈 공간에서만 나눠 읽습니다. 기존 그래프는 원래 입력을 유지합니다.'}),
+                'quality_guard': ('BOOLEAN', {'default':False, 'tooltip':'짧은 반복·과도한 누락 의심 시 다른 patch 설정으로 1회 재시도. 계속 의심되면 번역 전에 중단. 정확도 보증은 아닙니다.'})}}
+    RETURN_TYPES=('STRING','STRING','IMAGE')
+    RETURN_NAMES=('text','ocr_report_json','ocr_inputs')
+    OUTPUT_IS_LIST=(False,False,True)
     FUNCTION='read'
     CATEGORY='Manga Translator/OCR'
     def read(self,images,model,max_new_tokens=256,base_patches=512,small_text_patches=1024,small_text_px=48,
-             line_split=True,tight_crop=False,repetition_penalty=1.,retry_on_repetition=True):
+             line_split=True,tight_crop=False,repetition_penalty=1.,retry_on_repetition=True,
+             split_long_lines=False,quality_guard=False):
         from .adapters.options import OcrOptions
+        from .ocr_policy import plan_line, text_problem, join_chunks
+        from .adapters.hayai import preprocess_size
+        import torch
         if type(base_patches) is not int or base_patches not in (256,512,1024):
             raise ValueError('Invalid base OCR patch budget')
         if type(small_text_patches) is not int or small_text_patches not in (512,1024):
             raise ValueError('Invalid small-text OCR patch budget')
         if type(small_text_px) is not int or not 8 <= small_text_px <= 256:
             raise ValueError('Invalid small-text pixel threshold')
-        if any(type(value) is not bool for value in (line_split,tight_crop,retry_on_repetition)):
+        if any(type(value) is not bool for value in (line_split,tight_crop,retry_on_repetition,split_long_lines,quality_guard)):
             raise ValueError('Invalid adaptive OCR switches')
         options=OcrOptions(max_new_tokens=max_new_tokens,repetition_penalty=repetition_penalty)
         source=pil_image(images)
         crops=_ocr_line_images(source) if line_split else [source]
         if tight_crop:
             crops=[_tight_ocr_image(image) for image in crops]
-        texts=[]
-        for image in crops:
-            short=min(image.size)
-            patches=max(base_patches,small_text_patches) if short <= small_text_px else base_patches
-            LOG.info('Adaptive OCR input: crop=%sx%s short=%s patch_budget=%s',image.width,image.height,short,patches)
-            texts.append(_ocr_once(model,image,options,patches,repetition_penalty,retry_on_repetition))
-        return ('\n'.join(texts),)
+        texts, records, previews = [], [], []
+        if len(crops) > 32:
+            raise ValueError('OCR line count exceeds limit=32')
+        planned = [plan_line(image) if split_long_lines else [(image,[0,0,*image.size])] for image in crops]
+        if sum(len(parts) for parts in planned) > 128:
+            raise ValueError('OCR chunk count exceeds limit=128 per region')
+        for line_index, parts in enumerate(planned):
+            chunks=[]
+            for image, box in parts:
+                short=min(image.size)
+                patches=max(base_patches,small_text_patches) if short <= small_text_px else base_patches
+                LOG.info('Adaptive OCR input: line=%s box=%s crop=%sx%s patch_budget=%s',line_index,box,image.width,image.height,patches)
+                previews.append(torch.from_numpy(np.asarray(image,dtype=np.float32)/255)[None])
+                text=_ocr_once(model,image,options,patches,repetition_penalty,retry_on_repetition)
+                issue=text_problem(text,image) if quality_guard else None
+                attempts=[{'patch_budget':patches,'model_size':list(preprocess_size(image.size,patches)),
+                           'characters':len(text),'issue':issue}]
+                if issue:
+                    alternate=256 if patches != 256 else 512
+                    LOG.warning('OCR quality retry: reason=%s line=%s box=%s patches=%s->%s',issue,line_index,box,patches,alternate)
+                    text=_ocr_once(model,image,options,alternate,repetition_penalty,retry_on_repetition)
+                    issue=text_problem(text,image)
+                    attempts.append({'patch_budget':alternate,'model_size':list(preprocess_size(image.size,alternate)),
+                                     'characters':len(text),'issue':issue})
+                    if issue:
+                        raise ValueError(f'OCR 품질 검사 실패 ({issue}); line={line_index}, box={box}, attempts={attempts}. '
+                                         '원본 OCR 크롭과 Hayai 로그를 확인하세요. 번역할 원문을 확정하지 않았습니다.')
+                chunks.append(text)
+                records.append({'line':line_index,'line_local_bbox':box,'input_size':list(image.size),
+                                'attempts':attempts})
+            texts.append(join_chunks(chunks))
+        report={'source_size':list(source.size),'line_count':len(crops),'chunk_count':len(records),
+                'line_split':line_split,'tight_crop':tight_crop,'split_long_lines':split_long_lines,
+                'quality_guard':quality_guard,'chunks':records,
+                'quality_scope':'heuristic_checks_only_not_recognition_accuracy'}
+        return ('\n'.join(texts),json.dumps(report,ensure_ascii=False),previews)
 
 
 NODE_CLASS_MAPPINGS = {cls.__name__:cls for cls in

@@ -143,7 +143,21 @@ class OCROracle:
             texts = record['source'].split('\n')
             if len(lines) != len(texts):
                 raise ValueError(f'Fixture splitter returned {len(lines)} lines for {len(texts)} source lines')
-            for line, text in zip(lines, texts): self.expected[fingerprint(line)] = text
+            # Register the shipped input planner's exact chunks. Character
+            # positions come from the fixture font, not an OCR prediction.
+            from integrated_simulation.ocr_policy import plan_line
+            font = ImageFont.truetype(str(ROOT/'lettering/fonts/NanumGothic-Bold.ttf'),record['size'])
+            for line, text in zip(lines, texts):
+                parts = plan_line(line)
+                if len(parts) == 1:
+                    self.expected[fingerprint(line)] = text
+                    continue
+                midpoints = [8+(font.getlength(text[:i])+font.getlength(text[:i+1]))/2 for i in range(len(text))]
+                for part,box in parts:
+                    value = ''.join(char for char,x in zip(text,midpoints) if box[0] <= x < box[2]).strip()
+                    if not value:
+                        raise ValueError('OCR fixture planned an empty recognition chunk')
+                    self.expected[fingerprint(part)] = value
     def ocr(self, image, options, max_patches):
         self.calls += 1
         if fingerprint(image) not in self.expected:

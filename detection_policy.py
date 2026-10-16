@@ -209,7 +209,8 @@ def _recover_boundaries(image, model, thresholds, detections):
                 if key not in stitch_keys:
                     trusted.append(item)
                     stitch_keys.add(key)
-            diagnostic = {'fragment_bbox':fragment['bbox'],'window':list(window),'complete_regions':len(complete),
+            diagnostic = {'fragment_bbox':fragment['bbox'],'fragment_label':fragment['label'],
+                          'fragment_score':fragment['score'],'window':list(window),'complete_regions':len(complete),
                           'clipped_regions':len(items)-len(complete),
                           'coverage':round(_coverage(fragment,trusted,width,height),4),
                           'detections':[{'bbox':item['bbox'],'label':item['label'],
@@ -226,7 +227,8 @@ def _recover_boundaries(image, model, thresholds, detections):
     unresolved = [fragment for fragment in clipped if not _covered(fragment,trusted,width,height)]
     if unresolved:
         fragment = unresolved[0]
-        diagnostic = {'bbox':fragment['bbox'], 'edges':fragment['tile_provenance']['clipped_edges'],
+        diagnostic = {'bbox':fragment['bbox'], 'label':fragment['label'],'score':fragment['score'],
+                      'edges':fragment['tile_provenance']['clipped_edges'],
                       'coverage':round(_coverage(fragment,trusted,width,height),4),
                       'unresolved_regions':len(unresolved),'budget_exhausted':budget_exhausted,
                       'attempts':attempts}
@@ -272,8 +274,22 @@ def _tile_size(mode):
     raise ValueError('Invalid detector detail mode')
 
 
-def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=64):
-    full = model.detect(image, thresholds)
+def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=64, include_sfx=True):
+    if type(include_sfx) is not bool:
+        raise ValueError('Invalid detector include_sfx switch')
+    # Selection must precede boundary certification: an intentionally excluded
+    # effect must neither stop dialogue OCR nor contribute cleanup pixels.
+    ignored_sfx = 0
+    def selected(result):
+        nonlocal ignored_sfx
+        if include_sfx:
+            return result
+        detections = result.get('detections', [])
+        kept = [item for item in detections if item.get('label') != 'onomatopoeia']
+        ignored_sfx += len(detections)-len(kept)
+        return {**result, 'detections': kept}
+
+    full = selected(model.detect(image, thresholds))
     width, height = image.size
     if (full.get('image_width'), full.get('image_height')) != (width, height):
         raise ValueError('Detector result dimensions differ from source image')
@@ -317,14 +333,21 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
         raise ValueError(f'Detail detection requires {len(windows)} windows; split the page (limit=64)')
     recovered = []
     for x0, x1, y0, y1 in windows:
-        result = model.detect(image.crop((x0, y0, x1, y1)), thresholds)
+        result = selected(model.detect(image.crop((x0, y0, x1, y1)), thresholds))
         recovered.extend(_window_detections(result, (x0, y0, x1, y1), width, height, 'detail'))
         if len(full.get('detections', [])) + len(recovered) > 512:
             raise ValueError('Detail detector produced too many regions; lower detail mode or raise confidence thresholds')
 
     if len(full.get('detections', [])) + len(recovered) > 512:
         raise ValueError('Detail detector produced too many regions; lower detail mode or raise confidence thresholds')
-    complete, recovery = _recover_boundaries(image, model, thresholds, list(full.get('detections', [])) + recovered)
+    # Recovery can itself discover excluded effects; apply the same selection
+    # to every recovery response rather than only the initial detail pass.
+    class RecoveryModel:
+        def detect(self, crop, options):
+            return selected(model.detect(crop, options))
+    complete, recovery = _recover_boundaries(image, RecoveryModel(), thresholds, list(full.get('detections', [])) + recovered)
+    recovery['include_sfx'] = include_sfx
+    recovery['ignored_sfx_detections'] = ignored_sfx
     return {**full,
             'detections': complete,
             # Do not send fragment geometry to OCR, but retain its segmentation
@@ -347,6 +370,13 @@ class MangaDetectorDetailResolved(_BaseDetectorDetail):
                    '경계에서 잘린 글자는 넓은 문맥으로 재검출한 뒤 OCR에 전달하며 복구 실패 시 중단합니다. '
                    '중복 결과는 다음 MangaDetectionRegions 단계가 containment 기준으로 정리합니다.')
 
-    def detect(self, images, model, detail_mode='auto', detail_overlap=64, **thresholds):
+    @classmethod
+    def INPUT_TYPES(cls):
+        schema = super().INPUT_TYPES()
+        schema['optional'] = {'include_sfx': ('BOOLEAN', {'default': True,
+            'tooltip': '효과음 검출을 복구·OCR·제거 대상으로 포함. 제외할 때 영역/마스크 노드도 함께 끄세요. 기존 그래프는 포함을 유지합니다.'})}
+        return schema
+
+    def detect(self, images, model, detail_mode='auto', detail_overlap=64, include_sfx=True, **thresholds):
         _validate_thresholds(thresholds)
-        return (detail_detect(pil_image(images), model, thresholds, detail_mode, detail_overlap),)
+        return (detail_detect(pil_image(images), model, thresholds, detail_mode, detail_overlap, include_sfx),)

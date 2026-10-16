@@ -82,7 +82,8 @@ def test_adaptive_ocr_uses_larger_patch_budget_for_small_text(monkeypatch):
     result=M.MangaOCRAdaptive().read(object(),Model(),max_new_tokens=256,base_patches=512,
         small_text_patches=1024,small_text_px=48,line_split=True,tight_crop=False,
         repetition_penalty=1.,retry_on_repetition=True)
-    assert result==('small\nlarge',)
+    assert result[0]=='small\nlarge'
+    assert __import__('json').loads(result[1])['chunk_count'] == 2
     assert calls==[((160,32),1024,256),((160,80),512,256)]
 
 

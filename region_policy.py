@@ -72,12 +72,73 @@ def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CON
             return items
 
 
+def group_adjacent_lines(items, bubbles):
+    """Conservative horizontal paragraph grouping, before IDs are assigned.
+
+    Compare original rows, never growing paragraph boxes: otherwise a chain
+    could swallow the next paragraph as its height and allowed gap increase.
+    Different/ambiguous bubble ownership and multi-row blocks stay separate.
+    """
+    rows = sorted(items, key=lambda item: (item['bbox'][1], item['bbox'][0]))
+    def single_row(item):
+        raw = item.get('mask')
+        if raw is None:
+            return True
+        import numpy as np
+        from .mask_nodes import _decode_mask
+        pixels, _ = _decode_mask(raw, raw['x']+raw['width'],raw['y']+raw['height'])
+        active = np.flatnonzero((pixels>.5).sum(axis=1) >= 2)
+        if not len(active):
+            return False
+        bands = np.split(active,np.flatnonzero(np.diff(active)>max(3,min(8,round(pixels.shape[0]*.08))))+1)
+        return sum(group[-1]-group[0]+1 >= max(2,pixels.shape[0]*.1) for group in bands) == 1
+    single = {id(row): single_row(row) for row in rows}
+    def owner(item):
+        found = [i for i, bubble in enumerate(bubbles)
+                 if _intersection(item['bbox'], bubble['bbox']) / _area(item['bbox']) >= .95]
+        return tuple(found)
+    groups = []
+    for row in rows:
+        a = row['bbox']; aw, ah = a[2]-a[0], a[3]-a[1]
+        matches = []
+        for index, group in enumerate(groups):
+            last = group[-1]; b = last['bbox']; bw, bh = b[2]-b[0], b[3]-b[1]
+            if (row['label'] != 'text' or last['label'] != 'text' or not single[id(row)] or not single[id(last)] or
+                    min(aw/ah, bw/bh) < 3 or min(ah,bh)/max(ah,bh) < .65 or
+                    not 0 <= a[1]-b[3] <= .55*min(ah,bh) or
+                    abs(a[0]-b[0]) > .6*min(ah,bh) or
+                    min(aw,bw)/max(aw,bw) < .2 or owner(row) != owner(last) or
+                    len(owner(row)) > 1):
+                continue
+            matches.append(index)
+        if len(matches) == 1:
+            groups[matches[0]].append(row)
+        else:
+            groups.append([row])
+    output = []
+    for group in groups:
+        box = [min(row['bbox'][k] for row in group) if k < 2 else
+               max(row['bbox'][k] for row in group) for k in range(4)]
+        output.append({**group[0], 'bbox': box,
+                       'line_bboxes': [row['bbox'] for row in group]})
+    return output
+
+
 class MangaDetectionRegionsResolved(_BaseDetectionRegions):
     DESCRIPTION = ('RF-DETR 전체/상세 타일의 중복 검출을 논리 문단으로 정리합니다. '
                    'IoU뿐 아니라 작은 박스가 큰 박스에 포함되는 비율도 사용해 '
                    'detail pass의 반쪽 문단이 별도 번역문으로 내려가는 것을 막습니다.')
 
-    def convert(self, result, include_sfx=False, dedupe_iou=0.75, reading_order='top_to_bottom'):
+    @classmethod
+    def INPUT_TYPES(cls):
+        schema = super().INPUT_TYPES()
+        schema['optional'] = {'merge_adjacent_lines': ('BOOLEAN', {'default': False,
+            'tooltip': '가깝고 왼쪽이 정렬된 가로 행을 문단으로 묶습니다. 말풍선이 다르거나 애매하면 분리 유지.'})}
+        return schema
+
+    def convert(self, result, include_sfx=False, dedupe_iou=0.75, reading_order='top_to_bottom', merge_adjacent_lines=False):
+        if type(merge_adjacent_lines) is not bool:
+            raise ValueError('Invalid paragraph grouping switch')
         if not isinstance(result, dict) or result.get('protocol') != 1 or not isinstance(result.get('detections'), list):
             raise ValueError('Invalid detector response')
         width, height = result.get('image_width'), result.get('image_height')
@@ -93,6 +154,11 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
         candidates = [_detector_region(item, width, height)
                       for item in result['detections'] if item.get('label') in labels]
         selected = merge_detector_regions(candidates, dedupe_iou)
+        before_grouping = len(selected)
+        if merge_adjacent_lines:
+            bubbles = [_detector_region(item, width, height) for item in result['detections']
+                       if item.get('label') == 'bubble']
+            selected = group_adjacent_lines(selected, bubbles)
         selected.sort(key=(lambda row: (row['bbox'][1], row['bbox'][0]))
                       if reading_order == 'top_to_bottom'
                       else (lambda row: (-row['bbox'][0], row['bbox'][1])))
@@ -101,13 +167,15 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
                  'bbox': [item['bbox'][0] / width * 1000,
                           item['bbox'][1] / height * 1000,
                           item['bbox'][2] / width * 1000,
-                          item['bbox'][3] / height * 1000]}
+                          item['bbox'][3] / height * 1000],
+                 **({'line_bboxes_pixels': item['line_bboxes']} if 'line_bboxes' in item else {})}
                 for i, item in enumerate(selected)]
         value = encode({'regions': rows, 'origin': 'rfdetr',
                         'image_width': width, 'image_height': height,
                         'region_resolution': {
                             'input_regions': len(candidates),
                             'resolved_regions': len(selected),
+                            'grouped_lines': before_grouping-len(selected),
                             'dedupe_iou': dedupe_iou,
                             'containment_overlap': _CONTAINMENT_OVERLAP,
                             'boundary_recovery': result.get('detail_detection', {}).get('boundary_recovery'),

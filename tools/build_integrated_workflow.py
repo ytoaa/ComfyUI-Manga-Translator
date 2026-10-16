@@ -14,9 +14,9 @@ def build():
     g = Graph()
     original = g.add('LoadImage', {'image': ''}, (0, 50), '① 원본 페이지')
     detector_model = g.import_model_node(template, 24, (0, 400))
-    detector = g.add('MangaDetectorDetail', pos=(420, 50), title='② 전체+문맥/작은 타일 검출')
+    detector = g.add('MangaDetectorDetail', {'include_sfx':False}, pos=(420, 50), title='② 전체+문맥/작은 타일 검출 · 효과음 제외')
     g.connect(original, 0, detector, 'images'); g.connect(detector_model, 0, detector, 'model')
-    regions = g.add('MangaDetectionRegions', pos=(840, 50), title='③ 중복 해소 · OCR 영역')
+    regions = g.add('MangaDetectionRegions', {'merge_adjacent_lines':True}, pos=(840, 50), title='③ 중복 해소 · 가까운 행을 문단으로')
     g.connect(detector, 0, regions, 'result')
     raw_mask = g.add('MangaDetectionMask', pos=(840, 400), title='원문 글자 마스크')
     g.connect(detector, 0, raw_mask, 'result')
@@ -25,10 +25,12 @@ def build():
     crops = g.add('MangaRegionCrops', pos=(1260, 50), title='④ OCR 영역 · 좌표 유지')
     g.connect(original, 0, crops, 'images'); g.connect(regions, 0, crops, 'layout_json')
     ocr_model = g.import_model_node(template, 13, (1260, -220))
-    ocr = g.add('MangaOCRAdaptive', {'tight_crop': False}, (1680, 50), '⑤ 줄별 OCR · 작은 획 보존')
+    ocr = g.add('MangaOCRAdaptive', {'tight_crop':False,'base_patches':256,'small_text_patches':512,
+        'split_long_lines':True,'quality_guard':True}, (1680, 50), '⑤ 긴 행 분할 OCR · 누락/반복 의심 검사')
     g.connect(crops, 0, ocr, 'images'); g.connect(ocr_model, 0, ocr, 'model')
     collect = g.add('MangaCollectOCR', pos=(2100, 50))
     g.connect(ocr, 0, collect, 'text'); g.connect(crops, 1, collect, 'manifest_json')
+    g.connect(ocr, 1, collect, 'ocr_report_json')
     source_save = g.add('MangaSaveReview', {'filename_prefix': 'manga_translator/ocr'}, (2520, 50), 'OCR JSON 저장')
     g.connect(collect, 0, source_save, 'translated_json')
     translate = g.add('MangaTranslate', pos=(2940, 50), title='⑥ 번역 · 영역 ID 유지')
@@ -84,9 +86,16 @@ def build():
     g.connect(mask_image, 0, preview, 'images')
     typography_preview = g.add('PreviewImage', pos=(5460, 650), title='검수 · 원문 프레임과 확장 가능 공간')
     g.connect(typography, 1, typography_preview, 'images')
+    ocr_preview = g.add('PreviewImage', pos=(2100,-350), title='검수 · 실제 OCR 입력 행/조각')
+    g.connect(ocr, 2, ocr_preview, 'images')
+    original_crops = g.add('PreviewImage', pos=(1260,-550), title='검수 · OCR 전 원본 영역 크롭')
+    g.connect(crops, 0, original_crops, 'images')
     g.note('원문 크기 상한 → 축소 → 재배치 → 검증된 말풍선 확장. source/bubble/strict 모드.\n'
            'bubble은 검출된 실제 말풍선 마스크 또는 직접 연결한 내부 마스크에서 확장합니다. 겹침/최소 크기 실패는 저장 전에 중단합니다.\n'
            '영역별 폰트·방향·회전·수동 곡선은 식자 계획 노드의 JSON으로 지정합니다.\n'
+           '효과음은 검출·영역·마스크 세 노드에서 함께 설정합니다. 기본은 제외.\n'
+           '긴 가로 행은 빈 열에서 분할. OCR 반복/누락 의심은 patch 변경 1회 후 계속 실패하면 중단합니다.\n'
+           'OCR JSON에 영역별 입력 크기/분할/재시도 진단을 저장합니다. 휴리스틱 통과는 인식 정확도 보증이 아닙니다.\n'
            '한 번 실행: 검출→줄별 OCR→번역→타일별 제거→좌표 복원→식자.\n'
            'Qwen은 512px 코어+128px 문맥 타일만 처리합니다. 단색 배경은 보수적 색 채우기를 먼저 시도합니다.\n'
            '이미지 크롭/크기 복원/마스크 확대/타일 합성/미리보기/저장은 기본 노드입니다.\n'
@@ -94,6 +103,10 @@ def build():
            '마스크 밖 누락 글씨는 자동 삭제되지 않습니다. 마스크 미리보기와 OCR JSON으로 확인하세요.\n'
            '통합 모의 실행 결과와 실제 GPU 품질 검증은 구분합니다.', (3360, 1150))
     g.save('08-integrated-tiled-cleanup-lettering')
+    # The committed 08 graph uses LF; keep regeneration byte-for-byte stable.
+    for suffix in ('.json','.api.json'):
+        path=ROOT/'lettering/example_workflows'/('08-integrated-tiled-cleanup-lettering'+suffix)
+        path.write_bytes(path.read_bytes().replace(b'\r\n',b'\n'))
     return g
 
 

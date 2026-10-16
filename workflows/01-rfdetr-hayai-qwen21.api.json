@@ -316,7 +316,8 @@
       ],
       "include_sfx": false,
       "dedupe_iou": 0.75,
-      "reading_order": "top_to_bottom"
+      "reading_order": "top_to_bottom",
+      "merge_adjacent_lines": false
     }
   }
 }

@@ -135,6 +135,30 @@ def coordinate_page():
     return Image.fromarray(np.arange(640*1600,dtype=np.int32).reshape(640,1600))
 
 
+def test_excluded_effect_at_reported_backpack_box_cannot_block_text_or_leak_into_mask():
+    class Model:
+        calls = 0
+        def detect(self,image,_):
+            self.calls += 1
+            # Only a compact tile hallucinates an effect against its edges.
+            found = [item([199,407,576,576],label='onomatopoeia')] if image.size == (576,576) else []
+            return result(image.size,found)
+    model=Model()
+    raw=P.detail_detect(Image.new('RGB',(1086,1448)),model,{},include_sfx=False)
+    assert not raw['detections'] and not raw['mask_fragments']
+    assert raw['detail_detection']['boundary_recovery']['recovery_calls'] == 0
+    assert raw['detail_detection']['boundary_recovery']['ignored_sfx_detections'] > 0
+
+
+def test_enabled_effect_keeps_strict_boundary_checks():
+    class Model:
+        def detect(self,image,_):
+            found=[item([199,407,576,576],label='onomatopoeia')] if image.size == (576,576) else []
+            return result(image.size,found)
+    with pytest.raises(ValueError,match='unresolved clipped text'):
+        P.detail_detect(Image.new('RGB',(1086,1448)),Model(),{},include_sfx=True)
+
+
 def test_user_seams_recover_full_body_and_remove_cross_row_vertical_strip():
     detector=SeamDetector()
     raw=P.detail_detect(coordinate_page(),detector,{},'auto',64)

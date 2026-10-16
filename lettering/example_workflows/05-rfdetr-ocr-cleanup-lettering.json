@@ -754,6 +754,11 @@
           "name": "manifest_json",
           "type": "STRING",
           "link": 20
+        },
+        {
+          "name": "ocr_report_json",
+          "type": "STRING",
+          "link": null
         }
       ],
       "outputs": [
@@ -1194,12 +1199,14 @@
       "widgets_values": [
         false,
         0.75,
-        "top_to_bottom"
+        "top_to_bottom",
+        false
       ],
       "widgets_values_named": {
         "include_sfx": false,
         "dedupe_iou": 0.75,
-        "reading_order": "top_to_bottom"
+        "reading_order": "top_to_bottom",
+        "merge_adjacent_lines": false
       },
       "pos": [
         700,
