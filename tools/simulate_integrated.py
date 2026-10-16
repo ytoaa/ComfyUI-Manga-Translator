@@ -280,7 +280,14 @@ class GraphRunner:
         self.clean.save(self.destination/'oracle-background.png')
         pil(cleaned).save(self.destination/'cleaned.png')
         Image.fromarray((plan['cleanup_mask']*255).astype(np.uint8)).save(self.destination/'cleanup-mask.png')
-        report = {'simulation_only': True, 'model_inference': 'fixture test doubles; NOT RF-DETR/Hayai/vLLM/Qwen GPU results',
+        lettering_id=next(k for k,n in self.graph.items() if n['class_type']=='MangaLetterApply')
+        lettering=json.loads(self.cache[lettering_id][2][0])
+        (self.destination/'lettering-report.json').write_text(json.dumps(lettering,ensure_ascii=False,indent=2),encoding='utf-8')
+        assert all(r['render']['font_size']<=r['source_profile']['font_cap'] for r in lettering['regions'])
+        final=self.cache[lettering_id][0][0][0].numpy()
+        alpha=self.cache[lettering_id][1][0][0].numpy()
+        assert np.array_equal(final[alpha==0],cleaned[0].numpy()[alpha==0])
+        report = {'lettering':lettering,'simulation_only': True, 'model_inference': 'fixture test doubles; NOT RF-DETR/Hayai/vLLM/Qwen GPU results',
                   'execution': 'shipped API graph, real custom nodes, PyTorch CPU and native-equivalent image operations',
                   'selected_regions': len(selected['regions']), 'detector_calls': self.detector.calls,
                   'boundary_recovery': selected['region_resolution']['boundary_recovery'],

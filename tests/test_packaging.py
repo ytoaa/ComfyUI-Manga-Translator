@@ -21,5 +21,5 @@ def test_installable_zip_imports_all_integrated_nodes(tmp_path):
     plugin = importlib.util.module_from_spec(spec)
     sys.modules[name] = plugin
     spec.loader.exec_module(plugin)
-    assert {'MangaInpaintPlan', 'MangaInpaintAssemble', 'MangaDetectionMask', 'MangaDetectorDetail'} <= set(plugin.NODE_CLASS_MAPPINGS)
+    assert {'MangaInpaintPlan', 'MangaInpaintAssemble', 'MangaDetectionMask', 'MangaDetectorDetail', 'MangaLetterPlan', 'MangaLetterApply'} <= set(plugin.NODE_CLASS_MAPPINGS)
     assert plugin.NODE_CLASS_MAPPINGS['MangaDetectorDetail'].__module__.startswith(name+'.')

@@ -263,7 +263,7 @@ def _word_units(paragraph):
     return units
 
 
-def _layout(text, font, width, height, direction, spacing, tracking, effect_padding=0):
+def _layout(text, font, width, height, direction, spacing, tracking, effect_padding=0, vertical_policy='simple', wrap_policy='greedy'):
     ascent, descent = font.getmetrics()
     cell = ascent + descent
     # Reserve each line's outline/weight/shadow so auto-sized rows do not collide.
@@ -271,6 +271,12 @@ def _layout(text, font, width, height, direction, spacing, tracking, effect_padd
     lines = []
     if direction == 'horizontal':
         for paragraph in text.split('\n'):
+            if wrap_policy == 'balanced':
+                from .linebreak import balanced
+                wrapped = balanced(paragraph, font, width, tracking)
+                if wrapped is not None:
+                    lines.extend(wrapped)
+                    continue
             line = []
             for unit in _word_units(paragraph):
                 if line and _advance(font, line+unit, tracking) > width:
@@ -283,6 +289,9 @@ def _layout(text, font, width, height, direction, spacing, tracking, effect_padd
         widths = [_advance(font, line, tracking) for line in lines]
         extent = (max(widths, default=0), cell + (len(lines)-1)*line_step)
         return lines, extent, line_step, cell, widths
+    if vertical_policy == 'typographic':
+        from .vertical import layout
+        return layout(text, font, width, height, spacing, tracking, effect_padding)
     columns = []
     step = max(1., cell + tracking)
     for paragraph in text.split('\n'):
@@ -303,8 +312,12 @@ def _offset_alpha(alpha, dx, dy):
 
 def render_text(text, style, font_name='NanumGothic-Bold.ttf', direction='horizontal',
                 alignment='center', min_font=10, max_font=256, padding=8,
-                line_spacing=1., tracking=0., rotation=0., shear=0., supersample=2, max_lines=0):
+                line_spacing=1., tracking=0., rotation=0., shear=0., supersample=2, max_lines=0, vertical_policy='simple', wrap_policy='greedy'):
     text = clean_text(text)
+    if wrap_policy not in ('greedy', 'balanced'):
+        raise ValueError('Invalid wrap_policy')
+    if vertical_policy not in ('simple', 'typographic'):
+        raise ValueError('Invalid vertical_policy')
     validate_style(style)
     path = font_path(font_name, text)
     if direction not in ('horizontal', 'vertical_rtl', 'vertical_ltr') or alignment not in ('left', 'center', 'right'):
@@ -329,7 +342,7 @@ def render_text(text, style, font_name='NanumGothic-Bold.ttf', direction='horizo
         effect = math.ceil(style['outline_width'] + max(0, style['weight_px']) +
                            max(abs(style['shadow_x']), abs(style['shadow_y'])) + 3*style['shadow_blur'])
         layout = _layout(text, font, available_w*supersample, available_h*supersample,
-                         direction, line_spacing, tracking*supersample, effect*supersample)
+                         direction, line_spacing, tracking*supersample, effect*supersample, vertical_policy, wrap_policy)
         ew, eh = layout[1]
         angle = math.radians(rotation)
         sheared_w = ew + abs(shear)*eh
@@ -353,6 +366,12 @@ def render_text(text, style, font_name='NanumGothic-Bold.ttf', direction='horizo
             for char in line:
                 draw.text((x, origin_y+row*line_step), char, font=font, fill=255, anchor='la')
                 x += float(font.getlength(char)) + tracking*s
+    elif vertical_policy == 'typographic':
+        from .vertical import draw as draw_vertical
+        stat = Path(path).stat()
+        draw_vertical(canvas, lines, font, origin_x, origin_y, line_step, cell,
+                      tracking*s, direction == 'vertical_rtl',
+                      _font_coverage(path,stat.st_mtime_ns,stat.st_size))
     else:
         for column, chars in enumerate(lines):
             col = len(lines)-1-column if direction == 'vertical_rtl' else column
@@ -397,7 +416,7 @@ def render_text(text, style, font_name='NanumGothic-Bold.ttf', direction='horizo
     layer = np.divide(premult, alpha[..., None], out=np.zeros_like(premult), where=alpha[..., None] > 1e-6)
     layer = np.clip(layer, 0, 1).astype(np.float32)
     report = {'text': text, 'font': font_name, 'font_size': size, 'direction': direction,
-              'line_count': len(lines), 'line_step_px': line_step/s, 'rotation': rotation, 'shear': shear,
+              'wrap_policy': wrap_policy, 'vertical_policy': vertical_policy, 'line_count': len(lines), 'line_step_px': line_step/s, 'rotation': rotation, 'shear': shear,
               'glyph_geometry': 'font-rendered; no generative rewriting',
               'font_identification': 'user selection, not inferred original font'}
     return layer, alpha.astype(np.float32), json.dumps(report, ensure_ascii=False, indent=2)

@@ -382,14 +382,15 @@
     }
   },
   "29": {
-    "class_type": "MangaLetterPage",
+    "class_type": "MangaLetterPlan",
     "inputs": {
-      "regions_json": [
-        "28",
-        0
-      ],
       "default_font": "NanumGothic-Bold.ttf",
-      "texture_strength": 1.0,
+      "mode": "source",
+      "direction": "auto",
+      "min_font": 10,
+      "min_scale": 0.55,
+      "padding": 2,
+      "region_options_json": "{}",
       "original": [
         "1",
         0
@@ -401,20 +402,37 @@
       "source_mask": [
         "28",
         1
+      ],
+      "regions_json": [
+        "28",
+        0
+      ],
+      "detection_result": [
+        "3",
+        0
       ]
     }
   },
   "30": {
-    "class_type": "SaveImage",
+    "class_type": "MangaLetterApply",
     "inputs": {
-      "filename_prefix": "manga_translator/integrated_tiles",
-      "images": [
+      "plan": [
         "29",
         0
       ]
     }
   },
   "31": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "manga_translator/integrated_tiles",
+      "images": [
+        "30",
+        0
+      ]
+    }
+  },
+  "32": {
     "class_type": "PreviewImage",
     "inputs": {
       "images": [
@@ -423,7 +441,7 @@
       ]
     }
   },
-  "32": {
+  "33": {
     "class_type": "MaskToImage",
     "inputs": {
       "mask": [
@@ -432,12 +450,21 @@
       ]
     }
   },
-  "33": {
+  "34": {
     "class_type": "PreviewImage",
     "inputs": {
       "images": [
-        "32",
+        "33",
         0
+      ]
+    }
+  },
+  "35": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "29",
+        1
       ]
     }
   }

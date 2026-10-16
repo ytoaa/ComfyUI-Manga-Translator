@@ -1,8 +1,8 @@
 {
   "id": "6489a8d0-adb0-54db-baf9-5a11c43d9dd8",
   "revision": 1,
-  "last_node_id": 34,
-  "last_link_id": 53,
+  "last_node_id": 36,
+  "last_link_id": 56,
   "nodes": [
     {
       "id": 1,
@@ -117,7 +117,8 @@
           "type": "MANGA_DETECTION",
           "links": [
             3,
-            4
+            4,
+            50
           ]
         }
       ],
@@ -257,7 +258,7 @@
           "type": "MASK",
           "links": [
             17,
-            52
+            54
           ]
         }
       ],
@@ -1391,7 +1392,7 @@
           "type": "IMAGE",
           "links": [
             47,
-            51
+            53
           ]
         },
         {
@@ -1447,14 +1448,14 @@
           "name": "식자_영역_JSON",
           "type": "STRING",
           "links": [
-            48
+            49
           ]
         },
         {
           "name": "원문_스타일_참조_마스크",
           "type": "MASK",
           "links": [
-            49
+            48
           ]
         }
       ],
@@ -1473,14 +1474,14 @@
     },
     {
       "id": 29,
-      "type": "MangaLetterPage",
+      "type": "MangaLetterPlan",
       "pos": [
         5040,
         50
       ],
       "size": [
         330,
-        150
+        270
       ],
       "flags": {},
       "order": 28,
@@ -1499,54 +1500,71 @@
         {
           "name": "source_mask",
           "type": "MASK",
-          "link": 49
+          "link": 48
         },
         {
           "name": "regions_json",
           "type": "STRING",
-          "link": 48,
-          "widget": {
-            "name": "regions_json"
-          }
+          "link": 49
+        },
+        {
+          "name": "bubble_mask",
+          "type": "MASK",
+          "link": null
+        },
+        {
+          "name": "detection_result",
+          "type": "MANGA_DETECTION",
+          "link": 50
         }
       ],
       "outputs": [
         {
-          "name": "최종_페이지",
-          "type": "IMAGE",
+          "name": "식자_계획",
+          "type": "MANGA_LETTER_PLAN",
           "links": [
-            50
+            51
           ]
         },
         {
-          "name": "새_글자_알파",
-          "type": "MASK",
-          "links": []
+          "name": "배치_검수",
+          "type": "IMAGE",
+          "links": [
+            56
+          ]
         },
         {
-          "name": "영역별_보고서",
+          "name": "계획_보고서",
           "type": "STRING",
           "links": []
         }
       ],
       "properties": {
-        "Node name for S&R": "MangaLetterPage"
+        "Node name for S&R": "MangaLetterPlan"
       },
       "widgets_values": [
-        "{\"schema\":1,\"coordinate_format\":\"xywh\",\"page_size\":[1024,768],\"regions\":[{\"id\":\"1\",\"bbox\":[80,80,400,160],\"text\":\"번역문\"}]}",
         "NanumGothic-Bold.ttf",
-        1.0
+        "source",
+        "auto",
+        10,
+        0.55,
+        2,
+        "{}"
       ],
       "widgets_values_named": {
-        "regions_json": "{\"schema\":1,\"coordinate_format\":\"xywh\",\"page_size\":[1024,768],\"regions\":[{\"id\":\"1\",\"bbox\":[80,80,400,160],\"text\":\"번역문\"}]}",
         "default_font": "NanumGothic-Bold.ttf",
-        "texture_strength": 1.0
+        "mode": "source",
+        "direction": "auto",
+        "min_font": 10,
+        "min_scale": 0.55,
+        "padding": 2,
+        "region_options_json": "{}"
       },
-      "title": "⑪ 영역별 식자 · 외곽선 행간 확보"
+      "title": "⑪ 원문 크기·방향 보존 · 축소 우선 계획"
     },
     {
       "id": 30,
-      "type": "SaveImage",
+      "type": "MangaLetterApply",
       "pos": [
         5460,
         50
@@ -1560,29 +1578,43 @@
       "mode": 0,
       "inputs": [
         {
-          "name": "images",
-          "type": "IMAGE",
-          "link": 50
+          "name": "plan",
+          "type": "MANGA_LETTER_PLAN",
+          "link": 51
         }
       ],
-      "outputs": [],
-      "properties": {
-        "Node name for S&R": "SaveImage"
-      },
-      "widgets_values": [
-        "manga_translator/integrated_tiles"
+      "outputs": [
+        {
+          "name": "최종_페이지",
+          "type": "IMAGE",
+          "links": [
+            52
+          ]
+        },
+        {
+          "name": "새_글자_알파",
+          "type": "MASK",
+          "links": []
+        },
+        {
+          "name": "식자_보고서",
+          "type": "STRING",
+          "links": []
+        }
       ],
-      "widgets_values_named": {
-        "filename_prefix": "manga_translator/integrated_tiles"
+      "properties": {
+        "Node name for S&R": "MangaLetterApply"
       },
-      "title": "⑫ 통합 결과 저장"
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "⑫ 방향별 식자 · 비례 스타일 · 충돌 검사"
     },
     {
       "id": 31,
-      "type": "PreviewImage",
+      "type": "SaveImage",
       "pos": [
-        5040,
-        650
+        5880,
+        50
       ],
       "size": [
         330,
@@ -1595,23 +1627,27 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 51
+          "link": 52
         }
       ],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "PreviewImage"
+        "Node name for S&R": "SaveImage"
       },
-      "widgets_values": [],
-      "widgets_values_named": {},
-      "title": "검수 · 식자 직전 전체 배경"
+      "widgets_values": [
+        "manga_translator/integrated_tiles"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "manga_translator/integrated_tiles"
+      },
+      "title": "⑬ 통합 결과 저장"
     },
     {
       "id": 32,
-      "type": "MaskToImage",
+      "type": "PreviewImage",
       "pos": [
-        1260,
-        1050
+        5040,
+        650
       ],
       "size": [
         330,
@@ -1619,43 +1655,6 @@
       ],
       "flags": {},
       "order": 31,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "mask",
-          "type": "MASK",
-          "link": 52
-        }
-      ],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            53
-          ]
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "MaskToImage"
-      },
-      "widgets_values": [],
-      "widgets_values_named": {},
-      "title": "마스크 → 이미지 · 기본 노드"
-    },
-    {
-      "id": 33,
-      "type": "PreviewImage",
-      "pos": [
-        1260,
-        1250
-      ],
-      "size": [
-        330,
-        100
-      ],
-      "flags": {},
-      "order": 32,
       "mode": 0,
       "inputs": [
         {
@@ -1670,10 +1669,105 @@
       },
       "widgets_values": [],
       "widgets_values_named": {},
-      "title": "검수 · 제거 대상 마스크"
+      "title": "검수 · 식자 직전 전체 배경"
+    },
+    {
+      "id": 33,
+      "type": "MaskToImage",
+      "pos": [
+        1260,
+        1050
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 32,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 54
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            55
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MaskToImage"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "마스크 → 이미지 · 기본 노드"
     },
     {
       "id": 34,
+      "type": "PreviewImage",
+      "pos": [
+        1260,
+        1250
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 33,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 55
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "검수 · 제거 대상 마스크"
+    },
+    {
+      "id": 35,
+      "type": "PreviewImage",
+      "pos": [
+        5460,
+        650
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 34,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 56
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "검수 · 원문 프레임과 확장 가능 공간"
+    },
+    {
+      "id": 36,
       "type": "Note",
       "pos": [
         3360,
@@ -1684,13 +1778,13 @@
         270
       ],
       "flags": {},
-      "order": 33,
+      "order": 35,
       "mode": 0,
       "inputs": [],
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "한 번 실행: 검출→줄별 OCR→번역→타일별 제거→좌표 복원→식자.\nQwen은 512px 코어+128px 문맥 타일만 처리합니다. 단색 배경은 보수적 색 채우기를 먼저 시도합니다.\n이미지 크롭/크기 복원/마스크 확대/타일 합성/미리보기/저장은 기본 노드입니다.\n원문이 거의 그대로인 타일은 식자 전에 중단합니다. 픽셀 검사이며 OCR 품질 보증은 아닙니다.\n마스크 밖 누락 글씨는 자동 삭제되지 않습니다. 마스크 미리보기와 OCR JSON으로 확인하세요.\n통합 모의 실행 결과와 실제 GPU 품질 검증은 구분합니다."
+        "원문 크기 상한 → 축소 → 재배치 → 검증된 말풍선 확장. source/bubble/strict 모드.\nbubble은 검출된 실제 말풍선 마스크 또는 직접 연결한 내부 마스크에서 확장합니다. 겹침/최소 크기 실패는 저장 전에 중단합니다.\n영역별 폰트·방향·회전·수동 곡선은 식자 계획 노드의 JSON으로 지정합니다.\n한 번 실행: 검출→줄별 OCR→번역→타일별 제거→좌표 복원→식자.\nQwen은 512px 코어+128px 문맥 타일만 처리합니다. 단색 배경은 보수적 색 채우기를 먼저 시도합니다.\n이미지 크롭/크기 복원/마스크 확대/타일 합성/미리보기/저장은 기본 노드입니다.\n원문이 거의 그대로인 타일은 식자 전에 중단합니다. 픽셀 검사이며 OCR 품질 보증은 아닙니다.\n마스크 밖 누락 글씨는 자동 삭제되지 않습니다. 마스크 미리보기와 OCR JSON으로 확인하세요.\n통합 모의 실행 결과와 실제 GPU 품질 검증은 구분합니다."
       ]
     }
   ],
@@ -2074,48 +2168,72 @@
     [
       48,
       28,
-      0,
-      29,
-      3,
-      "STRING"
-    ],
-    [
-      49,
-      28,
       1,
       29,
       2,
       "MASK"
     ],
     [
+      49,
+      28,
+      0,
+      29,
+      3,
+      "STRING"
+    ],
+    [
       50,
+      3,
+      0,
+      29,
+      5,
+      "MANGA_DETECTION"
+    ],
+    [
+      51,
       29,
       0,
       30,
       0,
-      "IMAGE"
+      "MANGA_LETTER_PLAN"
     ],
     [
-      51,
-      27,
+      52,
+      30,
       0,
       31,
       0,
       "IMAGE"
     ],
     [
-      52,
-      6,
+      53,
+      27,
       0,
       32,
+      0,
+      "IMAGE"
+    ],
+    [
+      54,
+      6,
+      0,
+      33,
       0,
       "MASK"
     ],
     [
-      53,
-      32,
-      0,
+      55,
       33,
+      0,
+      34,
+      0,
+      "IMAGE"
+    ],
+    [
+      56,
+      29,
+      1,
+      35,
       0,
       "IMAGE"
     ]

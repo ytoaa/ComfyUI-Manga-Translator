@@ -1,0 +1,52 @@
+name: Validate custom nodes
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cpu:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: manga_translator
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: manga_translator
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install CPU verification dependencies
+        run: |
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install pytest numpy Pillow scipy fonttools 'pydantic>=2,<3'
+      - name: Verify committed source checksums
+        run: sha256sum --check SHA256SUMS
+      - name: Compile Python sources
+        run: python -m compileall -q lettering tools tests
+      - name: Run regression tests
+        run: python -m pytest -q --tb=short
+      - name: Execute integrated graph simulation
+        run: python tools/simulate_integrated.py --destination validation/simulation
+      - name: Render hybrid typography examples
+        run: python tools/demo_hybrid_lettering.py --destination validation/hybrid --preview-log
+      - name: Verify workflow generator
+        run: |
+          python tools/build_integrated_workflow.py
+          python -m pytest tests/test_workflow_widgets.py -q
+          python -c "import pathlib,json; p=pathlib.Path('lettering/example_workflows/08-integrated-tiled-cleanup-lettering'); print('HYBRID_GUI_JSON='+json.dumps(json.loads(p.with_suffix('.json').read_text()),ensure_ascii=True)); print('HYBRID_API_JSON='+json.dumps(json.loads(p.with_suffix('.api.json').read_text()),ensure_ascii=True))"
+      - name: Recheck regenerated integrated graph
+        run: python -m pytest tests/test_integrated_simulation.py -q
+      - name: Verify generated workflow matches source checksums
+        run: sha256sum --check SHA256SUMS
+      - name: Build and verify installable ZIP
+        run: python tools/package_style_lettering.py --destination validation/package
+      - name: Show package checksums
+        run: cat SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manga-translator-validation
+          path: manga_translator/validation

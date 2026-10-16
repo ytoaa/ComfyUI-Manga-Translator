@@ -68,10 +68,13 @@ def build():
     prepare = g.add('MangaLetterPrepare', pos=(4620, 50), title='⑩ 번역문과 원문 스타일 연결')
     g.connect(original, 0, prepare, 'original'); g.connect(target_save, 0, prepare, 'translated_json')
     g.connect(raw_mask, 0, prepare, 'text_pixel_mask')
-    lettering = g.add('MangaLetterPage', pos=(5040, 50), title='⑪ 영역별 식자 · 외곽선 행간 확보')
-    g.connect(original, 0, lettering, 'original'); g.connect(assemble, 0, lettering, 'cleaned')
-    g.connect(prepare, 0, lettering, 'regions_json'); g.connect(prepare, 1, lettering, 'source_mask')
-    save = g.add('SaveImage', {'filename_prefix': 'manga_translator/integrated_tiles'}, (5460, 50), '⑫ 통합 결과 저장')
+    typography = g.add('MangaLetterPlan', pos=(5040, 50), title='⑪ 원문 크기·방향 보존 · 축소 우선 계획')
+    g.connect(original, 0, typography, 'original'); g.connect(assemble, 0, typography, 'cleaned')
+    g.connect(prepare, 1, typography, 'source_mask'); g.connect(prepare, 0, typography, 'regions_json')
+    g.connect(detector, 0, typography, 'detection_result')
+    lettering = g.add('MangaLetterApply', pos=(5460, 50), title='⑫ 방향별 식자 · 비례 스타일 · 충돌 검사')
+    g.connect(typography, 0, lettering, 'plan')
+    save = g.add('SaveImage', {'filename_prefix': 'manga_translator/integrated_tiles'}, (5880, 50), '⑬ 통합 결과 저장')
     g.connect(lettering, 0, save, 'images')
     clean_preview = g.add('PreviewImage', pos=(5040, 650), title='검수 · 식자 직전 전체 배경')
     g.connect(assemble, 0, clean_preview, 'images')
@@ -79,7 +82,12 @@ def build():
     g.connect(grown, 0, mask_image, 'mask')
     preview = g.add('PreviewImage', pos=(1260, 1250), title='검수 · 제거 대상 마스크')
     g.connect(mask_image, 0, preview, 'images')
-    g.note('한 번 실행: 검출→줄별 OCR→번역→타일별 제거→좌표 복원→식자.\n'
+    typography_preview = g.add('PreviewImage', pos=(5460, 650), title='검수 · 원문 프레임과 확장 가능 공간')
+    g.connect(typography, 1, typography_preview, 'images')
+    g.note('원문 크기 상한 → 축소 → 재배치 → 검증된 말풍선 확장. source/bubble/strict 모드.\n'
+           'bubble은 검출된 실제 말풍선 마스크 또는 직접 연결한 내부 마스크에서 확장합니다. 겹침/최소 크기 실패는 저장 전에 중단합니다.\n'
+           '영역별 폰트·방향·회전·수동 곡선은 식자 계획 노드의 JSON으로 지정합니다.\n'
+           '한 번 실행: 검출→줄별 OCR→번역→타일별 제거→좌표 복원→식자.\n'
            'Qwen은 512px 코어+128px 문맥 타일만 처리합니다. 단색 배경은 보수적 색 채우기를 먼저 시도합니다.\n'
            '이미지 크롭/크기 복원/마스크 확대/타일 합성/미리보기/저장은 기본 노드입니다.\n'
            '원문이 거의 그대로인 타일은 식자 전에 중단합니다. 픽셀 검사이며 OCR 품질 보증은 아닙니다.\n'

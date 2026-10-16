@@ -144,3 +144,34 @@ python -m compileall -q lettering tools tests
 - **157 passed**, 통합 모의 실행 성공 5경로·예상 중단 2경로.
 - 실제 사용자 재검출 응답이 없으므로 이번 오류의 세부 원인과 GPU 해결 여부는 미확정이다.
 - [코드 변경·재현 입력·검증 범위](docs/boundary-recovery-v0.2.2.md).
+
+
+## 2026-10-16 원문 보존 통합 식자 v0.3.0
+
+- 08의 제거·좌표 복원 뒤에 원문 크기 상한을 사용하는 MangaLetterPlan과 MangaLetterApply를 연결했다.
+  기존 단일/페이지 식자 노드와 01~07 예제는 호환을 유지한다.
+- 실제 동봉 폰트로 짧은 번역 크기 상한, 긴 번역 축소 우선, 비례 외곽선, 최소 크기 후 재배치,
+  행 길이 균형·짧은 끝줄, 말풍선 경계, 검출 bubble segmentation 재사용, 이웃 글자 충돌 중단,
+  가로/세로 방향, 독립 두 자리 숫자·라틴 회전·문장부호, 회전/기울기/수동 곡선,
+  원문 한글 획의 분리와 외곽선 두께에 대한 크기 측정, 입력 검증을 검사한다.
+- 전체 회귀 검사 **182 passed**. 생성 후 위젯 검사 **18 passed**, 전체 그래프 검사 **7 passed**.
+  [기능 검증 CI](https://github.com/ytoaa/ComfyUI-Manga-Translator/actions/runs/38856867408)에서 모두 통과했다.
+  로컬 executor 연결 장애로 GitHub Actions의 Python 3.12/PyTorch CPU 환경에서 실행했다.
+- 배포 API 그래프를 실제 노드/PyTorch CPU로 실행하는 합성 입력 모의 실행은 성공 5경로,
+  예상 중단 2경로다. 검출 6영역·OCR 8줄 대응을 유지하며 원문 크기 상한, 식자 알파 밖
+  배경 픽셀의 완전 보존도 검사한다. 모델 응답은 대역이며 GPU 추론 결과가 아니다.
+- 합성 식자 비교 6개를 실제 폰트로 렌더링해 크기 상한·축소·재배치·세로쓰기·말풍선·수동 변형을 시각 검토한다.
+- 08 GUI/API 생성기를 실행한 뒤 위젯 계약 검사와 전체 그래프 회귀 검사를 다시 수행한다.
+- 설치 ZIP을 풀어 새 노드 등록을 검사하고, 최종 ZIP의 파일별 SHA256와 ZIP 무결성을 검증한다.
+- 실제 사용자 원본/GPU 결과, 자동 폰트 식별, 자동 곡선 복원, 완전한 OpenType 세로 조판,
+  OCR 오인식·번역 문맥 오류·제거 잔상 해결은 이 CPU 검증에 포함하지 않는다.
+
+재실행:
+```bash
+python -m pytest -q
+python tools/simulate_integrated.py --destination validation/simulation
+python tools/demo_hybrid_lettering.py --destination validation/hybrid
+python tools/build_integrated_workflow.py
+python -m pytest tests/test_workflow_widgets.py tests/test_integrated_simulation.py -q
+python tools/package_style_lettering.py --destination validation/package
+```
