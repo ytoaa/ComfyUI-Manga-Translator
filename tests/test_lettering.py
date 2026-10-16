@@ -146,7 +146,7 @@ def test_page_regions_read_pristine_references_even_when_overlapping(fixture):
 
 
 def test_node_schemas_and_outputs_are_consistent():
-    assert len(nodes.NODE_CLASS_MAPPINGS) == 11
+    assert len(nodes.NODE_CLASS_MAPPINGS) == 13
     assert set(nodes.NODE_CLASS_MAPPINGS) == set(nodes.NODE_DISPLAY_NAME_MAPPINGS)
     for name, cls in nodes.NODE_CLASS_MAPPINGS.items():
         schema = cls.INPUT_TYPES()

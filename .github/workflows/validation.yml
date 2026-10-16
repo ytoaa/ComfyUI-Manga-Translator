@@ -29,6 +29,10 @@ jobs:
         run: python -m pytest -q --tb=short
       - name: Execute integrated graph simulation
         run: python tools/simulate_integrated.py --destination validation/simulation
+      - name: Render hybrid typography examples
+        run: python tools/demo_hybrid_lettering.py --destination validation/hybrid --preview-log
+      - name: Verify workflow generator
+        run: python tools/build_integrated_workflow.py
       - name: Build and verify installable ZIP
         run: python tools/package_style_lettering.py --destination validation/package
       - name: Show package checksums
