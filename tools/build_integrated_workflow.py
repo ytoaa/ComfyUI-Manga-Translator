@@ -85,7 +85,7 @@ def build():
     typography_preview = g.add('PreviewImage', pos=(5460, 650), title='검수 · 원문 프레임과 확장 가능 공간')
     g.connect(typography, 1, typography_preview, 'images')
     g.note('원문 크기 상한 → 축소 → 재배치 → 검증된 말풍선 확장. source/bubble/strict 모드.\n'
-           'bubble은 실제 내부 마스크를 연결해야 확장합니다. 겹침/최소 크기 실패는 저장 전에 중단합니다.\n'
+           'bubble은 검출된 실제 말풍선 마스크 또는 직접 연결한 내부 마스크에서 확장합니다. 겹침/최소 크기 실패는 저장 전에 중단합니다.\n'
            '영역별 폰트·방향·회전·수동 곡선은 식자 계획 노드의 JSON으로 지정합니다.\n'
            '한 번 실행: 검출→줄별 OCR→번역→타일별 제거→좌표 복원→식자.\n'
            'Qwen은 512px 코어+128px 문맥 타일만 처리합니다. 단색 배경은 보수적 색 채우기를 먼저 시도합니다.\n'

@@ -20,7 +20,7 @@ class MangaLetterPlan:
             'min_scale':field('FLOAT','원문 기준 최소 축소 비율',default=.55,min=.2,max=1.,step=.05),
             'padding':field('INT','글자·외곽선 여백(px)',default=2,min=0,max=32),
             'region_options_json':field('STRING','영역 ID별 설정. 예: {"r1":{"direction":"vertical_rtl","font_cap":28},"r2":{"rotation":8,"bend":12}}. bend는 수동 곡선(px).',default='{}',multiline=True)},
-            'optional':{'bubble_mask':field('MASK','선택: 테두리·꼬리·그림을 제외한 실제 말풍선 내부. 없으면 영역 확장하지 않습니다.'),
+            'optional':{'bubble_mask':field('MASK','선택: 테두리·꼬리·그림을 제외한 실제 말풍선 내부. 자동 검출 마스크보다 우선합니다.'),
                         'detection_result':field('MANGA_DETECTION','선택: RF-DETR의 실제 bubble segmentation을 자동 재사용. 명시적 내부 마스크가 우선합니다.')}}
     RETURN_TYPES=('MANGA_LETTER_PLAN','IMAGE','STRING')
     RETURN_NAMES=('식자_계획','배치_검수','계획_보고서')
