@@ -87,9 +87,10 @@ def fixture(patterned_header=True):
 
 
 class DetectorOracle:
-    def __init__(self, records, original, seam_case=False, failed_recovery=False):
+    def __init__(self, records, original, seam_case=False, failed_recovery=False, require_recovery=False, empty_recovery=False):
         self.records, self.calls, self.windows = records, 0, []
         self.original, self.seam_case, self.failed_recovery = original, seam_case, failed_recovery
+        self.require_recovery, self.empty_recovery = require_recovery or failed_recovery, empty_recovery
         self.crops = {fingerprint(original): (0, 0, 1600, 640)}
         for tile in (1152, 576):
             for y0, y1 in P._sliding_windows(640, tile, 64):
@@ -105,9 +106,9 @@ class DetectorOracle:
         self.calls += 1
         assert image.size == (x1-x0, y1-y0)
         found = []
-        records = [] if self.failed_recovery and not initial else self.records
+        records = [] if (self.failed_recovery or self.empty_recovery) and not initial else self.records
         for index, record in enumerate(records):
-            if record.get('miss_full') and initial and (full or image.width > 576): continue
+            if record.get('miss_full') and initial and (full or image.width > 576 or (self.require_recovery and x0!=0)): continue
             if self.seam_case and initial and (x0,y0,x1)==(0,0,576) and index >= 2: continue
             a, b, c, d = record['bbox']
             a, b, c, d = max(a, x0), max(b, y0), min(c, x1), min(d, y1)
@@ -152,12 +153,12 @@ class OCROracle:
 
 class GraphRunner:
     def __init__(self, destination, uniform_fill=True, failed_qwen=False, patterned_header=True,
-                 seam_case=False, failed_recovery=False):
+                 seam_case=False, failed_recovery=False, require_recovery=False, empty_recovery=False):
         self.original, self.clean, self.raw, self.records = fixture(patterned_header)
         self.graph = json.loads((ROOT/'lettering/example_workflows/08-integrated-tiled-cleanup-lettering.api.json').read_text(encoding='utf-8'))
         self.cache, self.calls, self.destination = {}, Counter(), Path(destination)
         self.destination.mkdir(parents=True, exist_ok=True)
-        self.detector = DetectorOracle(self.records, self.original, seam_case, failed_recovery)
+        self.detector = DetectorOracle(self.records,self.original,seam_case,failed_recovery,require_recovery,empty_recovery)
         self.ocr = OCROracle(self.original, self.records)
         self.failed_qwen = failed_qwen
         self.qwen_calls = 0
@@ -297,7 +298,8 @@ def simulate(destination):
     for name, fill, pattern in [('uniform-and-qwen', True, True), ('all-bounded-qwen', False, True),
                                 ('uniform-bypass', True, False)]:
         reports[name] = GraphRunner(destination/name, uniform_fill=fill, patterned_header=pattern).execute()
-    reports['seam-recovery'] = GraphRunner(destination/'seam-recovery', seam_case=True).execute()
+    reports['seam-recovery'] = GraphRunner(destination/'seam-recovery', seam_case=True,require_recovery=True).execute()
+    reports['fragment-stitching'] = GraphRunner(destination/'fragment-stitching',seam_case=True,empty_recovery=True).execute()
     failed_detection = GraphRunner(destination/'unresolved-seam-stopped', seam_case=True, failed_recovery=True)
     try:
         failed_detection.execute()

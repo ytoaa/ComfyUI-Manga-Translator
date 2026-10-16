@@ -39,7 +39,7 @@ def test_uniform_page_bypasses_the_entire_qwen_branch(tmp_path):
 
 
 def test_full_graph_recovers_cross_row_strip_before_ocr(tmp_path):
-    report = S.GraphRunner(tmp_path, seam_case=True).execute()
+    report = S.GraphRunner(tmp_path, seam_case=True,require_recovery=True).execute()
     assert report['boundary_recovery']['recovery_calls'] > 0
     assert report['boundary_recovery']['unresolved_regions'] == 0
     assert report['selected_regions'] == 6 and report['ocr_line_calls'] == 8
@@ -57,3 +57,11 @@ def test_unresolved_seam_stops_full_graph_before_ocr_translation_qwen_and_save(t
     assert runner.ocr.calls == runner.qwen_calls == 0 and not runner.saved
     assert not runner.calls['MangaTranslate']
     assert not list((tmp_path/'manga_translator').glob('*.json'))
+
+
+def test_full_graph_uses_complementary_fragments_when_wide_inference_misses_text(tmp_path):
+    report=S.GraphRunner(tmp_path,seam_case=True,empty_recovery=True).execute()
+    assert report['boundary_recovery']['stitched_regions']>0
+    assert report['boundary_recovery']['recovery_calls']==0
+    assert report['selected_regions']==6 and report['ocr_line_calls']==8
+    assert report['all_fixture_ink_masked'] and report['outside_mask_unchanged'] and report['final_saved']

@@ -2,7 +2,7 @@
 
 **현재 기본 워크플로: [08 통합 타일 제거·식자](lettering/example_workflows/08-integrated-tiled-cleanup-lettering.json).** 검출·줄별 OCR·번역·마스크 기반 타일 Qwen·좌표 복원·잔존 원문 검사·식자를 한 번에 연결한다. 이미지 크롭/복원/마스크 합성/저장은 기본 노드를 사용한다. 설치 후 ComfyUI를 재시작하고 08 JSON을 새로 불러온다. [통합 기능·모의 실행·검증 한계](docs/integrated-workflow.md)를 먼저 참고한다. 모의 실행의 모델 응답은 대역이며 실제 GPU 품질 실증과 구분한다.
 
-v0.2.1은 검출 타일 경계에서 잘린 세로 조각·반쪽 문단을 문맥 확장 재검출로 복구한다. 복구할 수 없으면 OCR 전에 중단한다. 기존 08 연결을 유지하며, 자세한 검증 결과는 [타일 경계 복구 검증](docs/boundary-recovery-validation.md)을 참고한다.
+v0.2.2는 양쪽 끝이 관측된 겹친 타일 조각을 먼저 복원하고, 부족한 문맥은 여러 방향으로 넓혀 재검출한다. 모든 복구 결과를 모은 뒤 미해결 영역을 판정하며, 실패 시 크롭별 좌표·검출·포함률을 로그에 남긴다. 기존 08 연결을 유지한다. [복구 보완과 검증 범위](docs/boundary-recovery-v0.2.2.md)를 참고한다.
 
 ComfyUI에서 원문 검출 → OCR → 번역 → 이미지 모델 편집 → 최종 저장을 연결하는 초기 커스텀 노드 패키지. 첫 예제는 RF-DETR, Hayai OCR v2, 기존 번역 LLM 서버, Qwen Image 2.1 Turbo를 사용한다. Koharu 실행파일과 Rust 렌더러는 필요하지 않다.
 

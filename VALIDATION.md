@@ -135,3 +135,12 @@ python -m compileall -q lettering tools tests
 - 조각 segmentation 픽셀 보존, 모든 fixture 글자 마스크 포함, 마스크 밖 픽셀 불변을 확인했다.
 - 실제 사용자 이미지의 RF-DETR/Hayai/Qwen GPU 품질과 실제 ComfyUI executor는 미검증이다.
 - 변경·실행 환경·재현 방법·정확한 보증 범위: [검증 보고서](docs/boundary-recovery-validation.md).
+
+
+## 2026-10-16 복구 경로 보완 v0.2.2
+
+- v0.2.1 사용자 예외의 정확한 bbox와 합성 보완 조각으로 기존 중단을 재현했다.
+  양쪽 끝이 관측된 조각 연결, 여러 방향 문맥 확대, 전체 복구 후 최종 판정과 진단 로그를 추가했다.
+- **157 passed**, 통합 모의 실행 성공 5경로·예상 중단 2경로.
+- 실제 사용자 재검출 응답이 없으므로 이번 오류의 세부 원인과 GPU 해결 여부는 미확정이다.
+- [코드 변경·재현 입력·검증 범위](docs/boundary-recovery-v0.2.2.md).

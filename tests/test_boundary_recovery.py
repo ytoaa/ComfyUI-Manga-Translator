@@ -118,7 +118,7 @@ class SeamDetector:
         found=[]
         if self.fail and not initial: return result(image.size,[])
         for i,(a,b,c,d) in enumerate(self.boxes):
-            if initial and i==3 and w>576: continue  # Body missed in wide passes.
+            if initial and i==3 and (w>576 or (self.fail and x!=0)): continue  # Body missed in wide passes.
             a,b,c,d=max(a,x),max(b,y),min(c,x+w),min(d,y+h)
             if a>=c or b>=d: continue
             if initial and x==0 and w==576 and y==0 and i>=2: continue
@@ -143,7 +143,7 @@ def test_user_seams_recover_full_body_and_remove_cross_row_vertical_strip():
     assert len(boxes)==6
     for actual,expected in zip(boxes,detector.boxes): assert np.allclose(actual,expected)
     report=selected['region_resolution']['boundary_recovery']
-    assert report['clipped_regions'] > 0 and 0 < report['recovery_calls'] <= 16
+    assert report['clipped_regions'] > 0 and report['stitched_regions'] > 0
     assert detector.calls == 9+report['recovery_calls']
     assert not any(row.get('tile_provenance',{}).get('clipped_edges') for row in raw['detections'])
 
@@ -187,3 +187,140 @@ def test_clipped_masks_survive_for_cleanup_but_never_become_ocr_boxes():
     assert expected.sum()>0 and torch.equal(mask,expected)
     rows=json.loads(R.MangaDetectionRegionsResolved().convert(raw)[0])['regions']
     assert len(rows)==6
+
+
+USER_FRAGMENT = [465.2586364746094, 277.3353576660156, 576.0, 346.1344299316406]
+
+
+def user_pieces(axis=0, missing_end=False, cross_row=False):
+    boxes = [USER_FRAGMENT, [512.,278.,1088.,346.], [1024.,278.,1486.,346.]]
+    windows = [[0,0,576,576],[512,0,1088,576],[1024,0,1600,576]]
+    edges = [['right'],['left','right'],['left'] if not missing_end else ['left','right']]
+    values = []
+    for box,window,edge in zip(boxes,windows,edges):
+        if axis:
+            box=[box[1],box[0],box[3],box[2]]
+            window=[window[1],window[0],window[3],window[2]]
+            edge=[{'left':'top','right':'bottom'}[e] for e in edge]
+        values.append({**item(box), 'tile_provenance':{'stage':'detail','window':window,'clipped_edges':edge}})
+    if cross_row: values.append(clipped())
+    return values
+
+
+def test_logged_fragment_recovers_without_a_new_complete_detection():
+    class NoCompleteDetection:
+        def detect(self,*_): pytest.fail('Existing fragments already certify both outer ends')
+    trusted, report=P._recover_boundaries(Image.new('RGB',(1600,640)),NoCompleteDetection(),{},user_pieces())
+    assert len(trusted)==1
+    assert trusted[0]['bbox']==[USER_FRAGMENT[0],USER_FRAGMENT[1],1486.,USER_FRAGMENT[3]]
+    assert report['stitched_regions']==1 and report['recovery_calls']==0
+
+
+@pytest.mark.parametrize('axis', [0,1])
+def test_stitching_requires_observed_outer_endpoints_and_works_both_axes(axis):
+    w,h=(1600,640) if not axis else (640,1600)
+    assert len(P._stitch_fragments(user_pieces(axis),w,h))==1
+    assert not P._stitch_fragments(user_pieces(axis,missing_end=True),w,h)
+
+
+def test_stitching_never_joins_cross_row_strip_to_horizontal_body():
+    rows=P._stitch_fragments(user_pieces(cross_row=True),1600,640)
+    assert len(rows)==1 and rows[0]['bbox'][1]>277
+
+
+def test_aligned_but_disjoint_fragments_are_not_bridged():
+    values=user_pieces()
+    values[1]['bbox']=[700,278,1088,346]
+    assert not P._stitch_fragments(values,1600,640)
+
+
+def test_fragments_from_one_window_do_not_certify_a_complete_region():
+    values=user_pieces()
+    for row in values: row['tile_provenance']['window']=[0,0,576,576]
+    assert not P._stitch_fragments(values,1600,640)
+
+
+def test_stitched_masks_preserve_the_exact_union_of_fragment_pixels():
+    values=user_pieces()
+    expected=np.zeros((640,1600),bool)
+    for row in values:
+        a,b,c,d=row['bbox']; x,y=int(np.floor(a)),int(np.floor(b))
+        w,h=int(np.ceil(c))-x,int(np.ceil(d))-y
+        pixels=np.zeros((h,w),bool); pixels[4:-4,4:-4]=True
+        row['mask']={'x':x,'y':y,'width':w,'height':h,'runs':rle(pixels)}
+        expected[y:y+h,x:x+w] |= pixels
+    stitched=P._stitch_fragments(values,1600,640)
+    K=sys.modules[spec.name+'.mask_nodes']
+    local,(x,y,w,h)=K._decode_mask(stitched[0]['mask'],1600,640)
+    actual=np.zeros_like(expected); actual[y:y+h,x:x+w]=local>.5
+    assert np.array_equal(actual,expected)
+
+
+def test_full_height_context_changes_after_clipped_direction_reaches_page_end():
+    fragment=clipped(USER_FRAGMENT)
+    windows=[P._recovery_window(fragment,1600,640,n) for n in range(3)]
+    assert len(set(windows))==3
+    assert windows[2][1]<windows[1][1]<windows[0][1]
+    assert windows[2][3]>windows[1][3]>windows[0][3]
+
+
+def test_failure_logs_crop_results_and_coverage(caplog):
+    class NoDetections:
+        def detect(self,image,_): return result(image.size,[])
+    with caplog.at_level('INFO'):
+        with pytest.raises(ValueError,match='coverage=0.0%') as exc:
+            P._recover_boundaries(Image.new('RGB',(1600,640)),NoDetections(),{},[clipped(USER_FRAGMENT)])
+    assert 'recovery_windows=' in str(exc.value)
+    assert '"coverage": 0.0' in caplog.text and '"detections": []' in caplog.text
+
+
+def test_conflicting_outer_endpoints_in_new_partial_detections_are_not_certified():
+    root=clipped(USER_FRAGMENT)
+    expected_windows=[P._recovery_window(root,1600,640,n) for n in range(3)]
+    class Partials:
+        calls=0
+        def detect(self,image,_):
+            x,y,right,bottom=expected_windows[self.calls]; self.calls+=1
+            if self.calls==1:
+                # Right-clipped but it has an observed left endpoint.
+                box=[465-x,278-y,right-x,346-y]
+            else:
+                # A new left-clipped piece observes the far right endpoint.
+                box=[0,278-y,1486-x,346-y]
+            return result(image.size,[item(box)])
+    model=Partials()
+    with pytest.raises(ValueError,match='unresolved clipped text'):
+        P._recover_boundaries(Image.new('RGB',(1600,640)),model,{},[root])
+
+
+def test_later_fragment_recovery_can_resolve_an_earlier_failed_crop():
+    left=clipped(USER_FRAGMENT)
+    right={**item([1024,278,1486,346]),'tile_provenance':{
+        'stage':'detail','window':[1024,0,1600,576],'clipped_edges':['left']}}
+    second_window=P._recovery_window(right,1600,640,0)
+    class Model:
+        calls=0
+        def detect(self,image,_):
+            self.calls+=1
+            if self.calls<=3: return result(image.size,[])
+            x,y,_,_=second_window
+            return result(image.size,[item([USER_FRAGMENT[0]-x,USER_FRAGMENT[1]-y,1486-x,USER_FRAGMENT[3]-y])])
+    model=Model()
+    trusted,report=P._recover_boundaries(Image.new('RGB',(1600,640)),model,{},[left,right])
+    assert report['recovery_calls']==4 and report['unresolved_regions']==0
+    assert len(trusted)==1 and trusted[0]['bbox'][2]==1486
+
+
+def test_new_partial_from_recovery_completes_the_initial_fragment_chain():
+    left=clipped(USER_FRAGMENT)
+    right={**item([1024,278,1486,346]),'tile_provenance':{
+        'stage':'detail','window':[1024,0,1600,576],'clipped_edges':['left']}}
+    window=P._recovery_window(left,1600,640,0)
+    class Model:
+        def detect(self,image,_):
+            x,y,x1,_=window
+            return result(image.size,[item([465-x,278-y,x1-x,346-y])])
+    trusted,report=P._recover_boundaries(Image.new('RGB',(1600,640)),Model(),{},[left,right])
+    assert report['recovery_calls']==1 and report['recovered_regions']==0
+    assert report['stitched_regions']==1 and len(trusted)==1
+    assert trusted[0]['bbox'][2]==1486

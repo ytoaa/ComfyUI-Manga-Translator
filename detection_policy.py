@@ -11,8 +11,14 @@ from .models import _DETECTOR_NATIVE_SIZE, _offset_detection, _validate_threshol
 from .nodes import _detector_region
 from .mask_nodes import _decode_mask
 
+import json
+import logging
 import math
 import numpy as np
+
+from .adapters.model import rle
+
+LOG = logging.getLogger(__name__)
 
 _TEXT_LABELS = {'text', 'onomatopoeia'}
 _MAX_REGIONS = 512
@@ -40,13 +46,8 @@ def _window_detections(result, window, width, height, stage):
     return output
 
 
-def _covered(fragment, trusted, width, height):
-    """Require 98% support from same-label, unclipped regions, before merging.
-
-    For a multi-row strip, segmentation support matters: blank line gaps must
-    not prevent separate complete rows from replacing one erroneous strip.
-    With no mask, use the entire bounding rectangle conservatively.
-    """
+def _coverage(fragment, trusted, width, height):
+    """Fraction of fragment support contained by same-label complete boxes."""
     candidates = [item for item in trusted if item['label'] == fragment['label']]
     raw = fragment.get('mask')
     if raw is not None:
@@ -57,8 +58,9 @@ def _covered(fragment, trusted, width, height):
         x, y = math.floor(a), math.floor(b)
         w, h = math.ceil(c)-x, math.ceil(d)-y
         support = np.ones((h, w), dtype=bool)
-    if not support.any():
-        return False
+    count = np.count_nonzero(support)
+    if not count:
+        return 0.0
     covered = np.zeros((h, w), dtype=bool)
     for item in candidates:
         a, b, c, d = item['bbox']
@@ -66,7 +68,92 @@ def _covered(fragment, trusted, width, height):
         right, bottom = min(w, math.ceil(c)-x), min(h, math.ceil(d)-y)
         if right > left and bottom > top:
             covered[top:bottom, left:right] = True
-    return np.count_nonzero(covered & support) >= .98 * np.count_nonzero(support)
+    return float(np.count_nonzero(covered & support) / count)
+
+
+def _covered(fragment, trusted, width, height):
+    return _coverage(fragment, trusted, width, height) >= .98
+
+
+def _stitch_fragments(fragments, width, height):
+    """Certify overlapping, aligned pieces using observed outer endpoints.
+
+    A chain is complete only when both outer ends were seen away from crop
+    edges. Matching source windows must differ along the clipped axis, and
+    line/block thickness must agree. A tall cross-row strip cannot bridge
+    several ordinary horizontal rows. No box is enlarged into unobserved text.
+    """
+    stitched = []
+    for axis, allowed in ((0, {'left', 'right'}), (1, {'top', 'bottom'})):
+        ends = ('left', 'right') if axis == 0 else ('top', 'bottom')
+        eligible = [item for item in fragments
+                    if set(item['tile_provenance']['clipped_edges']) <= allowed
+                    and set(item['tile_provenance']['clipped_edges']) & allowed]
+        groups = []
+        for candidate in eligible:
+            related = []
+            a = candidate['bbox']
+            for i, group in enumerate(groups):
+                for other in group:
+                    b = other['bbox']
+                    if candidate['label'] != other['label']:
+                        continue
+                    wa, wb = candidate['tile_provenance']['window'], other['tile_provenance']['window']
+                    if (wa[axis], wa[axis+2]) == (wb[axis], wb[axis+2]):
+                        continue
+                    transverse = 1-axis
+                    at, bt = a[transverse+2]-a[transverse], b[transverse+2]-b[transverse]
+                    along_a, along_b = a[axis+2]-a[axis], b[axis+2]-b[axis]
+                    cross = max(0., min(a[transverse+2],b[transverse+2])-max(a[transverse],b[transverse]))
+                    overlap = max(0., min(a[axis+2],b[axis+2])-max(a[axis],b[axis]))
+                    if (min(at,bt)/max(at,bt) >= .65 and cross/min(at,bt) >= .8
+                            and overlap >= max(3., .1*min(along_a,along_b))):
+                        related.append(i)
+                        break
+            # Prevent a chain of gradually thicker boxes from connecting a
+            # single row to a multi-row strip through intermediate heights.
+            members = [candidate] + [row for i in related for row in groups[i]]
+            thicknesses = [row['bbox'][3-axis]-row['bbox'][1-axis] for row in members]
+            if min(thicknesses)/max(thicknesses) < .65:
+                related = []
+            if not related:
+                groups.append([candidate])
+            else:
+                members = [candidate]
+                for i in reversed(related): members.extend(groups.pop(i))
+                groups.append(members)
+        for group in groups:
+            low = min(item['bbox'][axis] for item in group)
+            high = max(item['bbox'][axis+2] for item in group)
+            # Endpoint evidence must be at the actual outer extent, not just an
+            # interior member whose end happens to be visible in another tile.
+            if not any(abs(item['bbox'][axis]-low) <= 1e-4 and
+                       ends[0] not in item['tile_provenance']['clipped_edges'] for item in group):
+                continue
+            if not any(abs(item['bbox'][axis+2]-high) <= 1e-4 and
+                       ends[1] not in item['tile_provenance']['clipped_edges'] for item in group):
+                continue
+            box = [min(item['bbox'][k] for item in group) if k < 2
+                   else max(item['bbox'][k] for item in group) for k in range(4)]
+            merged = {'label': group[0]['label'], 'score': max(item['score'] for item in group),
+                      'bbox': box, 'tile_provenance': {'stage': 'stitched', 'clipped_edges': [],
+                         'source_windows': [item['tile_provenance']['window'] for item in group]}}
+            masks = [item['mask'] for item in group if item.get('mask') is not None]
+            if masks:
+                x,y = math.floor(box[0]),math.floor(box[1])
+                w,h = math.ceil(box[2])-x,math.ceil(box[3])-y
+                if w*h > 64*1024*1024:
+                    raise ValueError('Stitched detector mask exceeds memory contract')
+                pixels = np.zeros((h,w), dtype=bool)
+                for raw in masks:
+                    local,(mx,my,mw,mh) = _decode_mask(raw,width,height)
+                    pixels[my-y:my-y+mh,mx-x:mx-x+mw] |= local > .5
+                runs = rle(pixels)
+                if len(runs) > 4_000_000:
+                    raise ValueError('Stitched detector mask exceeds RLE contract')
+                merged['mask'] = {'x':x,'y':y,'width':w,'height':h,'runs':runs}
+            stitched.append(merged)
+    return stitched
 
 
 def _recovery_window(fragment, width, height, attempt):
@@ -75,8 +162,8 @@ def _recovery_window(fragment, width, height, attempt):
     edges = fragment['tile_provenance']['clipped_edges']
     # Preserve detail scale on the other axis. A long horizontal paragraph is
     # re-detected as a wide, short crop rather than another shrunken whole page.
-    px = max(64, (c-a)*.15)
-    py = max(64, (d-b)*.15)
+    px = max(64, (c-a)*.15) * 2**attempt
+    py = max(64, (d-b)*.15) * 2**attempt
     dx, dy = max(256, x1-x0) * 2**attempt, max(256, y1-y0) * 2**attempt
     return (max(0, math.floor(a-(dx if 'left' in edges else px))),
             max(0, math.floor(b-(dy if 'top' in edges else py))),
@@ -90,7 +177,12 @@ def _recover_boundaries(image, model, thresholds, detections):
                if item.get('tile_provenance', {}).get('clipped_edges')]
     trusted = [item for item in detections
                if not item.get('tile_provenance', {}).get('clipped_edges')]
-    calls, recovered, seen, raw_count = [], 0, set(), len(detections)
+    pool = list(clipped)
+    stitched = _stitch_fragments(pool,width,height)
+    trusted.extend(stitched)
+    stitch_keys = {(item['label'],tuple(item['bbox'])) for item in stitched}
+    calls, attempts, recovered, seen, raw_count = [], [], 0, set(), len(detections)
+    budget_exhausted = False
     for fragment in clipped:
         if _covered(fragment, trusted, width, height):
             continue
@@ -99,8 +191,8 @@ def _recover_boundaries(image, model, thresholds, detections):
             if window in seen:
                 continue
             if len(calls) >= _MAX_RECOVERY_CALLS:
-                raise ValueError('검출 타일 경계 복구 한도 초과 (boundary recovery limit=16); '
-                                 '페이지를 나누거나 검출 설정을 조정하세요. OCR은 실행하지 않았습니다.')
+                budget_exhausted = True
+                break
             seen.add(window)
             calls.append(list(window))
             result = model.detect(image.crop(window), thresholds)
@@ -109,16 +201,47 @@ def _recover_boundaries(image, model, thresholds, detections):
             if raw_count > _MAX_REGIONS:
                 raise ValueError('Detail detector produced too many regions during boundary recovery (limit=512)')
             complete = [item for item in items if not item['tile_provenance']['clipped_edges']]
+            pool.extend(item for item in items if item['tile_provenance']['clipped_edges'])
             trusted.extend(complete)
             recovered += len(complete)
+            for item in _stitch_fragments(pool,width,height):
+                key = (item['label'],tuple(item['bbox']))
+                if key not in stitch_keys:
+                    trusted.append(item)
+                    stitch_keys.add(key)
+            diagnostic = {'fragment_bbox':fragment['bbox'],'window':list(window),'complete_regions':len(complete),
+                          'clipped_regions':len(items)-len(complete),
+                          'coverage':round(_coverage(fragment,trusted,width,height),4),
+                          'detections':[{'bbox':item['bbox'],'label':item['label'],
+                                         'edges':item['tile_provenance']['clipped_edges']} for item in items
+                                        if item['label']==fragment['label']]}
+            attempts.append(diagnostic)
+            LOG.info('Manga boundary recovery: %s',json.dumps(diagnostic,ensure_ascii=False))
             if _covered(fragment, trusted, width, height):
                 break
-        if not _covered(fragment, trusted, width, height):
-            raise ValueError('검출 타일 경계 복구 실패 (unresolved clipped text) '
-                             f"bbox={fragment['bbox']}, edges={fragment['tile_provenance']['clipped_edges']}; "
-                             '잘린 영역의 OCR/번역을 중단했습니다. 상세 검출을 조정해 다시 실행하세요.')
-    return trusted, {'clipped_regions': len(clipped), 'recovery_calls': len(calls),
-                     'recovered_regions': recovered, 'windows': calls, 'unresolved_regions': 0}
+        if budget_exhausted:
+            break
+    # A later fragment may yield a complete region covering an earlier failed
+    # crop. Judge the collected evidence once the recovery pass is finished.
+    unresolved = [fragment for fragment in clipped if not _covered(fragment,trusted,width,height)]
+    if unresolved:
+        fragment = unresolved[0]
+        diagnostic = {'bbox':fragment['bbox'], 'edges':fragment['tile_provenance']['clipped_edges'],
+                      'coverage':round(_coverage(fragment,trusted,width,height),4),
+                      'unresolved_regions':len(unresolved),'budget_exhausted':budget_exhausted,
+                      'attempts':attempts}
+        LOG.error('Manga boundary recovery failed: %s',json.dumps(diagnostic,ensure_ascii=False))
+        reason = ('검출 타일 경계 복구 한도 초과 (boundary recovery limit=16; unresolved clipped text) '
+                  if budget_exhausted else '검출 타일 경계 복구 실패 (unresolved clipped text) ')
+        raise ValueError(reason +
+                         f"bbox={fragment['bbox']}, edges={fragment['tile_provenance']['clipped_edges']}, "
+                         f"coverage={diagnostic['coverage']:.1%}, recovery_windows={calls}; "
+                         '상세 재검출 결과는 Manga boundary recovery 로그를 확인하세요. OCR/번역은 중단했습니다.')
+    if len(trusted) > _MAX_REGIONS:
+        raise ValueError('Resolved detector produced too many regions (limit=512)')
+    return trusted, {'clipped_regions':len(clipped),'recovery_calls':len(calls),
+                     'stitched_regions':len(stitch_keys),'recovered_regions':recovered,
+                     'windows':calls,'attempts':attempts,'unresolved_regions':0}
 
 
 def _sliding_windows(length, tile_size, overlap):
