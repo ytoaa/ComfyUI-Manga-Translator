@@ -329,3 +329,10 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'MangaLetterTranslate': '한 영역 vLLM 번역 · Manga',
     'MangaLetterPrepare': '기존 번역 JSON → 스타일 식자',
     'MangaCleanupPrompt': '이미지 모델 · 원문만 제거'}
+
+# Imported after shared boundary helpers to preserve legacy node compatibility.
+from .hybrid_nodes import MangaLetterPlan, MangaLetterApply
+NODE_CLASS_MAPPINGS.update({cls.__name__:cls for cls in (MangaLetterPlan,MangaLetterApply)})
+NODE_DISPLAY_NAME_MAPPINGS.update({
+    'MangaLetterPlan':'원문 보존 · 통합 식자 계획',
+    'MangaLetterApply':'축소·방향·충돌 검사 · 통합 식자'})
