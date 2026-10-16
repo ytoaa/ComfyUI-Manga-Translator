@@ -190,3 +190,9 @@ def test_balanced_reflow_avoids_a_single_character_last_line():
     lines=balanced('원본보다 긴 번역문을 말풍선 안에 다시 배치합니다',font,230,0)
     assert len(lines)>1 and len(lines[-1])>=3
     assert all(core._advance(font,line,0)<=230 for line in lines)
+
+
+def test_source_font_cap_is_not_inflated_by_outline_thickness():
+    plain,_,_=hybrid.build_plan(*fixture('번역',font_size=42,stroke=0))
+    outlined,_,_=hybrid.build_plan(*fixture('번역',font_size=42,stroke=4))
+    assert abs(plain['regions'][0]['cap']-outlined['regions'][0]['cap'])<=2

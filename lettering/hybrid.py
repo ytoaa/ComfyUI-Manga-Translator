@@ -16,8 +16,11 @@ def bands(values):
             for i in range(1,count+1)]
 
 
-def profile(reference, cleaned, support, font_name):
+def profile(reference, cleaned, support, font_name, foreground=None):
     ink = (support>.1) & (np.max(np.abs(reference-cleaned),axis=2) >= .07)
+    if foreground is not None:
+        pigment=ink & (np.max(np.abs(reference-np.asarray(foreground)),axis=2)<.2)
+        if pigment.sum()>=8: ink=pigment
     if ink.sum()<8:
         raise ValueError('Too few source ink pixels to estimate typography')
     ys,xs = np.where(ink)
@@ -161,8 +164,8 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         font=opts.get('font',item.get('font',default_font))
         core.font_path(font,item['text'])
         ref,clean,mask,_=core.crop_region(original,cleaned,support,item['bbox'])
-        measured,ink=profile(ref,clean,mask,font)
         style,analysis=core.analyze_style(ref,clean,mask)
+        measured,ink=profile(ref,clean,mask,font,style['foreground'])
         style=core.adjust_style(style,**item.get('style',{}))
         layout=dict(item.get('layout',{}))
         # Old JSON controls remain usable; all values are validated by the renderer.
