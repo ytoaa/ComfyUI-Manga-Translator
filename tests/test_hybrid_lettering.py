@@ -182,3 +182,11 @@ def test_missing_vertical_punctuation_does_not_drop_requested_characters():
     _,_,alpha,report,_,_=run(values,direction='vertical_rtl',min_scale=.3)
     assert report['regions'][0]['render']['text']=='가(나) 12 TEST!'
     assert alpha.sum()>50
+
+
+def test_balanced_reflow_avoids_a_single_character_last_line():
+    font=ImageFont.truetype(core.font_path('NanumGothic-Bold.ttf','한글'),21)
+    from hybrid_test_plugin.lettering.linebreak import balanced
+    lines=balanced('원본보다 긴 번역문을 말풍선 안에 다시 배치합니다',font,230,0)
+    assert len(lines)>1 and len(lines[-1])>=3
+    assert all(core._advance(font,line,0)<=230 for line in lines)

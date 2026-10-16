@@ -190,7 +190,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         curve=opts.get('bend',0.);core.finite(curve,-256,256,'bend')
         render_options={'direction':actual_direction,
                         'alignment':opts.get('alignment',layout.pop('alignment',measured['alignment'])),
-                        'padding':pad,'supersample':2,'vertical_policy':'typographic',**layout}
+                        'padding':pad,'supersample':2,'vertical_policy':'typographic','wrap_policy':'balanced',**layout}
         for key in ('rotation','shear','line_spacing','tracking'):
             if key in opts: render_options[key]=opts[key]
         original_lines=min(64,measured['line_count'])
