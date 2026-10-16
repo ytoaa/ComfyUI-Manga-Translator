@@ -32,7 +32,10 @@ jobs:
       - name: Render hybrid typography examples
         run: python tools/demo_hybrid_lettering.py --destination validation/hybrid --preview-log
       - name: Verify workflow generator
-        run: python tools/build_integrated_workflow.py
+        run: |
+          python tools/build_integrated_workflow.py
+          python -m pytest tests/test_workflow_widgets.py -q
+          python -c "import pathlib,json; p=pathlib.Path('lettering/example_workflows/08-integrated-tiled-cleanup-lettering'); print('HYBRID_GUI_JSON='+json.dumps(json.loads(p.with_suffix('.json').read_text()),ensure_ascii=True)); print('HYBRID_API_JSON='+json.dumps(json.loads(p.with_suffix('.api.json').read_text()),ensure_ascii=True))"
       - name: Build and verify installable ZIP
         run: python tools/package_style_lettering.py --destination validation/package
       - name: Show package checksums
