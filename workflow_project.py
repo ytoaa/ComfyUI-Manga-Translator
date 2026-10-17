@@ -202,10 +202,51 @@ class WorkflowProjects:
 PROJECTS = WorkflowProjects()
 
 
-def _context(server, prompt):
+def _context(server, prompt, unique_id):
+    """Resolve the parent prompt from ComfyUI's running queue without whole-graph equality.
+
+    ComfyUI keeps a deep-copied queue item while execution may annotate its working
+    prompt (for example with is_changed/cache information). Matching the complete
+    dictionaries therefore becomes unstable. Prefer an exact prompt match, then
+    identify the running job by this node's UNIQUE_ID, class type and stable user
+    inputs. Never silently pick between multiple candidates.
+    """
     running,_ = server.prompt_queue.get_current_queue()
+    node_id = str(unique_id)
+    current = prompt.get(node_id) if isinstance(prompt,dict) else None
+    exact, candidates = [], []
+    stable = ('input_mode','input_folder','project_name','action')
     for row in running:
-        if row[2] == prompt: return row[1],row[3].get('client_id')
+        if not isinstance(row,(list,tuple)) or len(row) < 4 or not isinstance(row[2],dict):
+            continue
+        queued = row[2]
+        if queued == prompt:
+            exact.append(row)
+            continue
+        queued_node = queued.get(node_id)
+        if (not isinstance(current,dict) or not isinstance(queued_node,dict)
+                or current.get('class_type') != 'MangaWorkflowInput'
+                or queued_node.get('class_type') != 'MangaWorkflowInput'):
+            continue
+        current_inputs, queued_inputs = current.get('inputs',{}), queued_node.get('inputs',{})
+        if all(current_inputs.get(key) == queued_inputs.get(key) for key in stable):
+            candidates.append(row)
+    matches = exact or candidates
+    if len(matches) == 1:
+        row = matches[0]
+        extra = row[3] if isinstance(row[3],dict) else {}
+        return row[1],extra.get('client_id')
+    if not matches and len(running) == 1:
+        # Last-resort compatibility for a core that mutates this node's inputs too:
+        # only accept the sole running prompt when it still contains this exact node id/type.
+        row = running[0]
+        if (isinstance(row,(list,tuple)) and len(row) >= 4 and isinstance(row[2],dict)
+                and isinstance(row[2].get(node_id),dict)
+                and row[2][node_id].get('class_type') == 'MangaWorkflowInput'):
+            extra = row[3] if isinstance(row[3],dict) else {}
+            return row[1],extra.get('client_id')
+    if len(matches) > 1:
+        raise ProjectError('현재 ComfyUI 실행 문맥이 둘 이상이라 프로젝트 시작 작업을 식별할 수 없습니다.')
     raise ProjectError('현재 ComfyUI 실행 문맥을 찾을 수 없습니다.')
 
 
@@ -277,7 +318,7 @@ class MangaWorkflowInput:
         elif action == '상태 확인': report = PROJECTS.snapshot(folder)
         else:
             inputs = PROJECTS.inputs(folder_paths.get_input_directory(),input_folder)
-            ident,client_id = _context(server,prompt)
+            ident,client_id = _context(server,prompt,unique_id)
             client = NativeComfyClient(server,folder_paths.get_input_directory(),folder_paths.get_output_directory(),unique_id,extra_pnginfo,client_id)
             client.parent_prompt_id = ident
             previews = [key for key,node in prompt.items() if node['class_type']=='PreviewAny' and node['inputs'].get('source') == [str(unique_id),2]]
