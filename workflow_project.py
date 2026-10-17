@@ -250,6 +250,23 @@ def _context(server, prompt, unique_id):
     raise ProjectError('현재 ComfyUI 실행 문맥을 찾을 수 없습니다.')
 
 
+def _queued_prompt(server, ident):
+    """Return the untouched queued graph for persistence and child-page submission.
+
+    The hidden PROMPT passed to a node is an execution working copy and can contain
+    non-JSON runtime values such as NaN from IS_CHANGED. The queue copy is the
+    canonical API graph accepted by ComfyUI and is therefore the only graph a folder
+    project should save and replay.
+    """
+    running,_ = server.prompt_queue.get_current_queue()
+    matches = [row for row in running
+               if isinstance(row,(list,tuple)) and len(row) >= 3
+               and row[1] == ident and isinstance(row[2],dict)]
+    if len(matches) != 1:
+        raise ProjectError('프로젝트에 저장할 원본 ComfyUI 워크플로우를 찾을 수 없습니다.')
+    return deepcopy(matches[0][2])
+
+
 def _encode(report): return json.dumps(report,ensure_ascii=False,indent=2,allow_nan=False)
 
 
@@ -319,15 +336,16 @@ class MangaWorkflowInput:
         else:
             inputs = PROJECTS.inputs(folder_paths.get_input_directory(),input_folder)
             ident,client_id = _context(server,prompt,unique_id)
+            graph = _queued_prompt(server,ident)
             client = NativeComfyClient(server,folder_paths.get_input_directory(),folder_paths.get_output_directory(),unique_id,extra_pnginfo,client_id)
             client.parent_prompt_id = ident
-            previews = [key for key,node in prompt.items() if node['class_type']=='PreviewAny' and node['inputs'].get('source') == [str(unique_id),2]]
+            previews = [key for key,node in graph.items() if node['class_type']=='PreviewAny' and node['inputs'].get('source') == [str(unique_id),2]]
             def publish(value):
                 if client_id is None: return
                 for node in previews:
                     server.send_sync('executed',{'node':node,'display_node':node,'prompt_id':ident,
                                      'output':{'text':[_encode(value)]}},client_id)
-            report = PROJECTS.start(folder,inputs,prompt,client,action == '실패 재시도',publish)
+            report = PROJECTS.start(folder,inputs,graph,client,action == '실패 재시도',publish)
         return ExecutionBlocker(None),ExecutionBlocker(None),_encode(report)
 
 
