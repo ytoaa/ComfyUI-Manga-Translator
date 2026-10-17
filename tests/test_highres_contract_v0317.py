@@ -5,7 +5,7 @@ import sys
 
 import numpy as np
 
-from tests.test_project_runner import P
+from tests.test_project_runner import P, FakeComfy, Clock, graph, make_page
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location(
@@ -20,6 +20,7 @@ tiles = sys.modules[spec.name+'.inpaint_tiles']
 
 
 def test_page_region_raster_and_typography_budgets_are_separate():
+    assert limits.RESOURCE_CONTRACT_VERSION == P.RESOURCE_CONTRACT_VERSION
     assert limits.MAX_SOURCE_PIXELS == 64*1024*1024
     assert limits.MAX_REGION_PIXELS == 16*1024*1024
     assert limits.MAX_RASTER_PIXELS == 32*1024*1024
@@ -75,3 +76,36 @@ def test_cleanup_page_ceiling_follows_shared_source_policy(monkeypatch):
         assert '64 Mi-pixel source-page ceiling' in str(exc)
     else:
         raise AssertionError('cleanup planner ignored source-page ceiling')
+
+
+def test_existing_project_retries_precontract_16mp_runtime_failure_once(tmp_path):
+    source=tmp_path/'input/1.png'; make_page(source)
+    client=FakeComfy(); clock=Clock()
+    runner=P.Project(tmp_path/'input',tmp_path/'project',graph(),client,
+                     clock=clock.now,sleep=clock.sleep,page_timeout=3)
+    runner.run(plan_only=True)
+    page=runner.pages[0]
+    state=runner._new(page)
+    state.pop('resource_contract_version',None)  # persisted by the pre-v0.3.17 runtime
+    state.update(status='failed',reason='execution_failed',
+                 failure_message='Expected a finite RGB image in [0, 1], at most 16 Mi pixels')
+    runner._save(state)
+    assert runner.run()['counts']=={'completed':1}
+    assert len(client.submissions)==1
+    attempts=sorted(runner.destination.glob('pages/*/attempt-*/state.json'))
+    assert len(attempts)==2
+    assert P.read_json(attempts[-1])['resource_contract_version']==P.RESOURCE_CONTRACT_VERSION
+
+
+def test_current_contract_failure_is_not_implicitly_retried(tmp_path):
+    source=tmp_path/'input/1.png'; make_page(source)
+    client=FakeComfy(); clock=Clock()
+    runner=P.Project(tmp_path/'input',tmp_path/'project',graph(),client,
+                     clock=clock.now,sleep=clock.sleep,page_timeout=3)
+    runner.run(plan_only=True)
+    page=runner.pages[0]
+    state=runner._new(page)
+    state.update(status='failed',reason='execution_failed',failure_message='current failure')
+    runner._save(state)
+    assert runner.run()['counts']=={'failed':1}
+    assert not client.submissions
