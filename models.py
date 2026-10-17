@@ -594,7 +594,7 @@ class MangaOCRAdaptive:
                                     if recovery and 'chunks' in recovery else {})})
             texts.append(join_chunks(chunks))
         recovered_lines=sum(len(r['layout_recovery']['chunks'])-1 for r in records
-            if r.get('layout_recovery',{}).get('strategy') in ('verified_rows','verified_columns')
+            if r.get('layout_recovery',{}).get('strategy') in ('verified_rows','verified_columns','verified_multicolumn_rows')
             and 'chunks' in r['layout_recovery'])
         leaf_count=sum(len(r['layout_recovery']['chunks']) if 'chunks' in r.get('layout_recovery',{}) else 1
                        for r in records)

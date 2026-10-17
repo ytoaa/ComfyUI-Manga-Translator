@@ -130,6 +130,8 @@ class DetectorOracle:
         for fragment in P._window_detections(response,(x0,y0,x1,y1),1600,640,'detail'):
             if fragment['tile_provenance']['clipped_edges']:
                 for attempt in range(3): self.register_crop(P._recovery_window(fragment,1600,640,attempt))
+                compact=P._compact_recovery_window(fragment,1600,640)
+                if compact is not None:self.register_crop(compact)
         return response
 
 

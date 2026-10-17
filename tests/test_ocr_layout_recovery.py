@@ -171,3 +171,69 @@ def test_failure_report_distinguishes_disabled_recovery_from_no_safe_split(monke
     report=json.loads(next((tmp_path/'manga_translator/ocr_failures').glob('*.json')).read_text())
     assert report['layout_recovery']['strategy']==strategy
     assert report['runtime_settings']['line_split']==line_split
+
+
+def two_column_guide(bright=False):
+    # Structural fixture only: independent horizontal columns, textured paper,
+    # a dotted gutter rule and a section marker spanning two right-hand rows.
+    rng=np.random.default_rng(14)
+    pixels=np.clip(np.array([218,207,179])+rng.integers(-5,6,(203,580,1)),0,255).astype('uint8')
+    image=Image.fromarray(pixels);draw=ImageDraw.Draw(image)
+    for x0,ys in [(7,range(4,201,23)),(330,[4,27,50,73,96,142,165,188])]:
+        for y in ys:
+            for x in range(x0,x0+(245 if x0==7 else 235),15):
+                draw.rectangle((x,y,x+10,min(202,y+13)),outline=(20,20,20),width=2)
+                draw.line((x+5,y,x+5,min(202,y+13)),fill=(20,20,20),width=2)
+    for y in range(16,203,4):draw.line((294,y,294,y+1),fill=(90,90,90))
+    draw.rectangle((277,6,312,11),fill=(100,100,100))
+    draw.rectangle((277,144,311,178),fill=(100,100,100))
+    draw.text((288,151),'8',fill='white')
+    draw.line((579,0,579,202),fill=(40,40,40),width=1)
+    if bright:image=Image.fromarray(255-np.asarray(image))
+    return image
+
+
+@pytest.mark.parametrize('bright',[False,True])
+def test_columns_are_read_independently_and_gutter_marker_is_not_sliced(bright):
+    source=two_column_guide(bright)
+    assert len(M._ocr_line_images(source))==1
+    parts,report=P.recovery_parts(source)
+    assert report['strategy']=='verified_multicolumn_rows'
+    assert report['reading_order']=='columns_left_to_right_then_rows_top_to_bottom'
+    assert [c['rows'] for c in report['columns']]==[9,7]
+    assert len(parts)==16
+    actual=np.zeros_like(np.asarray(source));coverage=np.zeros((203,580),int)
+    for part,(a,b,c,d) in parts:
+        actual[b:d,a:c]=np.asarray(part);coverage[b:d,a:c]+=1
+        # Neither the section box nor an original glyph is intersected by cuts.
+        if a<=277<c:assert not 144<b<179 and not 144<d<179
+    assert (coverage==1).all() and np.array_equal(actual,np.asarray(source))
+    assert not P.recovery_parts(source,'vertical_rtl')[1]['strategy']=='verified_multicolumn_rows'
+
+
+def test_column_recovery_uses_original_pixels_and_bounded_validated_child_outputs(monkeypatch):
+    source=two_column_guide();monkeypatch.setattr(M,'pil_image',lambda _:source)
+    parts,expected_plan=P.recovery_parts(source)
+    expected=[f'独立正文第{i}行内容' for i in range(1,17)]
+    class Model:
+        calls=0
+        def ocr(self,image,options,max_patches):
+            self.calls+=1
+            if image.size==source.size:return {'text':'内内内内内内内内内内内内内内内'}
+            index=self.calls-3
+            assert image.tobytes()==parts[index][0].tobytes()
+            return {'text':expected[index]}
+    model=Model()
+    text,raw,previews=M.MangaOCRAdaptive().read(object(),model,base_patches=256,small_text_patches=512,
+        quality_guard=True,retry_on_layout_failure=True)
+    report=json.loads(raw)
+    assert text=='\n'.join(expected) and model.calls==18
+    assert report['line_count']==report['chunk_count']==len(previews)==16
+    assert report['recognition_work_items']==17
+    recovery=report['chunks'][0]['layout_recovery']
+    assert recovery['columns']==expected_plan['columns'] and len(recovery['chunks'])==16
+
+
+def test_one_column_with_indented_lines_is_not_promoted_to_multicolumn():
+    image=framed_paragraph();parts,report=P.recovery_parts(image)
+    assert parts and report['strategy']=='verified_rows'

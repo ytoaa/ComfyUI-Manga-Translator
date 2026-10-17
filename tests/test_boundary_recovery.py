@@ -85,7 +85,7 @@ def test_unrecovered_fragment_stops_instead_of_being_silently_discarded():
     model = Model()
     with pytest.raises(ValueError,match='unresolved clipped text'):
         P._recover_boundaries(Image.new('RGB',(1600,640)),model,{},[clipped()])
-    assert model.calls <= 3
+    assert model.calls <= 4
 
 
 def test_recovery_call_budget_is_enforced(monkeypatch):
@@ -301,10 +301,12 @@ def test_failure_logs_crop_results_and_coverage(caplog):
 def test_conflicting_outer_endpoints_in_new_partial_detections_are_not_certified():
     root=clipped(USER_FRAGMENT)
     expected_windows=[P._recovery_window(root,1600,640,n) for n in range(3)]
+    expected_windows.append(P._compact_recovery_window(root,1600,640))
     class Partials:
         calls=0
         def detect(self,image,_):
             x,y,right,bottom=expected_windows[self.calls]; self.calls+=1
+            if self.calls==4:return result(image.size,[])
             if self.calls==1:
                 # Right-clipped but it has an observed left endpoint.
                 box=[465-x,278-y,right-x,346-y]
@@ -348,3 +350,71 @@ def test_new_partial_from_recovery_completes_the_initial_fragment_chain():
     assert report['recovery_calls']==1 and report['recovered_regions']==0
     assert report['stitched_regions']==1 and len(trusted)==1
     assert trusted[0]['bbox'][2]==1486
+
+
+COVER_FRAGMENT=[40.27874755859375,339.40850830078125,225.,576.]
+
+
+@pytest.mark.parametrize('transpose',[False,True])
+def test_compact_cover_context_encloses_fragment_without_a_tall_narrow_strip(transpose):
+    root=clipped(COVER_FRAGMENT,('bottom',))
+    width,height=800,1125
+    if transpose:
+        root['bbox']=[COVER_FRAGMENT[i] for i in (1,0,3,2)]
+        root['tile_provenance']['clipped_edges']=['right']
+        width,height=height,width
+    window=P._compact_recovery_window(root,width,height)
+    a,b,c,d=root['bbox'];x,y,right,bottom=window
+    assert right-x==bottom-y==576
+    assert x<=a and y<=b and c<=right and d<=bottom
+    assert min(a-x,b-y,right-c,bottom-d)>=39
+    if not transpose:assert window==(0,169,576,745)
+
+
+def test_logged_cover_expanded_misses_get_one_compact_attempt_with_same_coverage_check():
+    root=clipped(COVER_FRAGMENT,('bottom',))
+    compact=P._compact_recovery_window(root,800,1125)
+    observed=[40,339,225,710]
+    class Model:
+        def __init__(self):self.calls=[]
+        def detect(self,image,_):
+            self.calls.append(image.size)
+            if len(self.calls)<=3:return result(image.size,[])
+            x,y,_,_=compact
+            return result(image.size,[item([observed[0]-x,observed[1]-y,observed[2]-x,observed[3]-y])])
+    model=Model()
+    trusted,report=P._recover_boundaries(Image.new('RGB',(800,1125)),model,{},[root])
+    assert report['windows'][:3]==[[0,275,289,1125],[0,211,353,1125],[0,83,481,1125]]
+    assert report['windows'][-1]==[0,169,576,745]
+    assert report['recovery_calls']==4 and report['attempts'][-1]['strategy']=='compact_context'
+    assert report['attempts'][-1]['coverage']==1. and trusted[0]['bbox']==observed
+
+
+def test_compact_context_still_rejects_partial_coverage_and_obeys_shared_budget(monkeypatch):
+    class Model:
+        calls=0
+        def detect(self,image,_):
+            self.calls+=1
+            return result(image.size,[])
+    for budget,expected in [(16,4),(3,3)]:
+        monkeypatch.setattr(P,'_MAX_RECOVERY_CALLS',budget)
+        model=Model()
+        with pytest.raises(ValueError,match='unresolved clipped text'):
+            P._recover_boundaries(Image.new('RGB',(800,1125)),model,{},[clipped(COVER_FRAGMENT,('bottom',))])
+        assert model.calls==expected
+
+
+def test_compact_retry_does_not_duplicate_an_existing_detail_or_full_window():
+    root=clipped(COVER_FRAGMENT,('bottom',))
+    window=P._compact_recovery_window(root,800,1125)
+    # A complete unrelated detection certifies that this input was already run.
+    other={**item([400,200,420,220]),'tile_provenance':{
+        'stage':'detail','window':list(window),'clipped_edges':[]}}
+    class Model:
+        calls=0
+        def detect(self,image,_):self.calls+=1;return result(image.size,[])
+    model=Model()
+    with pytest.raises(ValueError,match='unresolved clipped text'):
+        P._recover_boundaries(Image.new('RGB',(800,1125)),model,{},[root,other])
+    assert model.calls==3
+    assert P._compact_recovery_window(clipped((0,0,1300,40)),1600,640) is None

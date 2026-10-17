@@ -272,3 +272,18 @@ The cover attachment is an 800×1125 source image, but its actual model detectio
 The reported teacher failure still needs its existing JSON and corresponding input/source PNGs.
 No actual RF-DETR/Hayai/Qwen GPU execution or resolution of that 580×203 OCR failure is claimed.
 See [configuration and remaining evidence](docs/selection-bubble-diagnostics-v0.3.6.md).
+
+# v0.3.7 multicolumn OCR / compact boundary recovery — 2026-10-17
+
+Base: `976d681240257c783f82dfd3c8f8316e01b2a466`. Full CPU regression: **269 passed**.
+The actual 580×203 failure input and runtime JSON/log were supplied after v0.3.6.
+The input contains two horizontal prose columns, a dotted gutter rule and a boxed section marker.
+Direct pixel planning yields 9 left-column and 7 right-column crops; the marker merges two right-hand rows.
+All 117,740 source pixels have coverage exactly one and coordinate reconstruction is byte-identical.
+No supplied image or recognized private text is committed. Synthetic bright/dark textured fixtures check
+independent column reading, unsliced section markers, exact pixels and bounded validated child outputs.
+The reported cover fragment/window coordinates are reproduced with model doubles. Expanded misses can
+reach a single 576×576 compact context, while duplicate windows, work limits and unresolved rejection remain.
+The simulator registers the new input shape and continues to test that unresolved seams stop before model
+loading, OCR, translation, cleanup and saving. Existing workflow inputs/connections are unchanged.
+See [behavior, update and live verification limits](docs/column-compact-recovery-v0.3.7.md).

@@ -171,6 +171,23 @@ def _recovery_window(fragment, width, height, attempt):
             min(height, math.ceil(d+(dy if 'bottom' in edges else py))))
 
 
+def _compact_recovery_window(fragment, width, height):
+    """Move a detail-size window off the seam without stretching one axis.
+
+    Expanded context is still tried first. This alternative encloses the whole
+    observed fragment with padding, rather than extending a narrow strip to
+    the page end. Oversized fragments keep the existing wide-context policy.
+    """
+    a,b,c,d=fragment['bbox']
+    span=max(_DETECTOR_NATIVE_SIZE//2,math.ceil(c-a+128),math.ceil(d-b+128))
+    if span>_DETECTOR_NATIVE_SIZE:
+        return None
+    w,h=min(width,span),min(height,span)
+    x=max(0,min(width-w,math.floor((a+c-w)/2)))
+    y=max(0,min(height-h,math.floor((b+d-h)/2)))
+    return (x,y,x+w,y+h)
+
+
 def _recover_boundaries(image, model, thresholds, detections):
     width, height = image.size
     clipped = [item for item in detections
@@ -183,45 +200,63 @@ def _recover_boundaries(image, model, thresholds, detections):
     stitch_keys = {(item['label'],tuple(item['bbox'])) for item in stitched}
     calls, attempts, recovered, seen, raw_count = [], [], 0, set(), len(detections)
     budget_exhausted = False
-    for fragment in clipped:
-        if _covered(fragment, trusted, width, height):
-            continue
-        for attempt in range(3):
-            window = _recovery_window(fragment, width, height, attempt)
-            if window in seen:
-                continue
-            if len(calls) >= _MAX_RECOVERY_CALLS:
-                budget_exhausted = True
-                break
-            seen.add(window)
-            calls.append(list(window))
-            result = model.detect(image.crop(window), thresholds)
-            items = _window_detections(result, window, width, height, 'recovery')
-            raw_count += len(items)
-            if raw_count > _MAX_REGIONS:
-                raise ValueError('Detail detector produced too many regions during boundary recovery (limit=512)')
-            complete = [item for item in items if not item['tile_provenance']['clipped_edges']]
-            pool.extend(item for item in items if item['tile_provenance']['clipped_edges'])
-            trusted.extend(complete)
-            recovered += len(complete)
-            for item in _stitch_fragments(pool,width,height):
-                key = (item['label'],tuple(item['bbox']))
-                if key not in stitch_keys:
-                    trusted.append(item)
-                    stitch_keys.add(key)
-            diagnostic = {'fragment_bbox':fragment['bbox'],'fragment_label':fragment['label'],
+    def probe(fragment,window,strategy):
+        nonlocal budget_exhausted,raw_count,recovered
+        if window in seen:
+            return False
+        if len(calls)>=_MAX_RECOVERY_CALLS:
+            budget_exhausted=True
+            return False
+        seen.add(window)
+        calls.append(list(window))
+        result=model.detect(image.crop(window),thresholds)
+        items=_window_detections(result,window,width,height,'recovery')
+        raw_count+=len(items)
+        if raw_count>_MAX_REGIONS:
+            raise ValueError('Detail detector produced too many regions during boundary recovery (limit=512)')
+        complete=[item for item in items if not item['tile_provenance']['clipped_edges']]
+        pool.extend(item for item in items if item['tile_provenance']['clipped_edges'])
+        trusted.extend(complete)
+        recovered+=len(complete)
+        for item in _stitch_fragments(pool,width,height):
+            key=(item['label'],tuple(item['bbox']))
+            if key not in stitch_keys:
+                trusted.append(item)
+                stitch_keys.add(key)
+        diagnostic = {'fragment_bbox':fragment['bbox'],'fragment_label':fragment['label'],
                           'fragment_score':fragment['score'],'window':list(window),'complete_regions':len(complete),
+                          'strategy':strategy,
                           'clipped_regions':len(items)-len(complete),
                           'coverage':round(_coverage(fragment,trusted,width,height),4),
                           'detections':[{'bbox':item['bbox'],'label':item['label'],
                                          'edges':item['tile_provenance']['clipped_edges']} for item in items
                                         if item['label']==fragment['label']]}
-            attempts.append(diagnostic)
-            LOG.info('Manga boundary recovery: %s',json.dumps(diagnostic,ensure_ascii=False))
-            if _covered(fragment, trusted, width, height):
+        attempts.append(diagnostic)
+        LOG.info('Manga boundary recovery: %s',json.dumps(diagnostic,ensure_ascii=False))
+        return _covered(fragment,trusted,width,height)
+
+    for fragment in clipped:
+        if _covered(fragment, trusted, width, height):
+            continue
+        for attempt in range(3):
+            if probe(fragment,_recovery_window(fragment,width,height,attempt),'expanded_context'):
+                break
+            if budget_exhausted:
                 break
         if budget_exhausted:
             break
+    # Give every fragment its original context attempts before spending the
+    # same shared budget on a different crop shape. Never rerun an input that
+    # was already seen by detail/full inference or another recovery attempt.
+    prior_windows={tuple(item['tile_provenance']['window']) for item in detections
+                   if item.get('tile_provenance',{}).get('window')}
+    prior_windows.add((0,0,width,height))
+    for fragment in clipped:
+        if budget_exhausted or _covered(fragment,trusted,width,height):
+            continue
+        window=_compact_recovery_window(fragment,width,height)
+        if window is not None and window not in prior_windows:
+            probe(fragment,window,'compact_context')
     # A later fragment may yield a complete region covering an earlier failed
     # crop. Judge the collected evidence once the recovery pass is finished.
     unresolved = [fragment for fragment in clipped if not _covered(fragment,trusted,width,height)]

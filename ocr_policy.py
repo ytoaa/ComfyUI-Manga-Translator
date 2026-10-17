@@ -88,6 +88,103 @@ def join_chunks(texts):
     return output
 
 
+def _runs(active, min_gap=4):
+    indices=np.flatnonzero(active)
+    runs=[]
+    for group in np.split(indices,np.flatnonzero(np.diff(indices)>1)+1):
+        if not len(group):continue
+        a,b=int(group[0]),int(group[-1])+1
+        if runs and a-runs[-1][1]<min_gap:runs[-1][1]=b
+        else:runs.append([a,b])
+    return runs
+
+
+def _multicolumn_parts(image,detail,positive,negative):
+    """Verify horizontal text columns before making any row cuts.
+
+    Paper specks and narrow scanner-edge strips are ignored only in analysis.
+    A gutter needs actual empty columns between repeated, elongated text rows.
+    Auxiliary gutter content stays with the following text column. Its number
+    boxes can merge adjacent rows so that a section marker is never cut in two.
+    Recognition inputs partition all original pixels in column reading order.
+    """
+    width,height=image.size
+    if max(positive,negative)<24 or width<128 or height<48:
+        return [],None
+    foreground=(detail>24 if positive>negative*1.2 else detail < -24
+                if negative>positive*1.2 else np.abs(detail)>24)
+    labels,count=ndimage.label(foreground,structure=np.ones((3,3),bool))
+    if count>65536:
+        return [],None
+    sizes=np.bincount(labels.ravel(),minlength=count+1)
+    keep=sizes>=8;keep[0]=False
+    edge_candidates=[[],[]]
+    for index,slices in enumerate(ndimage.find_objects(labels),1):
+        y,x=slices
+        w,h=x.stop-x.start,y.stop-y.start
+        if (x.start==0 or x.stop==width) and w<=max(3,round(width*.01)) and h>=max(16,4*w):
+            edge_candidates[0 if x.start==0 else 1].append((index,y))
+            if h>=height*.25 and h>=10*w:
+                keep[index]=False
+    for candidates in edge_candidates:
+        support=np.zeros(height,bool)
+        for index,y in candidates:support[y]=True
+        if np.count_nonzero(support)>=height*.5:
+            for index,y in candidates:keep[index]=False
+    work=keep[labels]
+    gutters=[]
+    for a,b in _runs(work.sum(axis=0)<=2):
+        if b-a<max(8,round(height*.035)) or a<32 or b>width-32:
+            continue
+        clear=~work[:,a:b].any(axis=0)
+        safe=np.flatnonzero(clear & np.r_[clear[1:],False])
+        if len(safe):
+            gutters.append(a+int(safe[np.argmin(np.abs(safe-(b-a)/2))]))
+    if not 1<=len(gutters)<=7:
+        return [],None
+    edges=[0,*gutters,width]
+
+    def rows(a,b,verify=False):
+        region=work[:,a:b]
+        found=[(top,bottom) for top,bottom in _runs(region.any(axis=1)) if bottom-top>=8]
+        if not verify:return found
+        if b-a<64 or len(found)<3:return []
+        good=0
+        for top,bottom in found:
+            band=region[top:bottom]
+            if np.count_nonzero(band.any(axis=0))<3*(bottom-top):continue
+            values,n=ndimage.label(band,structure=np.ones((3,3),bool))
+            if np.count_nonzero(np.bincount(values.ravel(),minlength=n+1)[1:]>=4)>=3:good+=1
+        return found if good>=math.ceil(len(found)*.75) else []
+
+    bodies=[i for i,(a,b) in enumerate(zip(edges,edges[1:])) if rows(a,b,True)]
+    if len(bodies)<2 or sum(edges[i+1]-edges[i] for i in bodies)<width*.6:
+        return [],None
+    # Attach narrow auxiliary strips to the next body, preserving all their
+    # pixels. Use that full pane for row gaps: a marker crossing two physical
+    # lines prevents the cut and both lines are recognized together.
+    cuts=[0,*[edges[i+1] for i in bodies[:-1]],width]
+    boxes=[];columns=[]
+    for a,b in zip(cuts,cuts[1:]):
+        found=rows(a,b)
+        if not 2<=len(found)<=16:return [],None
+        active=work[:,a:b].any(axis=1)
+        row_cuts=[0]
+        for left,right in zip(found,found[1:]):
+            gap=np.arange(left[1],right[0])
+            clear=gap[~active[gap]]
+            if len(clear)<4:return [],None
+            row_cuts.append(int(clear[np.argmin(np.abs(clear-(left[1]+right[0])/2))]))
+        row_cuts.append(height)
+        boxes.extend([[a,top,b,bottom] for top,bottom in zip(row_cuts,row_cuts[1:])])
+        columns.append({'bbox':[a,0,b,height],'rows':len(found)})
+    if len(boxes)>16:return [],None
+    return [(image.crop(box),box) for box in boxes],{
+        'strategy':'verified_multicolumn_rows','separator':'\n',
+        'reading_order':'columns_left_to_right_then_rows_top_to_bottom',
+        'columns':columns,'contrast':24,'analysis_only_min_component_pixels':8}
+
+
 def recovery_parts(image, direction='auto'):
     """One alternative reading plan after output rejection, never a blind cut.
 
@@ -101,6 +198,9 @@ def recovery_parts(image, direction='auto'):
     gray=pixels @ np.array([.299,.587,.114],np.float32)
     detail=gray-ndimage.uniform_filter(gray,size=31,mode='reflect')
     positive,negative=float(np.percentile(detail,99)),-float(np.percentile(detail,1))
+    if direction in ('auto','horizontal'):
+        parts,report=_multicolumn_parts(image,detail,positive,negative)
+        if parts:return parts,report
     candidates=[]
     for threshold in (16,8):
         if max(positive,negative)<threshold:
