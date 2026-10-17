@@ -94,12 +94,12 @@ def test_punctuation_only_translation_and_lettering_preserve_exact_original(monk
     assert value['regions'][0]['target']=='・'*9 and value['translation_skipped']
     document,support=MangaLetterPrepare().prepare(tensor(picture),target)
     prepared=json.loads(document)
-    assert prepared['regions']==[] and len(prepared['preserved_punctuation'])==1
+    assert prepared['regions']==[] and len(prepared['source_preservation'])==1
     original=tensor(picture).numpy()[0];clean=np.ones_like(original)
     plan,_,report=hybrid.build_plan(original,clean,support.numpy()[0],document)
     output,alpha,render=hybrid.render_plan(plan)
     assert np.array_equal(output,original) and not alpha.any()
-    assert json.loads(render)['skip_reason']=='source_punctuation_preserved'
+    assert json.loads(render)['skip_reason']=='source_preserved'
     assert not json.loads(report)['needs_review']
     ordinary,alpha,_=core.render_page(original,clean,support.numpy()[0],document)
     assert np.array_equal(ordinary,original) and not alpha.any()
@@ -143,3 +143,24 @@ def test_normal_ocr_remains_available_when_quality_guard_is_off():
         def ocr(self,*args,**kwargs):self.calls+=1;return {'text':'MODEL OUTPUT'}
     model=Model();text,_,_=M.MangaOCRAdaptive().read(tensor(dots()),model,quality_guard=False)
     assert text=='MODEL OUTPUT' and model.calls==1
+
+
+def test_punctuation_is_excluded_before_cleanup_and_not_reported_as_an_empty_page(monkeypatch):
+    from dot_tests.page_edit import MangaPageEditPlan
+    from dot_tests.inpaint_tiles import make_plan,assemble
+    picture=dots();source=source_document(picture)
+    monkeypatch.setattr(N,'api_json',lambda *a,**k:pytest.fail('Unexpected punctuation translation'))
+    translated=N.MangaTranslate().translate(source,'unused','','Korean','',4096,300)[0]
+    raw=torch.from_numpy((np.asarray(picture).mean(axis=2)<128).astype(np.float32))[None]
+    doc,source_mask,cleanup_mask,_,_=MangaPageEditPlan().plan(tensor(picture),translated,raw,raw)
+    assert not source_mask.any() and not cleanup_mask.any()
+    original=tensor(picture).numpy()[0]
+    plan=make_plan(original,source_mask[0].numpy(),cleanup_mask[0].numpy(),regions_json=doc,recover_uniform_ink=True)
+    result,_=assemble(plan,[])
+    assert not plan['tiles'] and np.array_equal(result,original)
+    prepared,support=MangaLetterPrepare().prepare(tensor(picture),doc)
+    lettering,_,_=hybrid.build_plan(original,result,support[0].numpy(),prepared)
+    output,alpha,report=hybrid.render_plan(lettering)
+    assert np.array_equal(output,original) and not alpha.any()
+    assert json.loads(report)['skip_reason']=='source_preserved'
+    assert 'page_status' not in json.loads(report)

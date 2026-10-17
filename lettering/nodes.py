@@ -220,13 +220,12 @@ class MangaLetterPrepare:
     RETURN_NAMES = ('식자_영역_JSON', '원문_스타일_참조_마스크')
     FUNCTION = 'prepare'
     def prepare(self, original, translated_json, region_padding=12, region_options_json='{}', text_pixel_mask=None):
-        from ..nodes import layout, pixel_box, decode, verified_dot_text
+        from ..nodes import layout, decode
+        from .. import page_edit
         original_array = image(original)
         height, width = original_array.shape[:2]
         core.integer(region_padding, 0, 128, 'region_padding')
         data = layout(translated_json)
-        if len(data['regions']) > 64:
-            raise ValueError('Style lettering accepts at most 64 regions; split the page')
         for field_name, expected in (('image_width', width), ('image_height', height)):
             if field_name in data and data[field_name] != expected:
                 raise ValueError('Translation coordinates belong to a different page size')
@@ -234,20 +233,21 @@ class MangaLetterPrepare:
         ids = {row['id'] for row in data['regions']}
         if not isinstance(overrides, dict) or set(overrides)-ids:
             raise ValueError('Style overrides must be keyed only by existing region IDs')
+        if 'page_edit_plan' not in data:
+            data = page_edit.build(data,width,height,padding=region_padding)
+        edits = page_edit.validate(data,width,height)
         rows = []
         preserved=[]
         support = np.zeros((height, width), np.float32)
-        for row in data['regions']:
+        for row, decision in zip(data['regions'],edits['regions']):
             core.clean_text(row.get('target'))
-            bounds = row.get('edit_bbox_pixels', pixel_box(row['bbox'], width, height, region_padding))
-            if not isinstance(bounds, list) or len(bounds) != 4:
-                raise ValueError('Invalid edit_bbox_pixels')
+            bounds = decision['bbox_pixels']
             x0, y0, x1, y1 = bounds
-            bounds = list(core.bbox([x0, y0, x1-x0, y1-y0], original_array.shape))
-            punctuation=verified_dot_text(row)
-            if punctuation is not None and row['target']==punctuation:
-                preserved.append({'id':row['id'],'bbox':bounds,'text':punctuation,'count':len(punctuation)})
+            bounds = [x0, y0, x1-x0, y1-y0]
+            if decision['action']=='preserve':
+                preserved.append({'id':row['id'],'bbox':bounds,'reason':decision['reason']})
                 continue
+            bounds = list(core.bbox(bounds, original_array.shape))
             opts = overrides.get(row['id'], {})
             if not isinstance(opts, dict) or set(opts)-{'font', 'layout', 'style'}:
                 raise ValueError('Region options may contain only font, layout and style')
@@ -256,8 +256,15 @@ class MangaLetterPrepare:
             support[y:y+h, x:x+w] = 1
         if text_pixel_mask is not None:
             support *= core.mask_array(mask(text_pixel_mask), (height, width))
+        for i,(x0,y0,x1,y1) in enumerate(edits['unassigned_boxes_pixels']):
+            ident=f'unassigned_{i+1}'
+            while ident in ids: ident+='_'
+            ids.add(ident)
+            preserved.append({'id':ident,'bbox':[x0,y0,x1-x0,y1-y0],'reason':'unassigned_source_ink'})
         output = json.dumps({'schema': 1, 'coordinate_format': 'xywh', 'page_size': [width, height], 'regions': rows,
-                            **({'preserved_punctuation':preserved} if preserved else {}),
+                            **({'source_preservation':preserved} if preserved else {}),
+                            'edit_summary':{'replace_regions':len(rows),'preserve_regions':len(preserved)},
+                            **({'needs_review':True} if data.get('needs_review') else {}),
                             **({'boundary_review':data['boundary_review'],'needs_review':True}
                                if data.get('boundary_review') is not None else {})}, ensure_ascii=False)
         core.parse_regions(output, original_array.shape)

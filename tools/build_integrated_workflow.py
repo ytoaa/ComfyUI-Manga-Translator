@@ -11,6 +11,7 @@ def build():
     g = Graph()
     original = g.add('MangaWorkflowInput', {'image': ''}, (0, 50), '① 워크플로우 입력 · 이미지 한 장 / 폴더 프로젝트')
     g.nodes[original - 1]['size'] = [420, 560]
+    direction = g.add('MangaLetteringDirection', pos=(420, -200), title='번역문 방향 · 폴더 전체 가로 / 세로 통일')
     detector_model = g.import_model_node(template, 24, (0, 700))
     detector = g.add('MangaDetectorDetail', {'include_sfx': False, 'boundary_policy':'preserve_review'}, pos=(420, 50), title='② 전체+작은 타일 검출 · 미복구 영역 원본 보존·검수')
     g.connect(original, 0, detector, 'images')
@@ -37,13 +38,18 @@ def build():
     g.connect(collect, 0, source_save, 'translated_json')
     translate = g.add('MangaTranslate', pos=(2940, 50), title='⑥ 번역 · 영역 ID 유지')
     g.connect(source_save, 0, translate, 'ocr_json')
-    target_save = g.add('MangaSaveReview', {'filename_prefix': 'manga_translator/translation'}, (3360, 50), '번역 JSON 저장')
-    g.connect(translate, 0, target_save, 'translated_json')
+    edits = g.add('MangaPageEditPlan', pos=(3360, 50), title='⑥-2 페이지 편집 계획 · 교체 / 원본 보존')
+    g.connect(original, 0, edits, 'original')
+    g.connect(translate, 0, edits, 'translated_json')
+    g.connect(raw_mask, mask_slot, edits, 'source_mask')
+    g.connect(grown, 0, edits, 'cleanup_mask')
+    target_save = g.add('MangaSaveReview', {'filename_prefix': 'manga_translator/translation'}, (3780, 50), '번역·편집 계획 JSON 저장')
+    g.connect(edits, 0, target_save, 'translated_json')
     plan = g.add('MangaInpaintPlan', {'recover_uniform_ink': True}, pos=(1680, 650), title='⑦ 단색 잔상 보완 · 제거 타일 계획')
     g.connect(original, 0, plan, 'original')
-    g.connect(raw_mask, mask_slot, plan, 'source_mask')
-    g.connect(grown, 0, plan, 'cleanup_mask')
-    g.connect(crops, 1, plan, 'regions_json')
+    g.connect(edits, 1, plan, 'source_mask')
+    g.connect(edits, 2, plan, 'cleanup_mask')
+    g.connect(target_save, 0, plan, 'regions_json')
     tile_crop = g.add('ImageCrop', pos=(2100, 650), title='영역 자르기 · 기본 ImageCrop')
     g.connect(plan, 0, tile_crop, 'image')
     for field, slot in [('x', 1), ('y', 2), ('width', 3), ('height', 4)]:
@@ -76,6 +82,7 @@ def build():
     g.connect(prepare, 1, typography, 'source_mask')
     g.connect(prepare, 0, typography, 'regions_json')
     g.connect(detector, 0, typography, 'detection_result')
+    g.connect(direction, 0, typography, 'page_direction')
     lettering = g.add('MangaLetterApply', pos=(5460, 50), title='⑫ 방향별 식자 · 비례 스타일 · 충돌 검사')
     g.connect(typography, 0, lettering, 'plan')
     save = g.add('SaveImage', {'filename_prefix': 'manga_translator/integrated_tiles'}, (5880, 50), '⑬ 통합 결과 저장')
@@ -101,6 +108,11 @@ def build():
         g.nodes[preview - 1]['size'] = [400, 260]
         g.nodes[preview - 1]['properties']['cnr_id'] = 'comfy-core'
         g.connect(source, 0, preview, 'source')
+    edit_preview = g.add('PreviewImage', pos=(3360, -550), title='검수 · 초록 교체 / 빨강 원본 보존')
+    g.connect(edits, 3, edit_preview, 'images')
+    edit_report = g.add('PreviewAny', pos=(3780, 250), title='교체·보존 이유 · 미리보기 아무거나')
+    g.connect(edits, 4, edit_report, 'source')
+    g.note('입력 옆의 번역문 방향 노드: 가로 통일 / 세로 통일(오른쪽·왼쪽 열부터) / 원문 따라 자동.\n통일 설정은 모든 페이지와 영역별 direction보다 우선하며 OCR 읽기 방향은 바꾸지 않습니다.\n방향은 식자에만 연결되어 앞 단계의 캐시를 유지합니다.\n페이지 편집 계획의 region_actions_json 예: {"r1":"preserve"}.\n원본 보존·미배정 획과 겹치는 이웃은 함께 보존·검수합니다.\n제거와 식자는 저장된 같은 편집 명세를 사용합니다. 계획 뒤에 원문/번역/좌표를 수정하면 계획부터 다시 실행하세요.', (3780, -350))
     scope = g.add('PrimitiveBoolean', {'value': False}, pos=(0, 950), title='효과음·표지 큰 글자 포함 · 공통 스위치')
     g.nodes[scope - 1]['properties']['cnr_id'] = 'comfy-core'
     for node in (detector, regions, raw_mask):

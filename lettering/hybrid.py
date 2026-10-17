@@ -157,12 +157,15 @@ def _curve(layer,alpha,bend):
 def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-Bold.ttf',
                mode='source',direction='auto',min_font=10,min_scale=.55,padding=2,
                region_options_json='{}',bubble_mask=None,detection_result=None,line_breaks='preserve',
-               fit_policy='source_ratio',respect_bubbles=False):
+               fit_policy='source_ratio',respect_bubbles=False,page_direction=None):
     original,cleaned=core.rgb(original),core.rgb(cleaned)
     if original.shape!=cleaned.shape: raise ValueError('Original and cleaned dimensions differ')
     support=core.mask_array(source_mask,original.shape[:2])
     data=core.parse_regions(document,original.shape)
     if mode not in MODES or direction not in DIRECTIONS: raise ValueError('Invalid lettering mode/direction')
+    if page_direction is not None and page_direction not in DIRECTIONS:
+        raise ValueError('Invalid page lettering direction')
+    forced_direction=page_direction if page_direction not in (None,'auto') else None
     if line_breaks not in LINE_BREAKS: raise ValueError('Invalid line break policy')
     if fit_policy not in FIT_POLICIES: raise ValueError('Invalid lettering fit policy')
     if type(respect_bubbles) is not bool:raise ValueError('Invalid bubble containment switch')
@@ -179,18 +182,20 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
             raise ValueError('Invalid bubble detection response')
         if (detection_result.get('image_width'),detection_result.get('image_height'))!=(original.shape[1],original.shape[0]):
             raise ValueError('Bubble detections belong to a different page size')
-    plan={'version':1,'cleaned':cleaned.copy(),'regions':[]}
+    plan={'version':1,'cleaned':cleaned.copy(),'regions':[],
+          'page_direction':page_direction,'needs_review':bool(data.get('needs_review'))}
     protected=boundary_review.boxes(data,original.shape[1],original.shape[0])
     if detection_result is not None:
         detected=boundary_review.boxes(detection_result,original.shape[1],original.shape[0])
         if detected and protected != detected:
             raise ValueError('Boundary protection missing or changed in lettering document')
     boundary_review.restore(plan['cleaned'],original,protected)
-    punctuation=core.preserved_punctuation_boxes(data,original.shape)
-    boundary_review.restore(plan['cleaned'],original,punctuation)
+    preserved=core.source_preservation_boxes(data,original.shape)
+    boundary_review.restore(plan['cleaned'],original,preserved)
     plan['boundary_review_required']=bool(protected)
-    plan['protected_boxes_pixels']=protected+punctuation
+    plan['protected_boxes_pixels']=protected+preserved
     plan['preserved_punctuation']=data.get('preserved_punctuation',[])
+    plan['source_preservation']=data.get('source_preservation',[])
     # Prepare masks once, rather than decoding every detection for every text.
     bubble_items=(bubble_constraints.candidates(bubble_mask,detection_result,original.shape)
                   if respect_bubbles or any(v.get('respect_bubbles') or v.get('require_bubble')
@@ -211,9 +216,10 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         style=core.adjust_style(style,**item.get('style',{}))
         layout=dict(item.get('layout',{}))
         # Old JSON controls remain usable; all values are validated by the renderer.
-        supplied_direction=opts.get('direction',layout.pop('direction',direction))
+        supplied_direction=opts.get('direction',layout.pop('direction',page_direction or direction))
         if supplied_direction not in DIRECTIONS: raise ValueError(f'{ident}: invalid direction')
-        actual_direction=measured['direction'] if supplied_direction=='auto' else supplied_direction
+        actual_direction=(forced_direction or
+                          (measured['direction'] if supplied_direction=='auto' else supplied_direction))
         cap=opts.get('font_cap',layout.pop('max_font',measured['font_cap']))
         core.integer(cap,4,512,'font_cap')
         ratio=opts.get('min_scale',min_scale);core.finite(ratio,.2,1,'min_scale')
@@ -231,7 +237,10 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         breaks=opts.get('line_breaks',line_breaks)
         if breaks not in LINE_BREAKS: raise ValueError(f'{ident}: invalid line break policy')
         flow=breaks=='reflow' and actual_direction=='horizontal' and selected_mode!='strict'
-        rendered_text=reflow_text(item['text']) if flow else item['text']
+        # Model-generated source line breaks must not become short columns when
+        # the user asks for uniform vertical output. Explicit preserve stays hard.
+        reflow=flow or (forced_direction is not None and breaks=='reflow' and selected_mode!='strict')
+        rendered_text=reflow_text(item['text']) if reflow else item['text']
         source=list(item['bbox'])
         bounds=source
         pad=opts.get('padding',layout.pop('padding',padding));core.integer(pad,0,32,'padding')
@@ -262,8 +271,8 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         original_lines=min(64,measured['line_count'])
         forced_lines=opts.get('max_lines',render_options.pop('max_lines',0))
         core.integer(forced_lines,0,64,'max_lines')
-        phases=[(source,forced_lines or (0 if flow else original_lines),'source-flow' if flow else 'source-lines')]
-        if selected_mode!='strict' and not forced_lines and not flow: phases.append((source,0,'reflow'))
+        phases=[(source,forced_lines or (0 if reflow else original_lines),'source-flow' if reflow else 'source-lines')]
+        if selected_mode!='strict' and not forced_lines and not reflow: phases.append((source,0,'reflow'))
         if bubble and bubble!=source: phases.append((bubble,forced_lines,'bubble'))
         if guard and guard['rectangle']!=source:
             phases.append((guard['rectangle'],forced_lines or (original_lines if selected_mode=='strict' else 0),
@@ -290,17 +299,19 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
                         'font_cap':cap,'min_font':floor,'mode':selected_mode,'font_fallback':font_fallback,
                         'fallback_min_font':fallback_floor,'fit_policy':policy,
                         'bubble_containment':guard_report,
-                        'direction':actual_direction,'line_breaks':breaks,'soft_wraps_reflowed':flow,
+                        'direction':actual_direction,'line_breaks':breaks,'soft_wraps_reflowed':reflow,
                         'warning':warning})
-    for a,b,c,d in punctuation:
+    for a,b,c,d in preserved:
         draw.rectangle((a,b,c-1,d-1),outline=(80,160,255),width=2)
     for a,b,c,d in protected:
         draw.rectangle((a,b,c-1,d-1),outline=(255,60,80),width=3)
-    report={'schema':1,'regions':reports,'preview':'orange=source frame; cyan=expanded bubble frame; green=safe bubble interior; red=preserved boundary review; blue=original dot punctuation',
-            'protected_boxes_pixels':protected,'needs_review':bool(protected),
+    report={'schema':1,'regions':reports,'preview':'orange=source frame; cyan=expanded bubble frame; green=safe bubble interior; red=preserved boundary review; blue=preserved source',
+            'protected_boxes_pixels':protected,'needs_review':bool(protected) or plan['needs_review'],
+            'page_direction':page_direction,
             'preserved_punctuation':plan['preserved_punctuation'],
-            **({'page_status':'no_text_detected','lettering_skipped':True} if not reports and not punctuation else {}),
-            **({'lettering_skipped':True,'skip_reason':'source_punctuation_preserved'} if not reports and punctuation else {}),
+            'source_preservation':plan['source_preservation'],
+            **({'page_status':'no_text_detected','lettering_skipped':True} if not reports and not preserved else {}),
+            **({'lettering_skipped':True,'skip_reason':'source_preserved'} if not reports and preserved else {}),
             'font_identity':'selected font; source size/direction/alignment are measured estimates',
             'curves':'manual bend only; no automatic curve reconstruction'}
     return plan,np.asarray(preview,np.float32)/255,json.dumps(report,ensure_ascii=False,indent=2)
@@ -376,9 +387,11 @@ def render_plan(plan):
                         'original_text':region['original_text'],'line_breaks':region['line_breaks'],
                         'outline_width':style['outline_width'],'bend':region['bend'],'warning':region['warning']})
     return result,page_alpha,json.dumps({'schema':1,'regions':reports,
-        'protected_boxes_pixels':protected,'needs_review':plan.get('boundary_review_required',bool(protected)),
+        'protected_boxes_pixels':protected,'needs_review':plan.get('boundary_review_required',bool(protected)) or plan.get('needs_review',False),
+        'page_direction':plan.get('page_direction'),
         'preserved_punctuation':plan.get('preserved_punctuation',[]),
-        **({'page_status':'no_text_detected','lettering_skipped':True} if not reports and not plan.get('preserved_punctuation') else {}),
-        **({'lettering_skipped':True,'skip_reason':'source_punctuation_preserved'} if not reports and plan.get('preserved_punctuation') else {}),
+        'source_preservation':plan.get('source_preservation',[]),
+        **({'page_status':'no_text_detected','lettering_skipped':True} if not reports and not (plan.get('source_preservation') or plan.get('preserved_punctuation')) else {}),
+        **({'lettering_skipped':True,'skip_reason':'source_preserved'} if not reports and (plan.get('source_preservation') or plan.get('preserved_punctuation')) else {}),
         'quality_scope':'geometry/style approximation; OCR, translation and GPU cleanup require separate review'},
         ensure_ascii=False,indent=2)

@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
 from ..limits import (MAX_SOURCE_PIXELS, MAX_REGION_PIXELS, MAX_RASTER_PIXELS,
-                      MAX_TYPOGRAPHY_PIXELS)
+                      MAX_TYPOGRAPHY_PIXELS, MAX_LETTERING_REGIONS)
 
 # Backward-compatible name used by older tests/extensions.  Page acceptance is
 # deliberately distinct from region/raster budgets below.
@@ -516,7 +516,7 @@ def parse_regions(document, shape):
     if data.get('page_size') != [shape[1], shape[0]]:
         raise ValueError('Regions page_size does not match input; restore original coordinates first')
     regions = data.get('regions')
-    if not isinstance(regions, list) or not 0 <= len(regions) <= 64:
+    if not isinstance(regions, list) or not 0 <= len(regions) <= MAX_LETTERING_REGIONS:
         raise ValueError('Expected 0–64 translated regions')
     ids = set()
     for item in regions:
@@ -551,6 +551,31 @@ def preserved_punctuation_boxes(data,shape):
     return output
 
 
+def source_preservation_boxes(data,shape):
+    # Previously saved prepared documents are read at this one boundary. New
+    # processing uses generic edit decisions rather than punctuation flags.
+    if 'source_preservation' not in data:
+        return preserved_punctuation_boxes(data,shape)
+    values=data['source_preservation']
+    if not isinstance(values,list) or len(values)>1024:
+        raise ValueError('Invalid source preservation list')
+    output=[];ids=set()
+    active={row['id'] for row in data['regions']}
+    for row in values:
+        if (not isinstance(row,dict) or not isinstance(row.get('id'),str) or not row['id']
+                or row['id'] in ids or row['id'] in active or not isinstance(row.get('reason'),str)):
+            raise ValueError('Invalid source preservation region')
+        ids.add(row['id'])
+        box=row.get('bbox')
+        if not isinstance(box,list) or len(box)!=4:
+            raise ValueError('Invalid source preservation bounds')
+        x,y,w,h=box
+        integer(x,0,shape[1]-1,'preserved x');integer(y,0,shape[0]-1,'preserved y')
+        integer(w,1,shape[1]-x,'preserved width');integer(h,1,shape[0]-y,'preserved height')
+        output.append([x,y,x+w,y+h])
+    return output
+
+
 def render_page(original, cleaned, source_mask, document, default_font='NanumGothic-Bold.ttf',
                 texture_strength=1.):
     original, cleaned = rgb(original), rgb(cleaned)
@@ -561,7 +586,7 @@ def render_page(original, cleaned, source_mask, document, default_font='NanumGot
     result = cleaned.copy()
     page_alpha = np.zeros(cleaned.shape[:2], np.float32)
     reports = []
-    preserved=preserved_punctuation_boxes(data,original.shape)
+    preserved=source_preservation_boxes(data,original.shape)
     for a,b,c,d in preserved:result[b:d,a:c]=original[b:d,a:c]
     # All references come from original/cleaned snapshots, never the cumulative result.
     for item in data['regions']:
@@ -574,9 +599,10 @@ def render_page(original, cleaned, source_mask, document, default_font='NanumGot
         page_alpha = changed + page_alpha*(1-changed)
         reports.append({'id': item['id'], 'analysis': json.loads(measured), 'render': json.loads(report)})
     for a,b,c,d in preserved:
-        if page_alpha[b:d,a:c].any():raise ValueError('Lettering overlaps preserved source punctuation')
+        if page_alpha[b:d,a:c].any():raise ValueError('Lettering overlaps preserved source')
     return result, page_alpha, json.dumps({'schema': 1, 'regions': reports,
         'preserved_punctuation':data.get('preserved_punctuation',[]),
+        'source_preservation':data.get('source_preservation',[]),
         'style_method': 'measured colors/outline/pigment + selected font; no trained style-transfer model'}, ensure_ascii=False, indent=2)
 
 

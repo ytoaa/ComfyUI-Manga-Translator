@@ -25,7 +25,7 @@ from PIL import Image, ImageChops, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
 if __package__:
-    from .. import boundary_review
+    from .. import boundary_review, page_edit
     from ..limits import (RESOURCE_CONTRACT_VERSION, LEGACY_PAGE_PIXELS,
                           MAX_SOURCE_PIXELS, MAX_INPUT_BYTES)
 else:
@@ -34,6 +34,7 @@ else:
     from limits import (RESOURCE_CONTRACT_VERSION, LEGACY_PAGE_PIXELS,
                         MAX_SOURCE_PIXELS, MAX_INPUT_BYTES)
     import boundary_review
+    import page_edit
 
 DEFAULT_WORKFLOW = ROOT/'lettering/example_workflows/08-integrated-tiled-cleanup-lettering.api.json'
 EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tif', '.tiff', '.gif'}
@@ -231,9 +232,19 @@ def workflow_bindings(graph):
     single('MangaDetectorDetail')  # Require detector-backed selection for automatic folder pages.
     single('MangaRegionCrops')
     collect, translate = single('MangaCollectOCR'), single('MangaTranslate')
-    saves = [key for key, node in graph.items() if node['class_type'] == 'MangaSaveReview']
-    source = next((key for key in saves if graph[key]['inputs'].get('translated_json') == [collect, 0]), None)
-    target = next((key for key in saves if graph[key]['inputs'].get('translated_json') == [translate, 0]), None)
+    # Bind durable artifacts at their semantic consumers. An edit planner may
+    # live between translation and its save without changing artifact ownership.
+    def review_input(consumer, field):
+        link=graph[consumer]['inputs'].get(field)
+        if (not isinstance(link,list) or len(link)!=2 or link[1]!=0
+                or not isinstance(link[0],str) or link[0] not in graph
+                or graph[link[0]]['class_type']!='MangaSaveReview'):
+            raise ProjectError('Connect saved OCR/translation JSON to its translation/lettering consumer')
+        return link[0]
+    source=review_input(translate,'ocr_json')
+    target=review_input(single('MangaLetterPrepare'),'translated_json')
+    if source==target or graph[source]['inputs'].get('translated_json')!=[collect,0]:
+        raise ProjectError('OCR and translation need distinct review artifacts')
     def preview(saved):
         matches = [key for key, node in graph.items() if node['class_type'] == 'PreviewAny'
                    and node['inputs'].get('source') == [saved, 0]]
@@ -671,15 +682,21 @@ class Project:
                 if list(picture.size) != state['image_size'] or picture.format != 'PNG' or picture.mode != 'RGB':
                     raise ProtocolError('Final image size/format differs from submitted page')
                 picture.load()
-                protected=boundary_review.boxes(source,*picture.size)
-                if protected:
+                boundary_protected=boundary_review.boxes(source,*picture.size)
+                protected=boundary_protected
+                edits=None
+                if 'page_edit_plan' in target:
+                    edits=page_edit.validate(target,*picture.size)
+                    protected=edits['protected_boxes_pixels']
+                if boundary_protected:
                     if source.get('boundary_review') != target.get('boundary_review'):
                         raise ProtocolError('Translation changed boundary protection metadata')
+                if protected:
                     with Image.open(self._attempt_dir(state)/'input.png') as prepared:
                         reference=prepared.convert('RGB')
                         for box in protected:
                             if ImageChops.difference(picture.crop(box),reference.crop(box)).getbbox():
-                                raise ProtocolError('Final image changed preserved boundary pixels')
+                                raise ProtocolError('Final image changed preserved source pixels')
                 if not source['regions']:
                     if (source.get('page_status') != 'no_text_detected' or source.get('ocr_skipped') is not True
                             or target.get('translation_skipped') is not True):
@@ -695,9 +712,11 @@ class Project:
             state['status'] = 'unchanged_blank' if state['uniform_rgb'] and not source.get('needs_review') and not source.get('no_text_reason') else 'needs_review'
             state['reason'] = 'uniform_rgb_pixels' if state['status'] == 'unchanged_blank' else source.get('no_text_reason','no_text_detected_not_verified_blank')
         else:
-            state['status'] = 'needs_review' if source.get('needs_review') or source.get('boundary_review') else 'completed'
-        if protected:
+            state['status'] = 'needs_review' if source.get('needs_review') or source.get('boundary_review') or target.get('needs_review') else 'completed'
+        if boundary_protected:
             state.update(status='needs_review',reason='unresolved_detection_boundary')
+        elif edits is not None and edits.get('needs_review'):
+            state.update(status='needs_review',reason=target.get('review_reason','source_edit_plan_requires_review'))
         self._save(state)
 
     def _resume(self, state):

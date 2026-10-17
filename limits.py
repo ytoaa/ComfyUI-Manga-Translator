@@ -23,3 +23,4 @@ MAX_RASTER_PIXELS = 32 * 1024 * 1024
 # Sum of candidate typography rectangles prepared for one page.  This bounds
 # repeated search work while allowing several large high-DPI text blocks.
 MAX_TYPOGRAPHY_PIXELS = 32 * 1024 * 1024
+MAX_LETTERING_REGIONS = 64

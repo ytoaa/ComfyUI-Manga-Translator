@@ -37,3 +37,11 @@ __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS', 'WEB_DIRECTORY']
 
 from .workflow_native import register_routes
 register_routes()
+
+from .page_edit import MangaPageEditPlan
+NODE_CLASS_MAPPINGS['MangaPageEditPlan'] = MangaPageEditPlan
+NODE_DISPLAY_NAME_MAPPINGS['MangaPageEditPlan'] = '페이지 편집 계획 · 교체 / 원본 보존'
+
+from .lettering.direction import MangaLetteringDirection
+NODE_CLASS_MAPPINGS['MangaLetteringDirection'] = MangaLetteringDirection
+NODE_DISPLAY_NAME_MAPPINGS['MangaLetteringDirection'] = '번역문 방향 · 가로 / 세로 통일'

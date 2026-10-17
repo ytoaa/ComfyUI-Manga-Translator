@@ -213,7 +213,7 @@ def test_project_checks_actual_preserved_pixels_and_marks_review(tmp_path,change
     inputs=tmp_path/'input';T.make_page(inputs/'page.png',blank=empty)
     project=T.P.Project(inputs,tmp_path/'project',T.graph(),Client(['no_text'] if empty else []),poll_interval=.001)
     if change_pixels or change_metadata:
-        with pytest.raises(T.P.ProtocolError,match='boundary'):
+        with pytest.raises(T.P.ProtocolError,match='boundary|preserved source'):
             project.run()
         assert project.state(project.pages[0])['status']=='collecting'
     else:

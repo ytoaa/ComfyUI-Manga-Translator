@@ -117,7 +117,15 @@ def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, m
         raise ValueError('Cleanup input contains nonfinite pixels')
     pending = cleanup_mask > .5
     raw = source_mask > .5
-    protected = boundary_review.boxes(json.loads(regions_json),width,height) if regions_json is not None else []
+    document = json.loads(regions_json) if regions_json is not None else None
+    edit_plan = None
+    if document is not None and 'page_edit_plan' in document:
+        from . import page_edit
+        edit_plan = page_edit.validate(document,width,height)
+        raw,pending = page_edit.masks(document,raw,pending)
+        document = page_edit.cleanup_document(document,width,height)
+    protected = (edit_plan['protected_boxes_pixels'] if edit_plan is not None else
+                 boundary_review.boxes(document,width,height) if document is not None else [])
     boundary_review.clear(raw,protected)
     boundary_review.clear(pending,protected)
     if np.any(raw & ~pending):
@@ -127,6 +135,7 @@ def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, m
     if not raw.any() and not pending.any():
         plan=_empty_plan(original,raw,pending,cleanup_mask,tile_size,context)
         plan['report']['protected_boxes_pixels']=protected
+        if edit_plan is not None: plan['report']['page_edit_plan']=edit_plan
         return plan
     base = original.copy()
     permitted=pending.copy()
@@ -134,7 +143,7 @@ def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, m
     if recover_uniform_ink and uniform_fill:
         if regions_json is None:
             raise ValueError('Connect text regions before recovering uniform-background ink')
-        base,raw,pending,permitted,recovery=_recover_uniform_regions(original,raw,pending,regions_json)
+        base,raw,pending,permitted,recovery=_recover_uniform_regions(original,raw,pending,json.dumps(document))
         boundary_review.restore(base,original,protected)
         for value in (raw,pending,permitted): boundary_review.clear(value,protected)
     labels, count = ndimage.label(pending, structure=np.ones((3, 3), bool))
@@ -213,6 +222,7 @@ def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, m
         raise ValueError('Cleanup tile ownership does not cover the pending mask exactly once')
     report = {'schema': 1, 'method': 'bounded_mask_tiles', 'page_size': [width, height],
               'protected_boxes_pixels':protected,
+              **({'page_edit_plan':edit_plan} if edit_plan is not None else {}),
               **({'cleanup_skipped':True,'skip_reason':'empty_masks'}
                  if not raw.any() and not permitted.any() else {}),
               'tile_core': tile_size, 'context': context, 'tile_count': len(tiles),

@@ -10,12 +10,18 @@
     }
   },
   "2": {
+    "class_type": "MangaLetteringDirection",
+    "inputs": {
+      "lettering_direction": "가로 통일"
+    }
+  },
+  "3": {
     "class_type": "MangaDetectorLoader",
     "inputs": {
       "model_name": "koharu-layout-rfdetr-seg-2xl-1152"
     }
   },
-  "3": {
+  "4": {
     "class_type": "MangaDetectorDetail",
     "inputs": {
       "text": 0.25,
@@ -25,7 +31,7 @@
       "detail_mode": "auto",
       "detail_overlap": 64,
       "include_sfx": [
-        "41",
+        "46",
         0
       ],
       "boundary_policy": "preserve_review",
@@ -34,56 +40,56 @@
         0
       ],
       "model": [
-        "2",
-        0
-      ]
-    }
-  },
-  "4": {
-    "class_type": "MangaDetectionRegions",
-    "inputs": {
-      "include_sfx": [
-        "41",
-        0
-      ],
-      "dedupe_iou": 0.75,
-      "reading_order": "top_to_bottom",
-      "merge_adjacent_lines": true,
-      "result": [
         "3",
         0
       ]
     }
   },
   "5": {
-    "class_type": "MangaDetectionMask",
+    "class_type": "MangaDetectionRegions",
     "inputs": {
       "include_sfx": [
-        "41",
+        "46",
         0
       ],
+      "dedupe_iou": 0.75,
+      "reading_order": "top_to_bottom",
+      "merge_adjacent_lines": true,
       "result": [
-        "3",
+        "4",
         0
       ]
     }
   },
   "6": {
-    "class_type": "GrowMask",
+    "class_type": "MangaDetectionMask",
     "inputs": {
-      "expand": 8,
-      "tapered_corners": true,
-      "mask": [
-        "5",
+      "include_sfx": [
+        "46",
+        0
+      ],
+      "result": [
+        "4",
         0
       ]
     }
   },
   "7": {
+    "class_type": "GrowMask",
+    "inputs": {
+      "expand": 8,
+      "tapered_corners": true,
+      "mask": [
+        "6",
+        0
+      ]
+    }
+  },
+  "8": {
     "class_type": "MangaRegionCrops",
     "inputs": {
       "layout_json": [
-        "4",
+        "5",
         0
       ],
       "ocr_padding": 4,
@@ -96,13 +102,13 @@
       ]
     }
   },
-  "8": {
+  "9": {
     "class_type": "MangaOCRLoader",
     "inputs": {
       "model_name": "hayai-ocr-v2"
     }
   },
-  "9": {
+  "10": {
     "class_type": "MangaOCRAdaptive",
     "inputs": {
       "max_new_tokens": 256,
@@ -119,41 +125,41 @@
       "retry_on_token_limit": true,
       "retry_on_layout_failure": true,
       "images": [
-        "7",
-        0
-      ],
-      "model": [
         "8",
         0
       ],
+      "model": [
+        "9",
+        0
+      ],
       "manifest_json": [
-        "7",
+        "8",
         1
       ],
       "region_plan_json": [
-        "7",
+        "8",
         3
       ]
     }
   },
-  "10": {
+  "11": {
     "class_type": "MangaCollectOCR",
     "inputs": {
       "text": [
-        "9",
+        "10",
         0
       ],
       "manifest_json": [
-        "7",
+        "8",
         1
       ],
       "ocr_report_json": [
-        "9",
+        "10",
         1
       ]
     }
   },
-  "11": {
+  "12": {
     "class_type": "MangaSaveReview",
     "inputs": {
       "filename_prefix": [
@@ -161,12 +167,12 @@
         4
       ],
       "translated_json": [
-        "10",
+        "11",
         0
       ]
     }
   },
-  "12": {
+  "13": {
     "class_type": "MangaTranslate",
     "inputs": {
       "base_url": "http://127.0.0.1:8000/v1",
@@ -177,12 +183,34 @@
       "timeout": 300,
       "translated_override_json": "",
       "ocr_json": [
-        "11",
+        "12",
         0
       ]
     }
   },
-  "13": {
+  "14": {
+    "class_type": "MangaPageEditPlan",
+    "inputs": {
+      "region_actions_json": "{}",
+      "original": [
+        "1",
+        0
+      ],
+      "translated_json": [
+        "13",
+        0
+      ],
+      "source_mask": [
+        "6",
+        0
+      ],
+      "cleanup_mask": [
+        "7",
+        0
+      ]
+    }
+  },
+  "15": {
     "class_type": "MangaSaveReview",
     "inputs": {
       "filename_prefix": [
@@ -190,12 +218,12 @@
         5
       ],
       "translated_json": [
-        "12",
+        "14",
         0
       ]
     }
   },
-  "14": {
+  "16": {
     "class_type": "MangaInpaintPlan",
     "inputs": {
       "tile_size": 512,
@@ -208,52 +236,52 @@
         0
       ],
       "source_mask": [
-        "5",
-        0
+        "14",
+        1
       ],
       "cleanup_mask": [
-        "6",
-        0
-      ],
-      "regions_json": [
-        "7",
-        1
-      ]
-    }
-  },
-  "15": {
-    "class_type": "ImageCrop",
-    "inputs": {
-      "width": [
-        "14",
-        3
-      ],
-      "height": [
-        "14",
-        4
-      ],
-      "x": [
-        "14",
-        1
-      ],
-      "y": [
         "14",
         2
       ],
-      "image": [
-        "14",
+      "regions_json": [
+        "15",
         0
       ]
     }
   },
-  "16": {
+  "17": {
+    "class_type": "ImageCrop",
+    "inputs": {
+      "width": [
+        "16",
+        3
+      ],
+      "height": [
+        "16",
+        4
+      ],
+      "x": [
+        "16",
+        1
+      ],
+      "y": [
+        "16",
+        2
+      ],
+      "image": [
+        "16",
+        0
+      ]
+    }
+  },
+  "18": {
     "class_type": "UNETLoader",
     "inputs": {
       "unet_name": "qwen_image_2.1_turbo_int8_convrot.safetensors",
       "weight_dtype": "default"
     }
   },
-  "17": {
+  "19": {
     "class_type": "CLIPLoader",
     "inputs": {
       "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
@@ -261,154 +289,154 @@
       "device": "default"
     }
   },
-  "18": {
+  "20": {
     "class_type": "VAELoader",
     "inputs": {
       "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
     }
   },
-  "19": {
+  "21": {
     "class_type": "TextEncodeQwenImage21",
     "inputs": {
       "prompt": "Remove all visible text and lettering from <image1>, including titles, names, small captions, labels, and every line of fine print. Completely erase lettering and text remnants. Reconstruct the background beneath the removed text to match the surrounding color, shading, and texture. Preserve gray panels, speech bubble outlines, illustrations, and layout.",
       "negative_prompt": "",
       "resolution": 0,
       "clip": [
-        "17",
+        "19",
         0
       ],
       "vae": [
-        "18",
+        "20",
         0
       ],
       "images.image_1": [
-        "15",
+        "17",
         0
       ]
     }
   },
-  "20": {
+  "22": {
     "class_type": "QwenImage21Cache",
     "inputs": {
       "device": "gpu",
       "dtype": "default",
       "model": [
-        "16",
+        "18",
         0
       ]
     }
   },
-  "21": {
+  "23": {
     "class_type": "KSamplerSelect",
     "inputs": {
       "sampler_name": "euler"
     }
   },
-  "22": {
+  "24": {
     "class_type": "ManualSigmas",
     "inputs": {
       "sigmas": "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0.0"
     }
   },
-  "23": {
+  "25": {
     "class_type": "SamplerCustom",
     "inputs": {
       "add_noise": true,
       "noise_seed": 0,
       "cfg": 1,
       "model": [
-        "20",
-        0
-      ],
-      "positive": [
-        "19",
-        0
-      ],
-      "negative": [
-        "19",
-        1
-      ],
-      "sampler": [
-        "21",
-        0
-      ],
-      "sigmas": [
         "22",
         0
       ],
+      "positive": [
+        "21",
+        0
+      ],
+      "negative": [
+        "21",
+        1
+      ],
+      "sampler": [
+        "23",
+        0
+      ],
+      "sigmas": [
+        "24",
+        0
+      ],
       "latent_image": [
-        "19",
+        "21",
         2
       ]
     }
   },
-  "24": {
+  "26": {
     "class_type": "VAEDecode",
     "inputs": {
       "samples": [
-        "23",
-        0
-      ],
-      "vae": [
-        "18",
-        0
-      ]
-    }
-  },
-  "25": {
-    "class_type": "ImageScale",
-    "inputs": {
-      "upscale_method": "lanczos",
-      "width": [
-        "14",
-        3
-      ],
-      "height": [
-        "14",
-        4
-      ],
-      "crop": "disabled",
-      "image": [
-        "24",
-        0
-      ]
-    }
-  },
-  "26": {
-    "class_type": "ImageCompositeMasked",
-    "inputs": {
-      "x": 0,
-      "y": 0,
-      "resize_source": false,
-      "destination": [
-        "15",
-        0
-      ],
-      "source": [
         "25",
         0
       ],
-      "mask": [
-        "14",
-        5
+      "vae": [
+        "20",
+        0
       ]
     }
   },
   "27": {
-    "class_type": "MangaInpaintAssemble",
+    "class_type": "ImageScale",
     "inputs": {
-      "strict_cleanup": true,
-      "plan": [
-        "14",
-        6
+      "upscale_method": "lanczos",
+      "width": [
+        "16",
+        3
       ],
-      "generated": [
+      "height": [
+        "16",
+        4
+      ],
+      "crop": "disabled",
+      "image": [
         "26",
         0
       ]
     }
   },
   "28": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "destination": [
+        "17",
+        0
+      ],
+      "source": [
+        "27",
+        0
+      ],
+      "mask": [
+        "16",
+        5
+      ]
+    }
+  },
+  "29": {
+    "class_type": "MangaInpaintAssemble",
+    "inputs": {
+      "strict_cleanup": true,
+      "plan": [
+        "16",
+        6
+      ],
+      "generated": [
+        "28",
+        0
+      ]
+    }
+  },
+  "30": {
     "class_type": "MangaLetterPrepare",
     "inputs": {
       "region_padding": 12,
@@ -418,16 +446,16 @@
         0
       ],
       "translated_json": [
-        "13",
+        "15",
         0
       ],
       "text_pixel_mask": [
-        "14",
+        "16",
         9
       ]
     }
   },
-  "29": {
+  "31": {
     "class_type": "MangaLetterPlan",
     "inputs": {
       "default_font": "NanumGothic-Bold.ttf",
@@ -445,33 +473,37 @@
         0
       ],
       "cleaned": [
-        "27",
+        "29",
         0
       ],
       "source_mask": [
-        "28",
+        "30",
         1
       ],
       "regions_json": [
-        "28",
+        "30",
         0
       ],
       "detection_result": [
-        "3",
+        "4",
+        0
+      ],
+      "page_direction": [
+        "2",
         0
       ]
     }
   },
-  "30": {
+  "32": {
     "class_type": "MangaLetterApply",
     "inputs": {
       "plan": [
-        "29",
+        "31",
         0
       ]
     }
   },
-  "31": {
+  "33": {
     "class_type": "SaveImage",
     "inputs": {
       "filename_prefix": [
@@ -479,26 +511,8 @@
         3
       ],
       "images": [
-        "30",
+        "32",
         0
-      ]
-    }
-  },
-  "32": {
-    "class_type": "PreviewImage",
-    "inputs": {
-      "images": [
-        "27",
-        0
-      ]
-    }
-  },
-  "33": {
-    "class_type": "MaskToImage",
-    "inputs": {
-      "mask": [
-        "14",
-        8
       ]
     }
   },
@@ -506,17 +520,17 @@
     "class_type": "PreviewImage",
     "inputs": {
       "images": [
-        "33",
+        "29",
         0
       ]
     }
   },
   "35": {
-    "class_type": "PreviewImage",
+    "class_type": "MaskToImage",
     "inputs": {
-      "images": [
-        "29",
-        1
+      "mask": [
+        "16",
+        8
       ]
     }
   },
@@ -524,8 +538,8 @@
     "class_type": "PreviewImage",
     "inputs": {
       "images": [
-        "9",
-        2
+        "35",
+        0
       ]
     }
   },
@@ -533,36 +547,72 @@
     "class_type": "PreviewImage",
     "inputs": {
       "images": [
-        "7",
-        0
+        "31",
+        1
+      ]
+    }
+  },
+  "38": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "10",
+        2
       ]
     }
   },
   "39": {
-    "class_type": "PreviewAny",
+    "class_type": "PreviewImage",
     "inputs": {
-      "source": [
-        "11",
-        0
-      ]
-    }
-  },
-  "40": {
-    "class_type": "PreviewAny",
-    "inputs": {
-      "source": [
-        "13",
+      "images": [
+        "8",
         0
       ]
     }
   },
   "41": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "12",
+        0
+      ]
+    }
+  },
+  "42": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "15",
+        0
+      ]
+    }
+  },
+  "43": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "14",
+        3
+      ]
+    }
+  },
+  "44": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "14",
+        4
+      ]
+    }
+  },
+  "46": {
     "class_type": "PrimitiveBoolean",
     "inputs": {
       "value": false
     }
   },
-  "42": {
+  "47": {
     "class_type": "PreviewAny",
     "inputs": {
       "source": [
