@@ -102,6 +102,7 @@
       "quality_guard": true,
       "text_direction": "auto",
       "retry_on_token_limit": true,
+      "retry_on_layout_failure": true,
       "images": [
         "7",
         0
@@ -412,6 +413,7 @@
       "padding": 2,
       "region_options_json": "{}",
       "line_breaks": "reflow",
+      "fit_policy": "readable",
       "original": [
         "1",
         0
@@ -503,6 +505,24 @@
     "inputs": {
       "images": [
         "7",
+        0
+      ]
+    }
+  },
+  "39": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "11",
+        0
+      ]
+    }
+  },
+  "40": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "13",
         0
       ]
     }

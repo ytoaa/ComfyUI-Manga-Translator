@@ -86,3 +86,86 @@ def join_chunks(texts):
             output += ' '
         output += text
     return output
+
+
+def recovery_parts(image, direction='auto'):
+    """One alternative reading plan after output rejection, never a blind cut.
+
+    Thin persistent ruling lines may inform segmentation without being erased
+    from recognition crops. Every cut needs a clear gap in the remaining ink;
+    crops partition the complete input, including punctuation and margins.
+    """
+    if direction not in ('auto','horizontal','vertical_rtl','vertical_ltr'):
+        raise ValueError('Invalid recovery direction')
+    pixels=np.asarray(image.convert('RGB'),np.float32)
+    gray=pixels @ np.array([.299,.587,.114],np.float32)
+    detail=gray-ndimage.uniform_filter(gray,size=31,mode='reflect')
+    positive,negative=float(np.percentile(detail,99)),-float(np.percentile(detail,1))
+    candidates=[]
+    for threshold in (16,8):
+        if max(positive,negative)<threshold:
+            continue
+        foreground=(detail>threshold if positive>negative*1.2 else detail < -threshold
+                    if negative>positive*1.2 else np.abs(detail)>threshold)
+        for horizontal in (True,False):
+            name='horizontal' if horizontal else 'vertical_rtl'
+            if direction!='auto' and horizontal!=(direction=='horizontal'):
+                continue
+            work=foreground.copy() if horizontal else foreground.T.copy()
+            # A thin panel edge can bridge every gap between text rows. Remove
+            # only narrow, nearly continuous cross-axis strips from analysis.
+            persistent=work.mean(axis=0)>=.8
+            groups=np.split(np.flatnonzero(persistent),np.flatnonzero(np.diff(np.flatnonzero(persistent))>1)+1)
+            removed=0
+            for group in groups:
+                if len(group) and len(group)<=max(2,round(work.shape[1]*.005)):
+                    work[:,group]=False
+                    removed+=len(group)
+            active=work.any(axis=1)
+            indices=np.flatnonzero(active)
+            if not len(indices):continue
+            runs=[]
+            for group in np.split(indices,np.flatnonzero(np.diff(indices)>1)+1):
+                a,b=int(group[0]),int(group[-1])+1
+                if runs and a-runs[-1][1]<4:runs[-1][1]=b
+                else:runs.append([a,b])
+            runs=[(a,b) for a,b in runs if b-a>=8]
+            if not 2<=len(runs)<=16:continue
+            elongated=0
+            for a,b in runs:
+                if np.count_nonzero(work[a:b].any(axis=0))<3*(b-a):continue
+                labels,count=ndimage.label(work[a:b],structure=np.ones((3,3),bool))
+                # A large connected glyph or drawn frame must not become
+                # several "text rows" just because its strokes have gaps.
+                if np.count_nonzero(np.bincount(labels.ravel(),minlength=count+1)[1:]>=4)>=3:
+                    elongated+=1
+            if elongated<math.ceil(len(runs)*.75):continue
+            cuts=[0];valid=True
+            for left,right in zip(runs,runs[1:]):
+                gap=np.arange(left[1],right[0])
+                clear=gap[~active[gap]]
+                if len(clear)<4:
+                    valid=False;break
+                midpoint=(left[1]+right[0])//2
+                cuts.append(int(clear[np.argmin(np.abs(clear-midpoint))]))
+            if not valid:continue
+            cuts.append(work.shape[0])
+            boxes=[([0,a,image.width,b] if horizontal else [a,0,b,image.height])
+                   for a,b in zip(cuts,cuts[1:])]
+            if not horizontal and direction!='vertical_ltr':boxes.reverse()
+            separation=sum(b[0]-a[1] for a,b in zip(runs,runs[1:]))/(runs[-1][1]-runs[0][0])
+            candidates.append((separation,horizontal,boxes,threshold,removed))
+        if candidates:break
+    if candidates:
+        candidates.sort(key=lambda row:row[0],reverse=True)
+        best=candidates[0]
+        other=next((v for v in candidates[1:] if v[1]!=best[1]),None)
+        if other and (best[0]<other[0]*1.5 or best[0]-other[0]<.05):return [],{}
+        _,horizontal,boxes,threshold,removed=best
+        return [(image.crop(box),box) for box in boxes],{
+            'strategy':'verified_rows' if horizontal else 'verified_columns',
+            'separator':'\n','contrast':threshold,'ruling_strips_ignored_in_analysis':removed}
+    if direction in ('auto','horizontal'):
+        parts=plan_line(image,max_aspect=6.)
+        if len(parts)>1:return parts,{'strategy':'shorter_horizontal_chunks','separator':''}
+    return [],{'strategy':'no_verified_alternative'}

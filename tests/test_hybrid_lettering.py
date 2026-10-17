@@ -239,3 +239,29 @@ def test_disconnected_small_punctuation_does_not_shrink_source_font_estimate():
     punctuated,_,_=hybrid.build_plan(original,clean,mask,doc)
     assert abs(plain['regions'][0]['cap']-punctuated['regions'][0]['cap']) <= 1
     assert punctuated['regions'][0]['profile']['line_count'] == 1
+
+
+def test_short_source_expanded_translation_can_use_absolute_readability_floor():
+    values=fixture('깜짝 놀랐어!',width=180,height=220,source='쾅',font_size=110,box=[30,35,120,150])
+    with pytest.raises(ValueError,match='no safe lettering fit'):
+        run(values)
+    plan,result,alpha,report,_,_=run(values,fit_policy='readable',line_breaks='reflow')
+    row=report['regions'][0]
+    assert 30<=row['render']['font_size']<plan['regions'][0]['floor']
+    assert row['source_ratio_relaxed'] and row['render']['text']=='깜짝 놀랐어!'
+    assert not alpha[:35].any() and not alpha[185:].any()
+    assert not alpha[:,:30].any() and not alpha[:,150:].any()
+    assert np.array_equal(result[alpha==0],values[1][alpha==0])
+
+
+@pytest.mark.parametrize('options',[{'mode':'strict'},
+    {'region_options_json':'{"r1":{"min_scale":0.8}}'}, {'min_font':80}])
+def test_readable_fit_keeps_strict_layout_explicit_ratio_and_absolute_minimum(options):
+    values=fixture('깜짝 놀랐어!',width=180,height=220,source='쾅',font_size=110,box=[30,35,120,150])
+    with pytest.raises(ValueError,match='no safe lettering fit'):
+        run(values,fit_policy='readable',**options)
+
+
+def test_readable_policy_does_not_relax_ratio_when_original_search_already_fits():
+    _,_,_,report,_,_=run(fixture('짧은 번역'),fit_policy='readable')
+    assert not report['regions'][0]['source_ratio_relaxed']

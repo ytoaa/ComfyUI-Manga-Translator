@@ -1,8 +1,8 @@
 {
   "id": "6489a8d0-adb0-54db-baf9-5a11c43d9dd8",
   "revision": 1,
-  "last_node_id": 38,
-  "last_link_id": 61,
+  "last_node_id": 40,
+  "last_link_id": 63,
   "nodes": [
     {
       "id": 1,
@@ -393,7 +393,7 @@
       ],
       "size": [
         330,
-        420
+        450
       ],
       "flags": {},
       "order": 8,
@@ -453,6 +453,7 @@
         true,
         true,
         "auto",
+        true,
         true
       ],
       "widgets_values_named": {
@@ -467,9 +468,10 @@
         "split_long_lines": true,
         "quality_guard": true,
         "text_direction": "auto",
-        "retry_on_token_limit": true
+        "retry_on_token_limit": true,
+        "retry_on_layout_failure": true
       },
-      "title": "⑤ 행/열 판단 OCR · 토큰 한도 1회 재시도"
+      "title": "⑤ OCR · 반복 시 입력 재분할"
     },
     {
       "id": 10,
@@ -544,7 +546,8 @@
           "name": "translated_json",
           "type": "STRING",
           "links": [
-            14
+            14,
+            62
           ]
         }
       ],
@@ -638,7 +641,8 @@
           "name": "translated_json",
           "type": "STRING",
           "links": [
-            46
+            46,
+            63
           ]
         }
       ],
@@ -1541,7 +1545,7 @@
       ],
       "size": [
         330,
-        300
+        330
       ],
       "flags": {},
       "order": 28,
@@ -1610,7 +1614,8 @@
         0.55,
         2,
         "{}",
-        "reflow"
+        "reflow",
+        "readable"
       ],
       "widgets_values_named": {
         "default_font": "NanumGothic-Bold.ttf",
@@ -1620,9 +1625,10 @@
         "min_scale": 0.55,
         "padding": 2,
         "region_options_json": "{}",
-        "line_breaks": "reflow"
+        "line_breaks": "reflow",
+        "fit_policy": "readable"
       },
-      "title": "⑪ 원문 크기·폭 활용 · 불필요한 줄바꿈 해제"
+      "title": "⑪ 원문 크기·폭 활용 · 최소 가독 크기까지 맞춤"
     },
     {
       "id": 30,
@@ -1904,8 +1910,80 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "선택한 글자 검출이 0개면 no_text_detected로 기록하고 원본 그대로 저장합니다. OCR/번역/Qwen/식자를 생략합니다.\n검출 0개는 실제 글자 없음의 보증이 아닙니다. 검출 오류/OCR 실패는 계속 중단합니다.\n원문 크기 상한에서 가용 폭을 먼저 사용. 단일 줄바꿈은 자동 재배치하고 빈 줄 문단은 유지합니다.\nline_breaks=preserve로 수동 줄바꿈 유지. strict/세로쓰기에서는 원래 줄바꿈을 유지합니다.\n단색이 확인된 OCR 영역 안에서 누락된 획/잔점을 제거 범위에 보완합니다. 실효 마스크를 미리보기로 확인하세요.\nbubble은 검출된 실제 말풍선 마스크 또는 직접 연결한 내부 마스크에서 확장합니다. 겹침/최소 크기 실패는 저장 전에 중단합니다.\n영역별 폰트·방향·회전·수동 곡선은 식자 계획 노드의 JSON으로 지정합니다.\n효과음은 검출·영역·마스크 세 노드에서 함께 설정합니다. 기본은 제외.\n긴 가로 행은 빈 열에서 분할. OCR 반복/누락 의심은 patch 변경 1회 후 계속 실패하면 중단합니다.\nOCR JSON에 영역별 입력 크기/분할/재시도 진단을 저장합니다. 휴리스틱 통과는 인식 정확도 보증이 아닙니다.\n한 번 실행: 검출→줄별 OCR→번역→타일별 제거→좌표 복원→식자.\nQwen은 512px 코어+128px 문맥 타일만 처리합니다. 단색 배경은 보수적 색 채우기를 먼저 시도합니다.\n이미지 크롭/크기 복원/마스크 확대/타일 합성/미리보기/저장은 기본 노드입니다.\n원문이 거의 그대로인 타일은 식자 전에 중단합니다. 픽셀 검사이며 OCR 품질 보증은 아닙니다.\n마스크 밖 누락 글씨는 자동 삭제되지 않습니다. 마스크 미리보기와 OCR JSON으로 확인하세요.\n통합 모의 실행 결과와 실제 GPU 품질 검증은 구분합니다."
+        "선택한 글자 검출이 0개면 no_text_detected로 기록하고 원본 그대로 저장합니다. OCR/번역/Qwen/식자를 생략합니다.\n검출 0개는 실제 글자 없음의 보증이 아닙니다. 검출 오류/OCR 실패는 계속 중단합니다.\n원문 크기 상한에서 가용 폭을 먼저 사용. 단일 줄바꿈은 자동 재배치하고 빈 줄 문단은 유지합니다.\nline_breaks=preserve로 수동 줄바꿈 유지. strict/세로쓰기에서는 원래 줄바꿈을 유지합니다.\n단색이 확인된 OCR 영역 안에서 누락된 획/잔점을 제거 범위에 보완합니다. 실효 마스크를 미리보기로 확인하세요.\nbubble은 검출된 실제 말풍선 마스크 또는 직접 연결한 내부 마스크에서 확장합니다. 겹침/최소 크기 실패는 저장 전에 중단합니다.\n영역별 폰트·방향·회전·수동 곡선은 식자 계획 노드의 JSON으로 지정합니다.\n효과음은 검출·영역·마스크 세 노드에서 함께 설정합니다. 기본은 제외.\n긴 가로 행은 빈 열에서 분할. OCR 반복/누락 의심은 patch 변경 1회 후 계속 실패하면 중단합니다.\nOCR JSON에 영역별 입력 크기/분할/재시도 진단을 저장합니다. 휴리스틱 통과는 인식 정확도 보증이 아닙니다.\n한 번 실행: 검출→줄별 OCR→번역→타일별 제거→좌표 복원→식자.\nQwen은 512px 코어+128px 문맥 타일만 처리합니다. 단색 배경은 보수적 색 채우기를 먼저 시도합니다.\n이미지 크롭/크기 복원/마스크 확대/타일 합성/미리보기/저장은 기본 노드입니다.\n원문이 거의 그대로인 타일은 식자 전에 중단합니다. 픽셀 검사이며 OCR 품질 보증은 아닙니다.\n마스크 밖 누락 글씨는 자동 삭제되지 않습니다. 마스크 미리보기와 OCR JSON으로 확인하세요.\n반복이 지속되면 확인된 행/열 간격에서 한 번 다시 분할합니다. 실패 입력은 output/manga_translator/ocr_failures에 저장합니다.\nfit_policy=readable은 원문 비율 제한으로 맞지 않을 때 min_font까지 추가 축소합니다. strict/명시적 최소 크기는 유지합니다.\n통합 모의 실행 결과와 실제 GPU 품질 검증은 구분합니다."
       ]
+    },
+    {
+      "id": 39,
+      "type": "PreviewAny",
+      "pos": [
+        2520,
+        250
+      ],
+      "size": [
+        400,
+        260
+      ],
+      "flags": {},
+      "order": 38,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 62
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny",
+        "cnr_id": "comfy-core"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "OCR 저장 JSON · 미리보기 아무거나"
+    },
+    {
+      "id": 40,
+      "type": "PreviewAny",
+      "pos": [
+        3360,
+        250
+      ],
+      "size": [
+        400,
+        260
+      ],
+      "flags": {},
+      "order": 39,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 63
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny",
+        "cnr_id": "comfy-core"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "번역 저장 JSON · 미리보기 아무거나"
     }
   ],
   "links": [
@@ -2395,6 +2473,22 @@
       1,
       9,
       2,
+      "STRING"
+    ],
+    [
+      62,
+      11,
+      0,
+      39,
+      0,
+      "STRING"
+    ],
+    [
+      63,
+      13,
+      0,
+      40,
+      0,
       "STRING"
     ]
   ],

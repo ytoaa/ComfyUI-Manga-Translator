@@ -233,3 +233,23 @@ Legacy examples serialize `allow_empty_page=false`; only refreshed 08 enables th
 Workflow widget/API contracts, stable regeneration, compilation, package integrity/import and source checksums are checked locally.
 Model responses are test doubles; actual user ComfyUI/GPU execution remains unverified.
 See [behavior and update requirements](docs/no-text-pages-v0.3.4.md).
+
+# v0.3.5 OCR layout recovery / readable fitting / text previews — 2026-10-17
+
+Base: `4be9e25d2a8f9ed30764319a956dde390d228413`. Full CPU regression: **245 passed**.
+Fifteen added cases cover dark/bright framed 580×203 OCR paragraphs, exact pixel reconstruction from recovery crops,
+accepted-row diagnostics, persistent child failure without recursive retry, combined-output loop rejection,
+vertical reading order, per-region work limit, disabling line split, no arbitrary slices, large connected glyph rejection,
+and actual PNG/JSON failure diagnostics including inability to save them.
+Actual bundled-font fitting tests exercise longer translations of a one-glyph source below the ratio floor,
+while retaining the frame, unchanged alpha exterior, strict mode, explicit region min_scale and absolute min_font.
+In a synthetic 120×150 frame, source cap 108px gives the previous floor 60px; refreshed-08 reflow/readable settings
+render the full target at 43px within that same frame. This is not the user's actual r1 reconstruction.
+The shipped graph adds two native PreviewAny endpoints directly after OCR/translation review saving.
+Both execute in the existing complete graph tests; normal text and no-text paths remain covered.
+Six successful and two expected-stop integrated simulations, stable GUI/API regeneration, workflow/widget serialization,
+compilation and package checksums/import are checked locally. Legacy 07 keeps layout recovery disabled.
+The supplied workflow is pasted Markdown with escaped JSON; its PreviewAny/source connections and OCR settings
+were inspected as text. The new attachment is a canvas screenshot, not the failing OCR crop or r1 source/target JSON.
+Actual 580×203 OCR root cause, r1 geometry/direction and user GPU/ComfyUI outcomes remain unverified.
+See [settings, evidence and limitations](docs/ocr-fit-preview-v0.3.5.md).

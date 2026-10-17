@@ -26,6 +26,12 @@ def test_complete_api_graph_preserves_regions_and_unmasked_pixels(tmp_path, fill
     source=__import__('json').loads(next((tmp_path/'manga_translator').glob('ocr*.json')).read_text())
     assert sum(row['ocr_diagnostics']['chunk_count'] for row in source['regions']) == 9
     assert sum(row['ocr_diagnostics']['line_count'] for row in source['regions']) == 8
+    assert report['calls']['PreviewAny']==2
+    graph=__import__('json').loads((ROOT/'lettering/example_workflows/08-integrated-tiled-cleanup-lettering.api.json').read_text())
+    for node in graph.values():
+        if node['class_type']=='PreviewAny':
+            saved_source=node['inputs']['source'][0]
+            assert graph[saved_source]['class_type']=='MangaSaveReview'
 
 
 def test_failed_cleanup_never_reaches_final_save(tmp_path):

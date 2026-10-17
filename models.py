@@ -419,6 +419,28 @@ def _empty_ocr_page(images, manifest_json):
     return True
 
 
+def _save_ocr_failure(source, image, diagnostic):
+    """Keep inspectable inputs even though a failed node cannot emit previews."""
+    try:
+        import folder_paths
+        import uuid
+        folder=Path(folder_paths.get_output_directory())/'manga_translator'/'ocr_failures'
+        folder.mkdir(parents=True,exist_ok=True)
+        prefix='ocr_'+uuid.uuid4().hex
+        source_path=folder/(prefix+'_source.png')
+        input_path=folder/(prefix+'_input.png')
+        report_path=folder/(prefix+'.json')
+        source.save(source_path);image.save(input_path)
+        report={**diagnostic,'source_size':list(source.size),'input_size':list(image.size),
+                'source_image':str(source_path),'failed_input_image':str(input_path)}
+        report_path.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+        LOG.error('OCR failure inputs saved: %s',report_path)
+        return str(report_path)
+    except Exception as exc:
+        LOG.warning('Could not save OCR failure inputs: %s',type(exc).__name__)
+        return None
+
+
 class MangaOCRAdaptive:
     DESCRIPTION = '영역을 행/열로 분리하고 여백을 줄인 뒤 작은 글씨에 더 큰 Hayai patch budget을 자동 배정합니다.'
     @classmethod
@@ -436,11 +458,13 @@ class MangaOCRAdaptive:
                 'manifest_json': ('STRING', {'forceInput':True,
                     'tooltip':'MangaRegionCrops의 페이지 명세. 0개 영역은 OCR 모델을 로드하지 않고 건너뜁니다.'}),
                 'split_long_lines': ('BOOLEAN', {'default':False, 'tooltip':'긴 가로 행을 글자 사이 빈 공간에서만 나눠 읽습니다. 기존 그래프는 원래 입력을 유지합니다.'}),
-                'quality_guard': ('BOOLEAN', {'default':False, 'tooltip':'짧은 반복·과도한 누락 의심 시 다른 patch 설정으로 1회 재시도. 계속 의심되면 번역 전에 중단. 정확도 보증은 아닙니다.'}),
+                'quality_guard': ('BOOLEAN', {'default':False, 'tooltip':'짧은 반복·과도한 누락 의심 시 다른 patch 설정으로 1회 재시도. 선택한 입력 재분할 복구도 실패하면 번역 전에 중단. 정확도 보증은 아닙니다.'}),
                 'text_direction': (['auto','horizontal','vertical_rtl','vertical_ltr'], {'default':'auto',
                     'tooltip':'OCR 행/열 분할 방향. 세로로 긴 가로 본문은 horizontal로 지정할 수 있습니다. 식자 방향과 별도입니다.'}),
                 'retry_on_token_limit': ('BOOLEAN', {'default':False,
-                    'tooltip':'토큰 한도에 닿으면 요청 한도를 2배(최대 2048)로 한 번 재시도합니다. 잘린 결과는 반환하지 않습니다.'})}}
+                    'tooltip':'토큰 한도에 닿으면 요청 한도를 2배(최대 2048)로 한 번 재시도합니다. 잘린 결과는 반환하지 않습니다.'}),
+                'retry_on_layout_failure': ('BOOLEAN', {'default':False,
+                    'tooltip':'품질 재시도도 실패하면 검증된 행/열 간격에서 입력을 한 번 다시 나눕니다. 계속 실패하면 입력 PNG/진단 JSON을 저장하고 중단합니다.'})}}
     RETURN_TYPES=('STRING','STRING','IMAGE')
     RETURN_NAMES=('text','ocr_report_json','ocr_inputs')
     OUTPUT_IS_LIST=(False,False,True)
@@ -454,13 +478,13 @@ class MangaOCRAdaptive:
     def read(self,images,model=None,max_new_tokens=256,base_patches=512,small_text_patches=1024,small_text_px=48,
              line_split=True,tight_crop=False,repetition_penalty=1.,retry_on_repetition=True,
              split_long_lines=False,quality_guard=False,text_direction='auto',retry_on_token_limit=False,
-             manifest_json=None):
+             manifest_json=None,retry_on_layout_failure=False):
         if _empty_ocr_page(images,manifest_json):
             LOG.info('Adaptive OCR skipped: no_text_detected')
             return ('',json.dumps({'status':'no_text_detected','ocr_skipped':True,
                                   'preview':'unchanged_page_not_ocr_input'}),[images])
         from .adapters.options import OcrOptions
-        from .ocr_policy import plan_line, text_problem, join_chunks
+        from .ocr_policy import plan_line, text_problem, join_chunks, recovery_parts
         from .adapters.hayai import preprocess_size
         import torch
         if type(base_patches) is not int or base_patches not in (256,512,1024):
@@ -469,7 +493,7 @@ class MangaOCRAdaptive:
             raise ValueError('Invalid small-text OCR patch budget')
         if type(small_text_px) is not int or not 8 <= small_text_px <= 256:
             raise ValueError('Invalid small-text pixel threshold')
-        if any(type(value) is not bool for value in (line_split,tight_crop,retry_on_repetition,split_long_lines,quality_guard,retry_on_token_limit)):
+        if any(type(value) is not bool for value in (line_split,tight_crop,retry_on_repetition,split_long_lines,quality_guard,retry_on_token_limit,retry_on_layout_failure)):
             raise ValueError('Invalid adaptive OCR switches')
         if text_direction not in ('auto','horizontal','vertical_rtl','vertical_ltr'):
             raise ValueError('Invalid OCR text direction')
@@ -484,13 +508,13 @@ class MangaOCRAdaptive:
         planned = [plan_line(image) if split_long_lines else [(image,[0,0,*image.size])] for image in crops]
         if sum(len(parts) for parts in planned) > 128:
             raise ValueError('OCR chunk count exceeds limit=128 per region')
-        for line_index, parts in enumerate(planned):
-            chunks=[]
-            for image, box in parts:
+        work_count=sum(len(parts) for parts in planned)
+        def recognize(image,line_index,box):
+            attempts=[];generation=[]
+            try:
                 short=min(image.size)
                 patches=max(base_patches,small_text_patches) if short <= small_text_px else base_patches
                 LOG.info('Adaptive OCR input: line=%s box=%s crop=%sx%s patch_budget=%s',line_index,box,image.width,image.height,patches)
-                previews.append(torch.from_numpy(np.asarray(image,dtype=np.float32)/255)[None])
                 generation=[]
                 text=_ocr_once(model,image,options,patches,repetition_penalty,retry_on_repetition,
                                retry_on_token_limit,generation)
@@ -506,17 +530,67 @@ class MangaOCRAdaptive:
                     issue=text_problem(text,image)
                     attempts.append({'patch_budget':alternate,'model_size':list(preprocess_size(image.size,alternate)),
                                      'characters':len(text),'issue':issue,'generation_attempts':generation})
-                    if issue:
-                        raise ValueError(f'OCR 품질 검사 실패 ({issue}); line={line_index}, box={box}, attempts={attempts}. '
-                                         '원본 OCR 크롭과 Hayai 로그를 확인하세요. 번역할 원문을 확정하지 않았습니다.')
+                return text,attempts,issue
+            except Exception as exc:
+                path=_save_ocr_failure(source,image,{'code':getattr(exc,'code',type(exc).__name__),
+                    'line':line_index,'line_local_bbox':box,'attempts':attempts,
+                    'generation_attempts':generation})
+                if path and hasattr(exc,'add_note'):exc.add_note('OCR diagnostic: '+path)
+                raise
+
+        def reject(image,line_index,box,attempts,issue,recovery=None,text=None):
+            path=_save_ocr_failure(source,image,{'code':issue,'line':line_index,'line_local_bbox':box,
+                                               'attempts':attempts,'layout_recovery':recovery,
+                                               'rejected_text':text})
+            raise ValueError(f'OCR 품질 검사 실패 ({issue}); line={line_index}, box={box}, attempts={attempts}. '
+                             f'진단={path or "저장 불가"}. 원본 OCR 크롭과 Hayai 로그를 확인하세요. '
+                             '번역할 원문을 확정하지 않았습니다.')
+
+        for line_index, parts in enumerate(planned):
+            chunks=[]
+            for image, box in parts:
+                text,attempts,issue=recognize(image,line_index,box)
+                recovery=None
+                if issue and retry_on_layout_failure and line_split:
+                    alternative,recovery=recovery_parts(image,text_direction)
+                    if alternative and work_count+len(alternative)<=128:
+                        LOG.warning('OCR layout recovery: line=%s crop=%s parts=%s strategy=%s',
+                                    line_index,image.size,len(alternative),recovery['strategy'])
+                        work_count+=len(alternative)
+                        values=[];children=[];child_previews=[]
+                        for part,local_box in alternative:
+                            value,child_attempts,child_issue=recognize(part,line_index,local_box)
+                            if child_issue:reject(part,line_index,local_box,child_attempts,child_issue,recovery,value)
+                            values.append(value)
+                            children.append({'parent_local_bbox':local_box,'input_size':list(part.size),
+                                             'attempts':child_attempts})
+                            child_previews.append(torch.from_numpy(np.asarray(part,dtype=np.float32)/255)[None])
+                        text='\n'.join(values) if recovery['separator']=='\n' else join_chunks(values)
+                        recovery={**recovery,'chunks':children}
+                        combined_issue=text_problem(text,image)
+                        if combined_issue:reject(image,line_index,box,attempts,combined_issue,recovery,text)
+                        previews.extend(child_previews)
+                        issue=None
+                    elif alternative:
+                        recovery={**recovery,'rejected':'region_work_limit=128'}
+                if issue:reject(image,line_index,box,attempts,issue,recovery,text)
+                if not recovery or 'chunks' not in recovery:
+                    previews.append(torch.from_numpy(np.asarray(image,dtype=np.float32)/255)[None])
                 chunks.append(text)
                 records.append({'line':line_index,'line_local_bbox':box,'input_size':list(image.size),
-                                'attempts':attempts})
+                                'attempts':attempts,**({'layout_recovery':recovery} if recovery else {})})
             texts.append(join_chunks(chunks))
-        report={'source_size':list(source.size),'line_count':len(crops),'chunk_count':len(records),
+        recovered_lines=sum(len(r['layout_recovery']['chunks'])-1 for r in records
+            if r.get('layout_recovery',{}).get('strategy') in ('verified_rows','verified_columns')
+            and 'chunks' in r['layout_recovery'])
+        leaf_count=sum(len(r['layout_recovery']['chunks']) if 'chunks' in r.get('layout_recovery',{}) else 1
+                       for r in records)
+        report={'source_size':list(source.size),'line_count':len(crops)+recovered_lines,'chunk_count':leaf_count,
+                'initial_line_count':len(crops),'initial_chunk_count':len(records),
                 'line_split':line_split,'tight_crop':tight_crop,'split_long_lines':split_long_lines,
                 'text_direction':text_direction,'retry_on_token_limit':retry_on_token_limit,
-                'quality_guard':quality_guard,'chunks':records,
+                'quality_guard':quality_guard,'retry_on_layout_failure':retry_on_layout_failure,
+                'recognition_work_items':work_count,'chunks':records,
                 'quality_scope':'heuristic_checks_only_not_recognition_accuracy'}
         return ('\n'.join(texts),json.dumps(report,ensure_ascii=False),previews)
 

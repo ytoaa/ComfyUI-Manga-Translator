@@ -261,6 +261,7 @@ class GraphRunner:
             alpha = a['mask'][..., None]
             return (a['source']*alpha + a['destination']*(1-alpha),)
         if kind == 'PreviewImage': return ()
+        if kind == 'PreviewAny': return {'ui':{'text':(a['source'],)},'result':(a['source'],)}
         if kind == 'SaveImage':
             path = self.destination/'final.png'
             pil(a['images']).save(path)
@@ -289,7 +290,7 @@ class GraphRunner:
             # Run the same output endpoints shipped in the GUI/API graph.
             for ident, node in self.graph.items():
                 cls = plugin.NODE_CLASS_MAPPINGS.get(node['class_type'])
-                if node['class_type'] in ('SaveImage', 'PreviewImage') or getattr(cls, 'OUTPUT_NODE', False):
+                if node['class_type'] in ('SaveImage', 'PreviewImage','PreviewAny') or getattr(cls, 'OUTPUT_NODE', False):
                     self.run(ident)
         plan_id = next(k for k, n in self.graph.items() if n['class_type'] == 'MangaInpaintPlan')
         finish_id = next(k for k, n in self.graph.items() if n['class_type'] == 'MangaInpaintAssemble')

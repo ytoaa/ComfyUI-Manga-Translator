@@ -6,7 +6,8 @@ CORE_SCHEMAS.update({
     'GrowMask': {'required': {'mask': ('MASK',), 'expand': ('INT', {'default': 8}),
                               'tapered_corners': ('BOOLEAN', {'default': True})}},
     'MaskToImage': {'required': {'mask': ('MASK',)}}})
-CORE_RETURNS.update({'GrowMask': ('MASK',), 'MaskToImage': ('IMAGE',)})
+CORE_SCHEMAS['PreviewAny']={'required':{'source':('*',)}}
+CORE_RETURNS.update({'GrowMask': ('MASK',), 'MaskToImage': ('IMAGE',),'PreviewAny':('STRING',)})
 
 
 def build():
@@ -26,7 +27,8 @@ def build():
     g.connect(original, 0, crops, 'images'); g.connect(regions, 0, crops, 'layout_json')
     ocr_model = g.import_model_node(template, 13, (1260, -220))
     ocr = g.add('MangaOCRAdaptive', {'tight_crop':False,'base_patches':256,'small_text_patches':512,
-        'split_long_lines':True,'quality_guard':True,'retry_on_token_limit':True}, (1680, 50), '⑤ 행/열 판단 OCR · 토큰 한도 1회 재시도')
+        'split_long_lines':True,'quality_guard':True,'retry_on_token_limit':True,
+        'retry_on_layout_failure':True}, (1680, 50), '⑤ OCR · 반복 시 입력 재분할')
     g.connect(crops, 0, ocr, 'images'); g.connect(ocr_model, 0, ocr, 'model')
     collect = g.add('MangaCollectOCR', pos=(2100, 50))
     g.connect(ocr, 0, collect, 'text'); g.connect(crops, 1, collect, 'manifest_json')
@@ -71,7 +73,7 @@ def build():
     prepare = g.add('MangaLetterPrepare', pos=(4620, 50), title='⑩ 번역문과 원문 스타일 연결')
     g.connect(original, 0, prepare, 'original'); g.connect(target_save, 0, prepare, 'translated_json')
     g.connect(plan, 9, prepare, 'text_pixel_mask')
-    typography = g.add('MangaLetterPlan', {'line_breaks':'reflow'}, pos=(5040, 50), title='⑪ 원문 크기·폭 활용 · 불필요한 줄바꿈 해제')
+    typography = g.add('MangaLetterPlan', {'line_breaks':'reflow','fit_policy':'readable'}, pos=(5040, 50), title='⑪ 원문 크기·폭 활용 · 최소 가독 크기까지 맞춤')
     g.connect(original, 0, typography, 'original'); g.connect(assemble, 0, typography, 'cleaned')
     g.connect(prepare, 1, typography, 'source_mask'); g.connect(prepare, 0, typography, 'regions_json')
     g.connect(detector, 0, typography, 'detection_result')
@@ -107,7 +109,15 @@ def build():
            '이미지 크롭/크기 복원/마스크 확대/타일 합성/미리보기/저장은 기본 노드입니다.\n'
            '원문이 거의 그대로인 타일은 식자 전에 중단합니다. 픽셀 검사이며 OCR 품질 보증은 아닙니다.\n'
            '마스크 밖 누락 글씨는 자동 삭제되지 않습니다. 마스크 미리보기와 OCR JSON으로 확인하세요.\n'
+           '반복이 지속되면 확인된 행/열 간격에서 한 번 다시 분할합니다. 실패 입력은 output/manga_translator/ocr_failures에 저장합니다.\n'
+           'fit_policy=readable은 원문 비율 제한으로 맞지 않을 때 min_font까지 추가 축소합니다. strict/명시적 최소 크기는 유지합니다.\n'
            '통합 모의 실행 결과와 실제 GPU 품질 검증은 구분합니다.', (3360, 1150))
+    for source,pos,title in [(source_save,(2520,250),'OCR 저장 JSON · 미리보기 아무거나'),
+                             (target_save,(3360,250),'번역 저장 JSON · 미리보기 아무거나')]:
+        preview=g.add('PreviewAny',pos=pos,title=title)
+        g.nodes[preview-1]['size']=[400,260]
+        g.nodes[preview-1]['properties']['cnr_id']='comfy-core'
+        g.connect(source,0,preview,'source')
     g.save('08-integrated-tiled-cleanup-lettering')
     # The committed 08 graph uses LF; keep regeneration byte-for-byte stable.
     for suffix in ('.json','.api.json'):

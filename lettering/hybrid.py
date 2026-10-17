@@ -10,6 +10,7 @@ from . import core
 MODES = ('source', 'bubble', 'strict')
 DIRECTIONS = ('auto', 'horizontal', 'vertical_rtl', 'vertical_ltr')
 LINE_BREAKS = ('preserve','reflow')
+FIT_POLICIES = ('source_ratio','readable')
 
 
 def reflow_text(text):
@@ -153,13 +154,15 @@ def _curve(layer,alpha,bend):
 
 def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-Bold.ttf',
                mode='source',direction='auto',min_font=10,min_scale=.55,padding=2,
-               region_options_json='{}',bubble_mask=None,detection_result=None,line_breaks='preserve'):
+               region_options_json='{}',bubble_mask=None,detection_result=None,line_breaks='preserve',
+               fit_policy='source_ratio'):
     original,cleaned=core.rgb(original),core.rgb(cleaned)
     if original.shape!=cleaned.shape: raise ValueError('Original and cleaned dimensions differ')
     support=core.mask_array(source_mask,original.shape[:2])
     data=core.parse_regions(document,original.shape)
     if mode not in MODES or direction not in DIRECTIONS: raise ValueError('Invalid lettering mode/direction')
     if line_breaks not in LINE_BREAKS: raise ValueError('Invalid line break policy')
+    if fit_policy not in FIT_POLICIES: raise ValueError('Invalid lettering fit policy')
     core.integer(min_font,4,128,'min_font');core.finite(min_scale,.2,1,'min_scale')
     core.integer(padding,0,32,'padding')
     if not isinstance(region_options_json,str) or len(region_options_json.encode('utf-8'))>262144:
@@ -180,7 +183,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
     total_area=0
     for item in data['regions']:
         ident=item['id'];opts=overrides.get(ident,{})
-        allowed={'font','mode','direction','font_cap','min_font','min_scale','alignment','rotation','shear','bend','padding','max_lines','line_spacing','tracking','line_breaks'}
+        allowed={'font','mode','direction','font_cap','min_font','min_scale','alignment','rotation','shear','bend','padding','max_lines','line_spacing','tracking','line_breaks','fit_policy'}
         if not isinstance(opts,dict) or set(opts)-allowed: raise ValueError(f'{ident}: unknown typography override')
         font=opts.get('font',item.get('font',default_font))
         core.font_path(font,item['text'])
@@ -197,10 +200,16 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         core.integer(cap,4,512,'font_cap')
         ratio=opts.get('min_scale',min_scale);core.finite(ratio,.2,1,'min_scale')
         floor=opts.get('min_font',layout.pop('min_font',min_font));core.integer(floor,4,512,'min_font')
+        absolute_floor=floor
         floor=max(floor,math.ceil(cap*ratio))
         if floor>cap: raise ValueError(f'{ident}: source size {cap}px is below readability minimum {floor}px; review typography')
         selected_mode=opts.get('mode',mode)
         if selected_mode not in MODES: raise ValueError(f'{ident}: invalid mode')
+        policy=opts.get('fit_policy',fit_policy)
+        if policy not in FIT_POLICIES: raise ValueError(f'{ident}: invalid fit policy')
+        # Explicit per-region scaling constraints and strict layouts stay hard.
+        fallback_floor=(absolute_floor if policy=='readable' and selected_mode!='strict'
+                        and 'min_scale' not in opts else floor)
         breaks=opts.get('line_breaks',line_breaks)
         if breaks not in LINE_BREAKS: raise ValueError(f'{ident}: invalid line break policy')
         flow=breaks=='reflow' and actual_direction=='horizontal' and selected_mode!='strict'
@@ -230,7 +239,8 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         if bubble and bubble!=source: phases.append((bubble,forced_lines,'bubble'))
         prepared={'id':ident,'text':rendered_text,'original_text':item['text'],'line_breaks':breaks,
                   'font':font,'style':style,'source':source,
-                  'phases':phases,'cap':cap,'floor':floor,'options':render_options,'bend':curve,
+                  'phases':phases,'cap':cap,'floor':floor,'fallback_floor':fallback_floor,
+                  'fit_policy':policy,'options':render_options,'bend':curve,
                   'profile':measured,'analysis':json.loads(analysis),'warning':warning}
         # Bound repeated search work and plan memory, including optional expanded rectangles.
         total_area+=max(b[2]*b[3] for b,_,_ in phases)
@@ -243,6 +253,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
             draw.rectangle((x,y,x+w-1,y+h-1),outline=(0,200,220),width=2)
         reports.append({'id':ident,'source':source,'source_profile':measured,'font':font,
                         'font_cap':cap,'min_font':floor,'mode':selected_mode,
+                        'fallback_min_font':fallback_floor,'fit_policy':policy,
                         'direction':actual_direction,'line_breaks':breaks,'soft_wraps_reflowed':flow,
                         'warning':warning})
     report={'schema':1,'regions':reports,'preview':'orange=source frame; cyan=verified bubble rectangle',
@@ -261,12 +272,17 @@ def render_plan(plan):
     reports=[]
     for region in plan['regions']:
         chosen=None;reason='no candidate'
-        for bounds,lines,phase in region['phases']:
+        phases=[(bounds,lines,phase,region['cap'],region['floor']) for bounds,lines,phase in region['phases']]
+        fallback_floor=region.get('fallback_floor',region['floor'])
+        if fallback_floor<region['floor']:
+            phases.extend((bounds,lines,phase+'-readable',region['floor']-1,fallback_floor)
+                          for bounds,lines,phase in region['phases'])
+        for bounds,lines,phase,ceiling,floor in phases:
             x,y,w,h=core.bbox(bounds,result.shape)
             options=dict(region['options'])
             # Reserve vertical clearance before bending, never crop the warped glyph.
             options['padding']=options['padding']+math.ceil(abs(region['bend']))
-            for size in range(region['cap'],region['floor']-1,-1):
+            for size in range(ceiling,floor-1,-1):
                 scale=size/region['cap']
                 style=scaled_style(region['style'],scale,(w,h))
                 try:
@@ -287,7 +303,10 @@ def render_plan(plan):
                 break
             if chosen is not None: break
         if chosen is None:
-            raise ValueError(f"{region['id']}: no safe lettering fit above {region['floor']}px ({reason}); review text, direction or region options")
+            raise ValueError(f"{region['id']}: no safe lettering fit above {fallback_floor}px ({reason}); "
+                             f"source_cap={region['cap']}px, source_floor={region['floor']}px, "
+                             f"direction={region['options']['direction']}, bounds={region['source']}; "
+                             'review text, direction or region options')
         bounds,layer,alpha,render,style,scale,phase=chosen
         place={'version':1,'bbox_xywh':bounds,'page_size':[result.shape[1],result.shape[0]]}
         result,changed=core.composite(result,layer,alpha,place)
@@ -295,6 +314,9 @@ def render_plan(plan):
         occupied |= ndimage.binary_dilation(changed>.01,iterations=2)
         reports.append({'id':region['id'],'source_profile':region['profile'],'bbox':bounds,
                         'fit_phase':phase,'scale':round(scale,4),'render':render,
+                        'fit_policy':region.get('fit_policy','source_ratio'),
+                        'source_floor':region['floor'],'minimum_font':fallback_floor,
+                        'source_ratio_relaxed':render['font_size']<region['floor'],
                         'original_text':region['original_text'],'line_breaks':region['line_breaks'],
                         'outline_width':style['outline_width'],'bend':region['bend'],'warning':region['warning']})
     return result,page_alpha,json.dumps({'schema':1,'regions':reports,
