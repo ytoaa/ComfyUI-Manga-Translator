@@ -25,10 +25,13 @@ from PIL import Image, ImageChops, ImageOps
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WORKFLOW = ROOT/'lettering/example_workflows/08-integrated-tiled-cleanup-lettering.api.json'
 EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tif', '.tiff', '.gif'}
-MAX_PAGE_PIXELS = 16*1024*1024  # Current integrated lettering page contract.
+LEGACY_PAGE_PIXELS = 16*1024*1024
+MAX_SOURCE_PIXELS = 64*1024*1024  # Safety ceiling; model work is already tile/region bounded.
+MAX_PAGE_PIXELS = MAX_SOURCE_PIXELS  # Backward-compatible public/CLI name.
 MAX_INPUT_BYTES = 256*1024*1024
 ACTIVE = {'submitting', 'queued', 'running', 'collecting'}
 FINISHED = {'completed', 'unchanged_blank', 'needs_review'}
+PROJECT_CONTROL_INPUTS = ('input_mode', 'input_folder', 'project_name', 'action')
 
 
 class ProjectError(RuntimeError):
@@ -218,6 +221,22 @@ def workflow_bindings(graph):
             'source_preview': preview(source), 'target_preview': preview(target)}
 
 
+def workflow_fingerprint(graph, bind=None, *, legacy=False):
+    """Hash semantic page-processing settings, not folder-control/location widgets."""
+    bind = bind or workflow_bindings(graph)
+    canonical = {key:{'class_type':node['class_type'],'inputs':deepcopy(node['inputs'])}
+                 for key,node in graph.items()}
+    load = canonical[bind['load']]
+    load['inputs']['image'] = ''
+    if not legacy and load['class_type'] == 'MangaWorkflowInput':
+        for key in PROJECT_CONTROL_INPUTS:
+            load['inputs'].pop(key, None)
+    for key in ('final', 'source', 'target'):
+        canonical[bind[key]]['inputs']['filename_prefix'] = key
+    return digest(json.dumps(canonical,ensure_ascii=False,sort_keys=True,
+                             allow_nan=False,separators=(',',':')).encode())
+
+
 class ComfyClient:
     def __init__(self, base='http://127.0.0.1:8188', timeout=30):
         parsed = parse.urlsplit(base)
@@ -270,7 +289,7 @@ class ComfyClient:
 
 
 class Project:
-    def __init__(self, inputs, destination, graph, client=None, *, recursive=True, max_pixels=MAX_PAGE_PIXELS,
+    def __init__(self, inputs, destination, graph, client=None, *, recursive=True, max_pixels=MAX_SOURCE_PIXELS,
                  page_timeout=3600, poll_interval=1, retry_failed=False, stop_on_error=False,
                  clock=time.monotonic, sleep=time.sleep, progress=None, should_stop=None):
         self.inputs, self.destination = Path(inputs).resolve(), Path(destination).resolve()
@@ -279,23 +298,36 @@ class Project:
         self.graph, self.bind = deepcopy(graph), workflow_bindings(graph)
         self.client = client or ComfyClient()
         self.recursive, self.max_pixels = recursive, max_pixels
-        if (type(max_pixels) is not int or not 1 <= max_pixels <= MAX_PAGE_PIXELS
+        if (type(max_pixels) is not int or not 1 <= max_pixels <= MAX_SOURCE_PIXELS
                 or not math.isfinite(page_timeout) or page_timeout <= 0 or not 0 < poll_interval <= 10):
-            raise ProjectError('Invalid project budget; current 08 supports at most 16,777,216 pixels per page')
+            raise ProjectError(f'Invalid project budget; source pages support at most {MAX_SOURCE_PIXELS:,} pixels')
         self.page_timeout, self.poll_interval = page_timeout, poll_interval
         self.retry_failed, self.stop_on_error = retry_failed, stop_on_error
         self.clock, self.sleep = clock, sleep
         self.progress = progress or (lambda value: None)
         self.should_stop = should_stop or (lambda: False)
-        canonical = deepcopy(graph)
-        canonical = {key:{'class_type':node['class_type'],'inputs':node['inputs']} for key,node in canonical.items()}
-        canonical[self.bind['load']]['inputs']['image'] = ''
-        for key in ('final', 'source', 'target'):
-            canonical[self.bind[key]]['inputs']['filename_prefix'] = key
-        self.config = {'input_folder':str(self.inputs), 'server':self.client.base,
-                       'workflow_sha256':digest(json.dumps(canonical,ensure_ascii=False,sort_keys=True,
-                                                          allow_nan=False,separators=(',',':')).encode()), 'recursive':recursive,
-                       'max_pixels':max_pixels, 'normalisation':'exif_rgb_white_alpha_v1'}
+        self.workflow_sha256 = workflow_fingerprint(graph,self.bind)
+        self.legacy_workflow_sha256 = workflow_fingerprint(graph,self.bind,legacy=True)
+        self.config = {'identity_version':2, 'server':self.client.base,
+                       'workflow_sha256':self.workflow_sha256, 'recursive':recursive,
+                       'source_pixel_limit':max_pixels, 'normalisation':'exif_rgb_white_alpha_v1'}
+        self._retry_policy_failures = False
+
+    def _compatible_previous_config(self, previous):
+        """Permit path/control-only migration and monotonic source-budget increases."""
+        if not isinstance(previous,dict): return False, False
+        if previous == self.config: return True, False
+        if previous.get('server') != self.config['server'] or previous.get('recursive') != self.config['recursive']:
+            return False, False
+        if previous.get('normalisation') != self.config['normalisation']:
+            return False, False
+        previous_sha = previous.get('workflow_sha256')
+        if previous_sha not in (self.workflow_sha256, self.legacy_workflow_sha256):
+            return False, False
+        previous_limit = previous.get('source_pixel_limit', previous.get('max_pixels'))
+        if type(previous_limit) is not int or previous_limit < 1 or previous_limit > self.max_pixels:
+            return False, False
+        return True, previous_limit < self.max_pixels
 
     def _page_dir(self, page): return self.destination/'pages'/page['id']
     def state(self, page):
@@ -355,8 +387,10 @@ class Project:
             if (not isinstance(removed,list) or any(not isinstance(name,str) or PurePosixPath(name).is_absolute()
                                                   or '..' in PurePosixPath(name).parts for name in removed)):
                 raise ProjectError('Invalid removed-input ledger')
-        if previous and previous.get('config') != self.config:
-            raise ProjectError('Project input/server/workflow settings changed; use a new project directory to preserve prior results and active job identities')
+            compatible, raised_limit = self._compatible_previous_config(previous.get('config'))
+            if not compatible:
+                raise ProjectError('Project model/workflow settings changed; use a new project directory to preserve prior results and active job identities')
+            self._retry_policy_failures = raised_limit
         pages = scan_images(self.inputs, self.recursive, allow_empty=previous is not None)
         self.project_id = previous['project_id'] if previous else uuid.uuid4().hex
         self.pages = pages
@@ -369,8 +403,9 @@ class Project:
             ident = 'p'+digest(relative.encode())[:20]
             known.setdefault(ident,{'id':ident,'relative_path':relative,'input_sha256':''})
         self.recovery_pages = list(known.values())
-        document = {'schema':1, 'project_id':self.project_id, 'config':self.config, 'pages':pages,
-                    'removed_inputs':removed, 'quality_scope':'model_results_require_review'}
+        document = {'schema':1, 'project_id':self.project_id, 'config':self.config,
+                    'source_folder':str(self.inputs), 'pages':pages, 'removed_inputs':removed,
+                    'quality_scope':'model_results_require_review'}
         atomic_write(path, json_bytes(document))
         if not (self.destination/'workflow.api.json').exists():
             atomic_write(self.destination/'workflow.api.json', json_bytes(self.graph))
@@ -623,7 +658,10 @@ class Project:
                 if missing:
                     state['status'] = 'collecting'; self._save(state); self._resume(state)
                 return
-            if state['status'] == 'failed' and not self.retry_failed: return
+            policy_retry = (self._retry_policy_failures and state['status'] == 'failed'
+                            and state.get('reason') == 'invalid_input'
+                            and state.get('failure_message') == 'Input exceeds configured pixel budget')
+            if state['status'] == 'failed' and not self.retry_failed and not policy_retry: return
         state = self._new(page)
         self._save(state)
         try:
@@ -644,7 +682,14 @@ class Project:
                 or subfolder != 'manga_translator/'+self.project_id or not filename.startswith(page['id']+'_')):
             raise ProtocolError('Invalid uploaded-image reference')
         graph = deepcopy(self.graph)
-        graph[self.bind['load']]['inputs']['image'] = str(PurePosixPath(subfolder)/filename)
+        load = graph[self.bind['load']]
+        load['inputs']['image'] = str(PurePosixPath(subfolder)/filename)
+        if load['class_type'] == 'MangaWorkflowInput':
+            # Child jobs are ordinary single-image jobs. The trusted extra_pnginfo marker
+            # identifies them as project pages without re-validating/relaunching the folder.
+            load['inputs']['input_mode'] = '이미지 한 장'
+            load['inputs']['input_folder'] = ''
+            load['inputs']['action'] = '상태 확인'
         prefix = f'manga_translator/projects/{self.project_id}/{page["id"]}/a{state["attempt"]:06d}'
         for key, basename in (('final','result'),('source','ocr'),('target','translation')):
             graph[self.bind[key]]['inputs']['filename_prefix'] = prefix+'/'+basename
@@ -688,7 +733,8 @@ class Project:
                         raise Paused('Page outcome was not durably settled; stop before submitting another page')
                 result = self._summary()
                 if export:
-                    result['export'] = self._export(result)
+                    exportable = any(row['status'] in ('completed','unchanged_blank') for row in result['pages'])
+                    result['export'] = self._export(result) if exportable else None
                     atomic_write(self.destination/'summary.json',json_bytes(result))
                 return result
             except (ProjectError, OSError, KeyboardInterrupt) as exc:
@@ -707,7 +753,7 @@ def main():
     parser.add_argument('--non-recursive', action='store_true')
     parser.add_argument('--retry-failed', action='store_true')
     parser.add_argument('--stop-on-error', action='store_true')
-    parser.add_argument('--max-pixels', type=int, default=MAX_PAGE_PIXELS)
+    parser.add_argument('--max-pixels', type=int, default=MAX_SOURCE_PIXELS)
     parser.add_argument('--page-timeout', type=float, default=3600)
     args = parser.parse_args()
     try:
