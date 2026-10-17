@@ -264,7 +264,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
                   'profile':measured,'analysis':json.loads(analysis),'warning':warning}
         # Bound repeated search work and plan memory, including optional expanded rectangles.
         total_area+=max(max(b[2]*b[3] for b,_,_ in phases),guard['mask'].size if guard else 0)
-        if total_area>core.MAX_PIXELS: raise ValueError('Total typography area exceeds 16 Mi pixels')
+        if total_area>core.MAX_TYPOGRAPHY_PIXELS: raise ValueError('Total typography area exceeds 32 Mi pixels')
         plan['regions'].append(prepared)
         x,y,w,h=source
         draw.rectangle((x,y,x+w-1,y+h-1),outline=(255,180,0),width=2)
