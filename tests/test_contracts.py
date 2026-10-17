@@ -148,7 +148,7 @@ def test_hayai_preprocessing_patch_budget_is_preserved():
 
 
 def test_workflow_json_edges_match_api_and_new_nodes_have_no_old_plugin_dependency():
-    for path in (ROOT/'workflows').glob('*.json'):
+    for path in (ROOT/'lettering/example_workflows').glob('*.json'):
         if path.name.endswith('.api.json'):continue
         workflow=json.loads(path.read_text(encoding='utf-8'))
         api=json.loads(path.with_name(path.stem+'.api.json').read_text(encoding='utf-8'))
@@ -158,13 +158,17 @@ def test_workflow_json_edges_match_api_and_new_nodes_have_no_old_plugin_dependen
             assert target['link']==linkid
             assert linkid in nodes[src]['outputs'][out]['links']
             assert api[str(dst)]['inputs'][target['name']]==[str(src),out]
-            assert target['type']==typ==nodes[src]['outputs'][out]['type']
+            assert typ==nodes[src]['outputs'][out]['type']
+            assert target['type'] in ('*', typ)
         classes={n['class_type'] for n in api.values()}
         assert not any(name.startswith('Koharu') for name in classes)
-        assert api['60']['inputs']['mask']==['45',2]
-        assert api['61']['class_type']=='SaveImage'
-        assert api['9']['inputs']['cfg']==1 and api['7']['inputs']['sampler_name']=='euler'
-        assert len(api['8']['inputs']['sigmas'].split(','))==9
+        by_kind={n['class_type']:n for n in api.values()}
+        saved=by_kind['SaveImage']
+        assert api[saved['inputs']['images'][0]]['class_type']=='MangaLetterApply'
+        sampler=by_kind['SamplerCustom']
+        assert sampler['inputs']['cfg']==1
+        assert by_kind['KSamplerSelect']['inputs']['sampler_name']=='euler'
+        assert len(by_kind['ManualSigmas']['inputs']['sigmas'].split(','))==9
 
 
 def test_review_rejects_path_traversal_and_keeps_existing_file(monkeypatch,tmp_path):

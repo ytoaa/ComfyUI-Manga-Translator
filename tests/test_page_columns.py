@@ -158,14 +158,14 @@ def test_invalid_explicit_row_plans_stop_before_model_calls(alter):
                                  text_direction='vertical_rtl' if alter == 'vertical' else 'auto')
 
 
-def test_shipped_workflows_share_refined_manifest_for_ocr_and_cleanup():
-    for name, expected in (('08-integrated-tiled-cleanup-lettering', True),
-                           ('09-manual-regions-integrated-cleanup-lettering', False)):
-        graph = json.loads((ROOT/'lettering/example_workflows'/f'{name}.api.json').read_text())
-        ident, crops = next((i, n) for i, n in graph.items() if n['class_type'] == 'MangaRegionCrops')
-        assert crops['inputs']['refine_page_columns'] is expected
-        ocr = next(n for n in graph.values() if n['class_type'] == 'MangaOCRAdaptive')
-        cleanup = next(n for n in graph.values() if n['class_type'] == 'MangaInpaintPlan')
-        collect = next(n for n in graph.values() if n['class_type'] == 'MangaCollectOCR')
-        assert ocr['inputs']['region_plan_json'] == [ident, 3]
-        assert cleanup['inputs']['regions_json'] == collect['inputs']['manifest_json'] == [ident, 1]
+def test_integrated_workflow_shares_refined_manifest_for_ocr_and_cleanup():
+    graph = json.loads((ROOT/'lettering/example_workflows/08-integrated-tiled-cleanup-lettering.api.json').read_text())
+    ident, crops = next((i, n) for i, n in graph.items() if n['class_type'] == 'MangaRegionCrops')
+    assert crops['inputs']['refine_page_columns'] is True
+    ocr = next(n for n in graph.values() if n['class_type'] == 'MangaOCRAdaptive')
+    cleanup = next(n for n in graph.values() if n['class_type'] == 'MangaInpaintPlan')
+    collect = next(n for n in graph.values() if n['class_type'] == 'MangaCollectOCR')
+    assert ocr['inputs']['region_plan_json'] == [ident, 3]
+    assert cleanup['inputs']['regions_json'] == collect['inputs']['manifest_json'] == [ident, 1]
+    # Direct manual node use remains compatible, without a separate example graph.
+    assert N.MangaRegionCrops.INPUT_TYPES()['optional']['refine_page_columns'][1]['default'] is False

@@ -17,6 +17,12 @@ def test_installable_zip_imports_all_integrated_nodes(tmp_path):
         assert 'ComfyUI-Manga-Translator/workflow_project.py' in z.namelist()
         assert 'ComfyUI-Manga-Translator/web/folder_upload.js' in z.namelist()
         assert not any(name.endswith('/project_ui.py') or name.endswith('/web/projects.js') for name in z.namelist())
+        examples = sorted(name for name in z.namelist()
+                          if '/example_workflows/' in name and name.endswith('.json'))
+        assert examples == [
+            'ComfyUI-Manga-Translator/lettering/example_workflows/08-integrated-tiled-cleanup-lettering.api.json',
+            'ComfyUI-Manga-Translator/lettering/example_workflows/08-integrated-tiled-cleanup-lettering.json']
+        assert not any('/workflows/' in name for name in z.namelist())
         z.extractall(tmp_path/'installed')
     installed = tmp_path/'installed/ComfyUI-Manga-Translator'
     name = 'installed_integrated_package'

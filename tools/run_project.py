@@ -219,7 +219,7 @@ def workflow_bindings(graph):
     sources = [key for key,node in graph.items() if node['class_type'] in ('LoadImage','MangaWorkflowInput')]
     if len(sources) != 1: raise ProjectError('Project workflow needs exactly one image/page input')
     load, final = sources[0], single('SaveImage')
-    single('MangaDetectorDetail')  # Prevent replaying hard-coded manual 09 frames over a book.
+    single('MangaDetectorDetail')  # Require detector-backed selection for automatic folder pages.
     single('MangaRegionCrops')
     collect, translate = single('MangaCollectOCR'), single('MangaTranslate')
     saves = [key for key, node in graph.items() if node['class_type'] == 'MangaSaveReview']

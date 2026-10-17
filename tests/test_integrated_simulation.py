@@ -107,15 +107,6 @@ def test_uniform_page_bypasses_the_entire_qwen_branch(tmp_path):
     assert 'UNETLoader' not in report['calls']
 
 
-def test_manual_integrated_graph_reaches_save_without_detector_or_boundary_recovery(tmp_path):
-    report=S.GraphRunner(tmp_path,manual_regions=True).execute()
-    assert report['region_selection']=='manual' and report['selected_regions']==6
-    assert report['detector_calls']==0 and not report['boundary_recovery']
-    assert not report['calls'].get('MangaDetectorLoader') and not report['calls'].get('MangaDetectorDetail')
-    assert report['ocr_line_calls']==9 and report['final_saved'] and report['outside_mask_unchanged']
-    assert report['calls']['PreviewAny']==2
-
-
 def test_full_graph_recovers_cross_row_strip_before_ocr(tmp_path):
     report = S.GraphRunner(tmp_path, seam_case=True,require_recovery=True).execute()
     assert report['boundary_recovery']['recovery_calls'] > 0

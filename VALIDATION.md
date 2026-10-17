@@ -1,5 +1,15 @@
 # 검증 범위
 
+## 2026-10-17 v0.3.18 단일 통합 워크플로우
+
+- 배포 예제를 통합 08 하나로 정리했다. 예전 10개 예제의 GUI/API 20개 파일과 이전 다중 예제 생성기를 제거했다. 기존 노드는 저장 그래프 호환을 위해 유지한다.
+- 제공 08 GUI/API의 경로·노드·기본값·연결·바이트는 v0.3.17과 동일하다. 한 장/폴더 입력과 PC 폴더 업로드, OCR/번역 JSON 및 프로젝트 보고서 PreviewAny 연결을 유지한다.
+- 예전 예제와 완성된 08이 없는 임시 폴더에서 모델 노드 선언만으로 생성하여 배포 파일과 바이트 단위로 비교했다. 설치 ZIP에도 이 GUI/API 쌍만 포함됨을 검사했다.
+- CPU 전체 회귀 **406 passed in 46.47s**: `python -m pytest tests -q --confcutdir=tests`. 이전 예제에 대한 중복 매개변수 검사와 폐기된 수동 그래프 시뮬레이션은 제거하고, 현재 그래프의 기본 크롭/복원/합성·최종 식자·저장 및 단일 배포/재생성 검사로 바꿨다. 과거 `wait_for_dispatch`를 부르던 취소 회귀는 현재 `wait_for_parent_success`로 수정했다.
+- 통합 CLI 모의 실행 8개 시나리오를 확인했다. 단색+Qwen, 전부 타일, Qwen 생략, 경계 재검출, 조각 연결, 무검출 페이지는 저장에 도달하고, 미복구 경계와 원문 그대로인 Qwen 결과는 예상대로 저장 전에 중단했다.
+- Python 컴파일, 폴더 업로드 JS 구문, 문서 로컬 링크, ZIP 설치 import·CRC·파일별 SHA256, 배포 체크섬 및 생성 후 정합성을 검사했다.
+- 실제 DGX RF-DETR/Hayai/번역/Qwen 추론과 ComfyUI 브라우저 실행은 이번 정리에서 재실행하지 않았다. 이하 문단은 당시 버전의 검증 기록이며 현재 사용법은 README를 따른다.
+
 ## 2026-10-17 v0.3.14 워크플로우 내부 폴더 프로젝트
 
 - 사이드바와 별도 프로젝트 HTTP 경로/프런트엔드 JS를 제거했다. 같은 08의 첫 `MangaWorkflowInput` 노드에서 이미지 한 장/폴더 프로젝트, 원본 폴더, 프로젝트 이름, 시작·재개/실패 재시도/상태 확인/일시정지를 설정한다. 보고서는 기본 `PreviewAny`에 연결한다.
@@ -67,7 +77,7 @@ pytest의 `--confcutdir=tests`는 하이픈이 있는 ComfyUI 저장소 루트�
 
 ```bash
 python -m pytest --rootdir=tests --confcutdir=tests -q
-python tools/build_lettering_examples.py
+python tools/build_lettering_fixture.py
 python -m compileall -q lettering tools tests
 ```
 

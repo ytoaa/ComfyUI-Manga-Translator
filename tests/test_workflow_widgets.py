@@ -52,7 +52,7 @@ def test_widget_positions_match_runtime_schema_and_api_literals(path):
                 assert name in sockets and 'widget' not in sockets[name]
 
 
-@pytest.mark.parametrize('path', [path for path in FILES if path.stem.startswith(('01-rfdetr', '02-manual', '05-', '06-'))])
+@pytest.mark.parametrize('path', FILES)
 def test_translation_and_review_settings_do_not_shift(path):
     graph = json.loads(path.read_text())
     translate = next(node for node in graph['nodes'] if node['type'] == 'MangaTranslate')
@@ -65,22 +65,25 @@ def test_translation_and_review_settings_do_not_shift(path):
             assert len(node['widgets_values']) == 1 and node['widgets_values'][0]
 
 
-@pytest.mark.parametrize('name', ['01-single-region', '03-vllm-translation', '04-qwen-pigment-experimental'])
-def test_simple_crops_and_compositing_use_native_nodes(name):
-    prompt = json.loads((ROOT/'lettering/example_workflows'/f'{name}.api.json').read_text())
+def test_integrated_crops_and_compositing_use_native_nodes():
+    prompt = json.loads(FILES[0].with_name(FILES[0].stem+'.api.json').read_text())
     kinds = [node['class_type'] for node in prompt.values()]
-    assert kinds.count('ImageCrop') == 2 and kinds.count('CropMask') == 1
-    assert kinds.count('PrimitiveInt') == 4 and kinds.count('ImageCompositeMasked') == 1
+    assert kinds.count('ImageCrop') == 1 and kinds.count('ImageCompositeMasked') == 1
+    assert kinds.count('ImageScale') == 1 and kinds.count('GrowMask') == 1
     assert 'MangaLetterRegion' not in kinds and 'MangaLetterComposite' not in kinds
-    crop = next(node for node in prompt.values() if node['class_type'] == 'ImageCrop')
+    plan_id = next(i for i, node in prompt.items() if node['class_type'] == 'MangaInpaintPlan')
+    crop_id, crop = next((i, n) for i, n in prompt.items() if n['class_type'] == 'ImageCrop')
+    scale_id, scale = next((i, n) for i, n in prompt.items() if n['class_type'] == 'ImageScale')
     composite = next(node for node in prompt.values() if node['class_type'] == 'ImageCompositeMasked')
+    assert crop['inputs']['image'] == [plan_id, 0]
+    for field, slot in (('x', 1), ('y', 2), ('width', 3), ('height', 4)):
+        assert crop['inputs'][field] == [plan_id, slot]
+    for field in ('width', 'height'):
+        assert scale['inputs'][field] == crop['inputs'][field]
+    assert composite['inputs']['destination'] == [crop_id, 0]
+    assert composite['inputs']['source'] == [scale_id, 0]
+    assert composite['inputs']['mask'] == [plan_id, 5]
     assert composite['inputs']['resize_source'] is False
-    for node in prompt.values():
-        if node['class_type'] in ('ImageCrop', 'CropMask'):
-            for field in ('x', 'y', 'width', 'height'):
-                assert node['inputs'][field] == crop['inputs'][field]
-    for field in ('x', 'y'):
-        assert composite['inputs'][field] == crop['inputs'][field]
 
 
 def test_upload_buttons_are_not_serialized_and_integer_controls_are_fixed():

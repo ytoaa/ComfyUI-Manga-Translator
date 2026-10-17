@@ -268,10 +268,10 @@ def test_workflow_change_missing_nodes_and_parallel_project_lock_fail_before_sub
     assert not client.submissions
 
 
-def test_09_gui_json_empty_folder_and_recursive_output_cannot_start_project(tmp_path):
+def test_missing_detector_gui_json_empty_folder_and_recursive_output_cannot_start_project(tmp_path):
     make_page(tmp_path/'input/1.png')
     with pytest.raises(P.ProjectError,match='outside'): P.Project(tmp_path/'input',tmp_path/'input/output',graph())
-    manual = P.read_json(ROOT/'lettering/example_workflows/09-manual-regions-integrated-cleanup-lettering.api.json')
+    manual = {i:n for i,n in graph().items() if n['class_type'] != 'MangaDetectorDetail'}
     with pytest.raises(P.ProjectError,match='MangaDetectorDetail'): P.Project(tmp_path/'input',tmp_path/'out',manual)
     with pytest.raises(P.ProjectError,match='API-format'): P.Project(tmp_path/'input',tmp_path/'out',{'nodes':[]})
     (tmp_path/'empty').mkdir()

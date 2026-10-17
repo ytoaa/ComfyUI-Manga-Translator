@@ -244,10 +244,10 @@ def test_cancelled_dispatch_never_submits_a_page(tmp_path,monkeypatch):
     with native_client(tmp_path,monkeypatch) as (client,queue,_):
         parent=str(uuid.uuid4());client.parent_prompt_id=parent
         queue.history[parent]={'status':{'status_str':'error','completed':False}}
-        with pytest.raises(P.Paused,match='시작 작업'):client.wait_for_dispatch()
+        with pytest.raises(P.Paused,match='시작 작업'):client.wait_for_parent_success()
         assert not queue.pending
         queue.history[parent]['status']={'status_str':'success','completed':True}
-        client.wait_for_dispatch()
+        client.wait_for_parent_success()
 
 
 def test_status_during_start_is_not_misread_as_server_restart(tmp_path,monkeypatch):

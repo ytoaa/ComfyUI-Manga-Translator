@@ -244,7 +244,7 @@ def test_existing_translation_json_bridges_to_lettering(fixture, monkeypatch):
 
 def test_all_example_workflow_links_api_and_new_node_schemas():
     files = sorted((PACKAGE/'example_workflows').glob('*.api.json'))
-    assert len(files) == 9
+    assert len(files) == 1
     for path in files:
         prompt = json.loads(path.read_text())
         ui = json.loads(path.with_name(path.name.replace('.api.json', '.json')).read_text())
@@ -287,15 +287,16 @@ def test_all_example_workflow_links_api_and_new_node_schemas():
         for identifier in prompt: visit(identifier)
 
 
-def test_native_integrated_workflows_use_cleanup_then_exact_lettering():
-    for filename in ('05-rfdetr-ocr-cleanup-lettering', '06-manual-ocr-cleanup-lettering'):
-        graph = json.loads((PACKAGE/'example_workflows'/(filename+'.api.json')).read_text())
-        kinds = {n['class_type'] for n in graph.values()}
-        assert 'MangaCleanupPrompt' not in kinds and 'MangaEditPrompt' not in kinds
-        encoder = next(n for n in graph.values() if n['class_type'] == 'TextEncodeQwenImage21')
-        assert encoder['inputs']['resolution'] == 0
-        assert encoder['inputs']['prompt'] == "Remove all visible text and lettering from <image1>, including titles, names, small captions, labels, and every line of fine print. Completely erase lettering and text remnants. Reconstruct the background beneath the removed text to match the surrounding color, shading, and texture. Preserve gray panels, speech bubble outlines, illustrations, and layout."
-        page_id = next(i for i, n in graph.items() if n['class_type'] == 'MangaLetterPage')
-        saved = next(n for n in graph.values() if n['class_type'] == 'SaveImage')
-        assert saved['inputs']['images'] == [page_id, 0]
-        assert 'MangaTranslate' in kinds and 'MangaOCR' in kinds
+def test_integrated_workflow_uses_cleanup_then_exact_lettering():
+    graph = json.loads((PACKAGE/'example_workflows/08-integrated-tiled-cleanup-lettering.api.json').read_text())
+    kinds = {n['class_type'] for n in graph.values()}
+    assert 'MangaCleanupPrompt' not in kinds and 'MangaEditPrompt' not in kinds
+    encoder = next(n for n in graph.values() if n['class_type'] == 'TextEncodeQwenImage21')
+    assert encoder['inputs']['resolution'] == 0
+    assert 'Remove all visible text and lettering' in encoder['inputs']['prompt']
+    crop_id = next(i for i, n in graph.items() if n['class_type'] == 'ImageCrop')
+    assert encoder['inputs']['images.image_1'] == [crop_id, 0]
+    page_id = next(i for i, n in graph.items() if n['class_type'] == 'MangaLetterApply')
+    saved = next(n for n in graph.values() if n['class_type'] == 'SaveImage')
+    assert saved['inputs']['images'] == [page_id, 0]
+    assert {'MangaTranslate', 'MangaOCRAdaptive', 'MangaInpaintAssemble', 'MangaLetterPlan'} <= kinds

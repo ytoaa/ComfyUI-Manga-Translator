@@ -1,3 +1,5 @@
+> 과거 v0.3.9의 실패 진단과 수동 우회 기록이다. v0.3.18부터 수동 예제는 배포하지 않으며, 현재 작업은 [통합 08](../README.md)을 사용한다. 아래 설명은 당시 버전에 해당한다.
+
 # OCR 행 복구와 수동 통합 경로 — v0.3.9
 
 ## 305×270 실제 실패 입력
@@ -32,7 +34,7 @@ v0.3.8의 작은 성분 제외는 누락 경보에만 적용되어 있었다.
 
 ## 09 수동 영역 통합
 
-[09 GUI JSON](../lettering/example_workflows/09-manual-regions-integrated-cleanup-lettering.json)을 새로 불러온다.
+[09 GUI JSON](https://github.com/ytoaa/ComfyUI-Manga-Translator/blob/10e179f36469608d428d15740522cc735445a8d4/lettering/example_workflows/09-manual-regions-integrated-cleanup-lettering.json)을 새로 불러온다.
 `.api.json`은 API 제출용이다. 원본 이미지를 선택하고 두 번째 `MangaRegionCrops`의 `layout_json`을
 확인한다. 이 경로에는 RF-DETR 로더/검출/경계 복구가 없고 새 커스텀 노드도 없다.
 지정 프레임 → Hayai → 원문 JSON/미리보기 → 번역 → 번역 JSON/미리보기 → 타일 제거 → 식자 → 저장으로 연결된다.

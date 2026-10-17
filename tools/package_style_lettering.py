@@ -10,7 +10,7 @@ TOP = {'__init__.py', 'nodes.py', 'models.py', 'requirements.txt', 'README.md', 
        'VALIDATION.md', 'provenance.json', 'pytest.ini', '.gitattributes', '.gitignore',
        'limits.py', 'detection_policy.py', 'region_policy.py', 'mask_nodes.py', 'inpaint_tiles.py',
        'ocr_policy.py', 'layout_refinement.py', 'workflow_project.py'}
-DIRECTORIES = ('adapters', 'docs', 'examples', 'lettering', 'tests', 'tools', 'web', 'workflows')
+DIRECTORIES = ('adapters', 'docs', 'examples', 'lettering', 'tests', 'tools', 'web')
 
 
 def package(destination):
@@ -31,7 +31,7 @@ def package(destination):
     files.append(ROOT/'SHA256SUMS')
     destination = Path(destination).resolve()
     destination.mkdir(parents=True, exist_ok=True)
-    output = destination/'ComfyUI-Manga-Translator-integrated-v0.3.17.zip'
+    output = destination/'ComfyUI-Manga-Translator-integrated-v0.3.18.zip'
     temporary = output.with_suffix('.zip.tmp')
     with zipfile.ZipFile(temporary, 'w', zipfile.ZIP_DEFLATED) as archive:
         for path in files:
