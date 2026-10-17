@@ -5,7 +5,6 @@ Project runner and ComfyUI parent control prompt are tested separately.
 """
 from copy import deepcopy
 import importlib.util
-import json
 from pathlib import Path
 import shutil
 import sys
@@ -109,7 +108,8 @@ def test_no_empty_export_edition_is_claimed_when_every_page_is_invalid(tmp_path)
     report = runner.run(export=True)
     assert report['counts'] == {'failed':1}
     assert report['export'] is None
-    assert not list((runner.destination/'exports').glob('*')) if (runner.destination/'exports').exists() else True
+    if (runner.destination/'exports').exists():
+        assert not list((runner.destination/'exports').glob('*'))
 
 
 def test_real_processing_setting_change_still_requires_new_project(tmp_path):
@@ -143,15 +143,29 @@ def test_parent_failure_or_pause_never_submits_a_child_page(tmp_path):
     assert not client.submissions
 
 
-def test_native_parent_reconciler_accepts_success_and_rejects_error_or_stop():
+def test_native_parent_reconciler_waits_running_then_accepts_success():
+    client = object.__new__(W.NativeComfyClient); client.parent_prompt_id='parent'; calls={'history':0}
+    def history(_):
+        calls['history'] += 1
+        if calls['history'] >= 3:
+            return {'status':{'status_str':'success','completed':True}}
+        return None
+    client.history=history
+    client.queue=lambda:{'queue_running':[[0,'parent',{},{}]],'queue_pending':[]}
+    client.wait_for_parent_success(timeout=1)
+    assert calls['history'] >= 3
+
+
+def test_native_parent_reconciler_rejects_error_stop_and_disappearance():
     client = object.__new__(W.NativeComfyClient); client.parent_prompt_id='parent'
-    client.history=lambda ident:{'status':{'status_str':'success','completed':True}}
-    client.queue=lambda:{'queue_running':[],'queue_pending':[]}
-    client.wait_for_parent_success(timeout=.01)
     client.history=lambda ident:{'status':{'status_str':'error','completed':False}}
+    client.queue=lambda:{'queue_running':[],'queue_pending':[]}
     with pytest.raises(P.Paused,match='실패'):
         client.wait_for_parent_success(timeout=.01)
     client.history=lambda ident:None
     client.queue=lambda:{'queue_running':[[0,'parent',{},{}]],'queue_pending':[]}
     with pytest.raises(P.Paused,match='일시정지'):
         client.wait_for_parent_success(lambda:True, timeout=.01)
+    client.queue=lambda:{'queue_running':[],'queue_pending':[]}
+    with pytest.raises(P.Paused,match='사라졌'):
+        client.wait_for_parent_success(timeout=1)
