@@ -21,8 +21,8 @@ def candidates(provided, detection, shape):
             local,bounds=_decode_mask(item['mask'],shape[1],shape[0])
             found.append({'mask':local>.5,'bounds':list(bounds),'source':'detector'})
             if len(found)>64:raise ValueError('Too many detected bubble masks')
-    if sum(item['mask'].size for item in found)>core.MAX_PIXELS:
-        raise ValueError('Bubble mask analysis exceeds 16 Mi pixels')
+    if sum(item['mask'].size for item in found)>core.MAX_SOURCE_PIXELS:
+        raise ValueError('Bubble mask analysis exceeds the 64 Mi-pixel source-page ceiling')
     for i,item in enumerate(found):
         item.update(index=i,pixels=int(item['mask'].sum()),safe={})
     return found
@@ -77,7 +77,7 @@ def constrain(ink,source,items,shape,padding,expand=False):
             min(shape[0],y+2*h)-max(0,y-h)] if expand else source
     left,top,right,bottom=overlap(window,chosen['bounds'])
     if (right-left)*(bottom-top)>core.MAX_REGION_PIXELS:
-        raise ValueError('Bubble fitting window exceeds 4 Mi pixels')
+        raise ValueError('Bubble fitting window exceeds 16 Mi pixels')
     clearance=max(1,padding)
     if clearance not in chosen['safe']:
         chosen['safe'][clearance]=ndimage.binary_erosion(chosen['mask'],iterations=clearance,border_value=0)
