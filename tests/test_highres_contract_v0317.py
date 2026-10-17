@@ -5,6 +5,8 @@ import sys
 
 import numpy as np
 
+from tests.test_project_runner import P
+
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location(
     'highres_contract_extension', ROOT/'__init__.py', submodule_search_locations=[str(ROOT)])
@@ -22,7 +24,8 @@ def test_page_region_raster_and_typography_budgets_are_separate():
     assert limits.MAX_REGION_PIXELS == 16*1024*1024
     assert limits.MAX_RASTER_PIXELS == 32*1024*1024
     assert limits.MAX_TYPOGRAPHY_PIXELS == 32*1024*1024
-    assert core.MAX_SOURCE_PIXELS == tiles.MAX_SOURCE_PIXELS == limits.MAX_SOURCE_PIXELS
+    assert P.MAX_SOURCE_PIXELS == core.MAX_SOURCE_PIXELS == tiles.MAX_SOURCE_PIXELS == limits.MAX_SOURCE_PIXELS
+    assert P.MAX_INPUT_BYTES == limits.MAX_INPUT_BYTES
     assert core.MAX_REGION_PIXELS == limits.MAX_REGION_PIXELS
     assert core.MAX_RASTER_PIXELS == limits.MAX_RASTER_PIXELS
 
