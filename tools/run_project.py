@@ -270,7 +270,7 @@ class ComfyClient:
 class Project:
     def __init__(self, inputs, destination, graph, client=None, *, recursive=True, max_pixels=MAX_PAGE_PIXELS,
                  page_timeout=3600, poll_interval=1, retry_failed=False, stop_on_error=False,
-                 clock=time.monotonic, sleep=time.sleep, progress=None):
+                 clock=time.monotonic, sleep=time.sleep, progress=None, should_stop=None):
         self.inputs, self.destination = Path(inputs).resolve(), Path(destination).resolve()
         if self.destination == self.inputs or self.destination.is_relative_to(self.inputs):
             raise ProjectError('Project output must be outside the scanned input folder')
@@ -284,6 +284,7 @@ class Project:
         self.retry_failed, self.stop_on_error = retry_failed, stop_on_error
         self.clock, self.sleep = clock, sleep
         self.progress = progress or (lambda value: None)
+        self.should_stop = should_stop or (lambda: False)
         canonical = deepcopy(graph)
         canonical = {key:{'class_type':node['class_type'],'inputs':node['inputs']} for key,node in canonical.items()}
         canonical[self.bind['load']]['inputs']['image'] = ''
@@ -673,6 +674,8 @@ class Project:
                     if state and state['status'] in ACTIVE: self._resume(state)
                 self._preflight()
                 for page in self.pages:
+                    if self.should_stop():
+                        raise Paused('사용자 요청으로 일시정지했습니다. 재개하면 완료한 페이지는 건너뜁니다.')
                     self._process(page)
                     settled = self.state(page)
                     if not settled or settled['status'] not in FINISHED | {'failed'}:

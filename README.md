@@ -1,5 +1,7 @@
 # ComfyUI-Manga-Translator
 
+v0.3.13은 **ComfyUI 왼쪽 ‘만화 번역 프로젝트’ 패널**을 추가한다. 기존 08을 열어 설정한 뒤 폴더 선택/업로드 → 실행 → 페이지별 결과 확인 → 일시정지/재개까지 ComfyUI 안에서 처리한다. 명령어와 API JSON 내보내기는 필요 없다. 업데이트 후 ComfyUI 재시작·브라우저 새로고침으로 탭을 불러온다. [패널 사용법·예외 처리](docs/comfyui-projects-v0.3.13.md).
+
 v0.3.12는 **같은 08을 폴더의 이미지에 순차 실행하는 프로젝트 실행기**와 실패·재개 시뮬레이션을 추가한다. 파일 순서·원본/결과 해시·시도별 작업 ID를 기록하며, 페이지 오류는 분리하고 접수 여부 불명·메모리·디스크·구성 오류는 추가 제출을 멈춘다. 응답 유실·중단 후 같은 프로젝트를 재개해도 작업을 무작정 다시 제출하지 않는다. 번호 칸 침범·일부 표지 자동 검출은 여전히 개선 대상이다. [사용법·예외 처리·검증 범위](docs/project-processing-v0.3.12.md).
 
 v0.3.11은 다단 본문의 중복 영역을 **OCR 전에** 정리한다. 반복되는 단과 실제 여백이 확인된 경우에만 단별·문단별 영역을 만들고, 확인된 행을 처음부터 나눠 읽는다. 번역·제거·식자가 같은 명세를 사용하며 인접 문단의 여유 범위도 겹치지 않게 제한한다. **업데이트 후 ComfyUI를 재시작하고 새 08을 다시 가져온다. 실제 Hayai 인식 정확도는 재실행 확인이 필요하다.** [원인·연결·검증 범위](docs/page-columns-v0.3.11.md).
@@ -47,7 +49,7 @@ ComfyUI에서 원문 검출 → OCR → 번역 → 이미지 모델 편집 → �
 1. 이 저장소 폴더를 `ComfyUI/custom_nodes/ComfyUI-Manga-Translator`에 둔다. 저장소 루트의 `__init__.py`가 바로 보이는 구조다.
 2. 기존 ComfyUI Python 환경을 사용한다. RF-DETR/Hayai를 이전에 실행한 환경이라면 모델 어댑터 의존성이 이미 있을 수 있다. [requirements.txt](requirements.txt)는 어댑터 요구사항이다. 설치 전에 기존 torch/CUDA/Transformers 버전과 충돌 여부를 확인하고, 현재 동작 중인 환경을 임의로 업그레이드하지 않는다. 이 패키지는 런타임에 설치·다운로드를 수행하지 않는다.
 3. ComfyUI를 재시작하고 브라우저를 새로고침한다.
-4. `workflows/01-rfdetr-hayai-qwen21.json`을 ComfyUI로 가져온다. `.api.json`은 API 제출용이며 캔버스 가져오기는 일반 `.json`을 쓴다.
+4. `lettering/example_workflows/08-integrated-tiled-cleanup-lettering.json`을 ComfyUI로 가져온다. `.api.json`은 API 제출용이며 캔버스 가져오기는 일반 `.json`을 쓴다.
 5. `원본 이미지`에서 입력 이미지를 업로드하고, 로더에서 실제 설치된 모델을 선택한다.
 
 Git으로 설치할 경우 ComfyUI의 `custom_nodes` 폴더에서:
