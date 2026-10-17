@@ -1,6 +1,7 @@
 """Regression tests for resolving a running ComfyUI prompt without graph equality."""
 from copy import deepcopy
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import types
@@ -68,6 +69,19 @@ def test_context_survives_annotation_on_source_node():
     live['7']['is_changed'] = [None]
     assert queued != live
     assert W._context(Server([row('parent-2', queued, None)]), live, 7) == ('parent-2', None)
+
+
+def test_queued_prompt_excludes_runtime_nan_and_is_json_safe():
+    queued = prompt()
+    live = deepcopy(queued)
+    live['7']['is_changed'] = float('nan')
+    server = Server([row('parent-3', queued)])
+    ident, _ = W._context(server, live, '7')
+    canonical = W._queued_prompt(server, ident)
+    assert canonical == queued
+    assert canonical is not queued
+    assert 'is_changed' not in canonical['7']
+    json.dumps(canonical, allow_nan=False)
 
 
 def test_context_refuses_ambiguous_running_jobs():
