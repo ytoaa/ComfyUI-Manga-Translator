@@ -199,7 +199,9 @@ def workflow_bindings(graph):
         if len(matches) != 1:
             raise ProjectError(f'Project workflow needs exactly one {kind}')
         return matches[0]
-    load, final = single('LoadImage'), single('SaveImage')
+    sources = [key for key,node in graph.items() if node['class_type'] in ('LoadImage','MangaWorkflowInput')]
+    if len(sources) != 1: raise ProjectError('Project workflow needs exactly one image/page input')
+    load, final = sources[0], single('SaveImage')
     single('MangaDetectorDetail')  # Prevent replaying hard-coded manual 09 frames over a book.
     single('MangaRegionCrops')
     collect, translate = single('MangaCollectOCR'), single('MangaTranslate')
@@ -532,6 +534,10 @@ class Project:
                     'no space left','disk full','errno 28','permission denied','connection refused',
                     'http error 401','http error 403','http error 429','rate limit')):
                 raise Paused('Server resource/storage/service failure; check the server before continuing the project')
+            if state['reason'] in ('InterruptProcessingException','ExecutionInterrupted') or any(
+                    isinstance(entry,list) and entry and entry[0]=='execution_interrupted'
+                    for entry in status.get('messages',[])):
+                raise Paused('ComfyUI에서 페이지 실행이 중지되었습니다. 프로젝트의 추가 제출을 멈췄습니다.')
             if state['reason'] in ('FileNotFoundError','ModuleNotFoundError','ImportError'):
                 raise Paused('Server model/font/dependency configuration failed; check it before continuing')
             if self.stop_on_error: raise Paused('Stopped after a failed page by project policy')

@@ -14,6 +14,8 @@ def test_installable_zip_imports_all_integrated_nodes(tmp_path):
     tool = importlib.util.module_from_spec(spec); spec.loader.exec_module(tool)
     archive = tool.package(tmp_path/'archive')
     with zipfile.ZipFile(archive) as z:
+        assert 'ComfyUI-Manga-Translator/workflow_project.py' in z.namelist()
+        assert not any(name.endswith('/project_ui.py') or '/web/' in name for name in z.namelist())
         z.extractall(tmp_path/'installed')
     installed = tmp_path/'installed/ComfyUI-Manga-Translator'
     name = 'installed_integrated_package'
@@ -21,5 +23,5 @@ def test_installable_zip_imports_all_integrated_nodes(tmp_path):
     plugin = importlib.util.module_from_spec(spec)
     sys.modules[name] = plugin
     spec.loader.exec_module(plugin)
-    assert {'MangaInpaintPlan', 'MangaInpaintAssemble', 'MangaDetectionMask', 'MangaDetectorDetail', 'MangaLetterPlan', 'MangaLetterApply'} <= set(plugin.NODE_CLASS_MAPPINGS)
+    assert {'MangaWorkflowInput','MangaInpaintPlan', 'MangaInpaintAssemble', 'MangaDetectionMask', 'MangaDetectorDetail', 'MangaLetterPlan', 'MangaLetterApply'} <= set(plugin.NODE_CLASS_MAPPINGS)
     assert plugin.NODE_CLASS_MAPPINGS['MangaDetectorDetail'].__module__.startswith(name+'.')

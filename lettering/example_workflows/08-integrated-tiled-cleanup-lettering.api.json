@@ -1,8 +1,12 @@
 {
   "1": {
-    "class_type": "LoadImage",
+    "class_type": "MangaWorkflowInput",
     "inputs": {
-      "image": ""
+      "input_mode": "이미지 한 장",
+      "image": "",
+      "input_folder": "manga_book",
+      "project_name": "book_01",
+      "action": "시작·재개"
     }
   },
   "2": {
@@ -546,6 +550,15 @@
     "class_type": "PrimitiveBoolean",
     "inputs": {
       "value": false
+    }
+  },
+  "42": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "1",
+        2
+      ]
     }
   }
 }

@@ -1,19 +1,19 @@
 {
   "id": "6489a8d0-adb0-54db-baf9-5a11c43d9dd8",
   "revision": 1,
-  "last_node_id": 41,
-  "last_link_id": 67,
+  "last_node_id": 43,
+  "last_link_id": 68,
   "nodes": [
     {
       "id": 1,
-      "type": "LoadImage",
+      "type": "MangaWorkflowInput",
       "pos": [
         0,
         50
       ],
       "size": [
-        330,
-        120
+        400,
+        270
       ],
       "flags": {},
       "order": 0,
@@ -21,7 +21,7 @@
       "inputs": [],
       "outputs": [
         {
-          "name": "IMAGE",
+          "name": "image",
           "type": "IMAGE",
           "links": [
             1,
@@ -32,21 +32,36 @@
           ]
         },
         {
-          "name": "MASK",
+          "name": "mask",
           "type": "MASK",
           "links": []
+        },
+        {
+          "name": "project_report",
+          "type": "STRING",
+          "links": [
+            67
+          ]
         }
       ],
       "properties": {
-        "Node name for S&R": "LoadImage"
+        "Node name for S&R": "MangaWorkflowInput"
       },
       "widgets_values": [
-        ""
+        "이미지 한 장",
+        "",
+        "manga_book",
+        "book_01",
+        "시작·재개"
       ],
       "widgets_values_named": {
-        "image": ""
+        "input_mode": "이미지 한 장",
+        "image": "",
+        "input_folder": "manga_book",
+        "project_name": "book_01",
+        "action": "시작·재개"
       },
-      "title": "① 원본 페이지"
+      "title": "① 워크플로우 입력 · 이미지 한 장 / 폴더 프로젝트"
     },
     {
       "id": 2,
@@ -357,7 +372,7 @@
           "name": "ocr_region_plans",
           "type": "STRING",
           "links": [
-            67
+            68
           ]
         }
       ],
@@ -450,7 +465,7 @@
         {
           "name": "region_plan_json",
           "type": "STRING",
-          "link": 67
+          "link": 68
         }
       ],
       "outputs": [
@@ -2062,6 +2077,63 @@
         "value": false
       },
       "title": "효과음·표지 큰 글자 포함 · 공통 스위치"
+    },
+    {
+      "id": 42,
+      "type": "PreviewAny",
+      "pos": [
+        0,
+        -350
+      ],
+      "size": [
+        420,
+        300
+      ],
+      "flags": {},
+      "order": 41,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 67
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny",
+        "cnr_id": "comfy-core"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "프로젝트 진행·실패·결과 위치 · 미리보기 아무거나"
+    },
+    {
+      "id": 43,
+      "type": "Note",
+      "pos": [
+        420,
+        -550
+      ],
+      "size": [
+        500,
+        270
+      ],
+      "flags": {},
+      "order": 42,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "폴더 처리도 이 워크플로우 안에서 실행합니다. 입력 노드의 input_mode=폴더 프로젝트로 설정하세요.\ninput_folder는 ComfyUI/input 아래의 원본 폴더, project_name은 결과·재개 기록의 이름입니다.\naction=시작·재개로 실행하면 현재 08 설정을 저장하고 한 페이지씩 같은 그래프를 큐에 제출합니다.\n진행 보고서는 미리보기 아무거나에 표시합니다. 일시정지/상태 확인도 action을 바꾸고 실행하세요.\n일시정지는 현재 페이지를 마친 뒤 적용합니다. 실패 재시도는 실패 페이지에만 새 시도를 추가합니다.\n재개는 저장된 설정을 사용합니다. 모델·번역·식자 설정을 바꾼 새 실행은 새 project_name을 사용하세요.\n이미지를 한꺼번에 텐서 목록으로 합치지 않습니다. OCR/타일 집계는 페이지마다 독립 실행합니다."
+      ]
     }
   ],
   "links": [
@@ -2595,6 +2667,14 @@
     ],
     [
       67,
+      1,
+      2,
+      42,
+      0,
+      "STRING"
+    ],
+    [
+      68,
       7,
       3,
       9,

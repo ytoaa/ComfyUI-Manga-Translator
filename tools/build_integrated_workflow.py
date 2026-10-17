@@ -15,7 +15,8 @@ CORE_RETURNS.update({'GrowMask': ('MASK',), 'MaskToImage': ('IMAGE',),'PreviewAn
 def build(manual=False):
     template = json.loads((ROOT/'lettering/example_workflows/07-rfdetr-detail-adaptive-ocr-cleanup-lettering.json').read_text(encoding='utf-8'))
     g = Graph()
-    original = g.add('LoadImage', {'image': ''}, (0, 50), '① 원본 페이지')
+    original = g.add('LoadImage' if manual else 'MangaWorkflowInput', {'image': ''}, (0, 50), '① 원본 페이지' if manual else '① 워크플로우 입력 · 이미지 한 장 / 폴더 프로젝트')
+    if not manual:g.nodes[original-1]['size']=[400,270]
     if manual:
         # One editable JSON is authoritative for crops, cleanup and lettering.
         # These are human-selected frames for the reported 800x1125 cover,
@@ -163,6 +164,18 @@ def build(manual=False):
         g.nodes[scope-1]['properties']['cnr_id']='comfy-core'
         for node in (detector,regions,raw_mask):g.connect(scope,0,node,'include_sfx')
         name='08-integrated-tiled-cleanup-lettering'
+    if not manual:
+        status=g.add('PreviewAny',pos=(0,-350),title='프로젝트 진행·실패·결과 위치 · 미리보기 아무거나')
+        g.nodes[status-1]['size']=[420,300]
+        g.nodes[status-1]['properties']['cnr_id']='comfy-core'
+        g.connect(original,2,status,'source')
+        g.note('폴더 처리도 이 워크플로우 안에서 실행합니다. 입력 노드의 input_mode=폴더 프로젝트로 설정하세요.\n'
+               'input_folder는 ComfyUI/input 아래의 원본 폴더, project_name은 결과·재개 기록의 이름입니다.\n'
+               'action=시작·재개로 실행하면 현재 08 설정을 저장하고 한 페이지씩 같은 그래프를 큐에 제출합니다.\n'
+               '진행 보고서는 미리보기 아무거나에 표시합니다. 일시정지/상태 확인도 action을 바꾸고 실행하세요.\n'
+               '일시정지는 현재 페이지를 마친 뒤 적용합니다. 실패 재시도는 실패 페이지에만 새 시도를 추가합니다.\n'
+               '재개는 저장된 설정을 사용합니다. 모델·번역·식자 설정을 바꾼 새 실행은 새 project_name을 사용하세요.\n'
+               '이미지를 한꺼번에 텐서 목록으로 합치지 않습니다. OCR/타일 집계는 페이지마다 독립 실행합니다.',(420,-550))
     g.connect(crops, 3, ocr, 'region_plan_json')
     g.save(name)
     # The committed 08 graph uses LF; keep regeneration byte-for-byte stable.

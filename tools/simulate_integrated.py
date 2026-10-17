@@ -230,7 +230,7 @@ class GraphRunner:
         for i in range(count):
             args = values if input_is_list else {k: v[min(i, len(v)-1)] for k, v in values.items()}
             self.calls[kind] += 1
-            if cls and kind not in ('MangaDetectorLoader', 'MangaOCRLoader'):
+            if cls and kind not in ('MangaDetectorLoader', 'MangaOCRLoader', 'MangaWorkflowInput'):
                 result = getattr(obj, cls.FUNCTION)(**args)
             else: result = self.native(kind, args)
             if isinstance(result, dict):
@@ -245,6 +245,10 @@ class GraphRunner:
         return outputs
     def native(self, kind, a):
         if kind == 'LoadImage': return tensor(self.original), torch.zeros((1, 640, 1600))
+        if kind == 'MangaWorkflowInput':
+            override = getattr(self,'page_input',None)
+            if override: return override(a)
+            return tensor(self.original), torch.zeros((1, 640, 1600)), '{"status":"single_image"}'
         if kind == 'MangaDetectorLoader': return (self.detector,)
         if kind == 'MangaOCRLoader': return (self.ocr,)
         if kind in ('UNETLoader', 'CLIPLoader', 'VAELoader', 'KSamplerSelect'): return (object(),)
@@ -286,6 +290,11 @@ class GraphRunner:
             pil(a['images']).save(path)
             self.saved.append(path)
             prefix = Path(a['filename_prefix'])
+            saved = self.destination/prefix.parent/(prefix.name+'_00001_.png')
+            if not saved.resolve().is_relative_to(self.destination.resolve()):
+                raise ValueError('Simulation output prefix leaves its destination')
+            saved.parent.mkdir(parents=True,exist_ok=True)
+            pil(a['images']).save(saved)
             return {'ui':{'images':[{'filename':prefix.name+'_00001_.png',
                        'subfolder':'' if str(prefix.parent)=='.' else prefix.parent.as_posix(),
                        'type':'output'}]}}
@@ -300,8 +309,9 @@ class GraphRunner:
             answer = {'translations': [{'id': row['id'], 'target': targets[row['source']]} for row in data['regions']]}
             return {'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(answer, ensure_ascii=False)}}]}
         N.api_json = fake_api
-        sys.modules['folder_paths'] = types.SimpleNamespace(get_output_directory=lambda: str(self.destination),
-                                                          models_dir=str(self.destination/'models'))
+        folder_functions = dict(vars(folder)) if folder is not None else {}
+        folder_functions.update(get_output_directory=lambda: str(self.destination), models_dir=str(self.destination/'models'))
+        sys.modules['folder_paths'] = types.SimpleNamespace(**folder_functions)
         try: yield
         finally:
             N.api_json = previous
