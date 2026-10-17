@@ -14,8 +14,12 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
-MAX_PIXELS = 16 * 1024 * 1024
-MAX_REGION_PIXELS = 4 * 1024 * 1024
+from ..limits import (MAX_SOURCE_PIXELS, MAX_REGION_PIXELS, MAX_RASTER_PIXELS,
+                      MAX_TYPOGRAPHY_PIXELS)
+
+# Backward-compatible name used by older tests/extensions.  Page acceptance is
+# deliberately distinct from region/raster budgets below.
+MAX_PIXELS = MAX_SOURCE_PIXELS
 MAX_TEXT = 2048
 FONT_DIR = Path(__file__).with_name('fonts')
 
@@ -23,9 +27,9 @@ FONT_DIR = Path(__file__).with_name('fonts')
 def rgb(value):
     value = np.asarray(value, dtype=np.float32)
     if (value.ndim != 3 or value.shape[2] != 3 or min(value.shape[:2]) < 1
-            or value.shape[0] * value.shape[1] > MAX_PIXELS
+            or value.shape[0] * value.shape[1] > MAX_SOURCE_PIXELS
             or not np.isfinite(value).all() or value.min() < 0 or value.max() > 1):
-        raise ValueError('Expected a finite RGB image in [0, 1], at most 16 Mi pixels')
+        raise ValueError('Expected a finite RGB image in [0, 1], at most 64 Mi pixels')
     return value
 
 
@@ -53,7 +57,7 @@ def bbox(value, shape):
         raise ValueError('bbox must be [x, y, width, height] in original page pixels')
     x, y, w, h = [integer(v, 0 if i < 2 else 1, 16384, 'bbox') for i, v in enumerate(value)]
     if x + w > shape[1] or y + h > shape[0] or w * h > MAX_REGION_PIXELS:
-        raise ValueError('Region is outside the page or exceeds 4 Mi pixels')
+        raise ValueError('Region is outside the page or exceeds 16 Mi pixels')
     return x, y, w, h
 
 
@@ -95,7 +99,7 @@ def _texture(reference, fill_mask):
 def analyze_style(reference, cleaned, source_mask, polarity='auto', difference_threshold=.07):
     reference, cleaned = rgb(reference), rgb(cleaned)
     if reference.shape != cleaned.shape or reference.shape[0] * reference.shape[1] > MAX_REGION_PIXELS:
-        raise ValueError('Style reference must be aligned and at most 4 Mi pixels')
+        raise ValueError('Style reference must be aligned and at most 16 Mi pixels')
     source_mask = mask_array(source_mask, reference.shape[:2])
     finite(difference_threshold, .005, .5, 'difference_threshold')
     if polarity not in ('auto', 'dark', 'light'):
@@ -178,9 +182,9 @@ def validate_style(style):
     if len(size) != 2:
         raise ValueError('Invalid style canvas')
     for v in size:
-        integer(v, 1, 8192, 'style canvas')
+        integer(v, 1, 16384, 'style canvas')
     if size[0] * size[1] > MAX_REGION_PIXELS:
-        raise ValueError('Style canvas exceeds 4 Mi pixels')
+        raise ValueError('Style canvas exceeds 16 Mi pixels')
     for key, low, high in [('outline_width', 0, 32), ('weight_px', -8, 16), ('texture_strength', 0, 2),
                             ('shadow_x', -64, 64), ('shadow_y', -64, 64), ('shadow_blur', 0, 32)]:
         finite(style.get(key), low, high, key)
@@ -328,8 +332,8 @@ def render_text(text, style, font_name='NanumGothic-Bold.ttf', direction='horizo
     finite(line_spacing, .5, 3, 'line_spacing'); finite(tracking, -4, 32, 'tracking')
     finite(rotation, -180, 180, 'rotation'); finite(shear, -.6, .6, 'shear')
     w, h = style['size']
-    if w*h*supersample**2 > MAX_PIXELS:
-        raise ValueError('Supersampled region exceeds 16 Mi pixels; reduce supersample or region size')
+    if w*h*supersample**2 > MAX_RASTER_PIXELS:
+        raise ValueError('Supersampled region exceeds 32 Mi pixels; reduce supersample or region size')
     # LANCZOS spreads coverage up to three output pixels beyond the high-res
     # glyph. Keep a clear pixel after that footprint. A fixed two-pixel left
     # origin otherwise touches the boundary at every font size after resize.
@@ -498,8 +502,8 @@ def parse_regions(document, shape):
             raise ValueError('Unknown region field')
         if not isinstance(item.get('layout', {}), dict) or not isinstance(item.get('style', {}), dict):
             raise ValueError('layout and style must be objects')
-    if sum(r['bbox'][2]*r['bbox'][3] for r in regions) > MAX_PIXELS:
-        raise ValueError('Total region area exceeds 16 Mi pixels')
+    if sum(r['bbox'][2]*r['bbox'][3] for r in regions) > MAX_TYPOGRAPHY_PIXELS:
+        raise ValueError('Total region area exceeds 32 Mi pixels')
     return data
 
 
