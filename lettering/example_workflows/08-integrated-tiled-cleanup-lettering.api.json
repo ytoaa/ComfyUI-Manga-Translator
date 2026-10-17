@@ -182,6 +182,7 @@
       "max_tokens": 4096,
       "timeout": 300,
       "translated_override_json": "",
+      "response_format": "json_schema",
       "ocr_json": [
         "12",
         0

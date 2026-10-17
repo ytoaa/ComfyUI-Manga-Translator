@@ -50,6 +50,16 @@ def test_control_widgets_do_not_change_semantic_workflow_identity():
     assert P.workflow_fingerprint(base) != P.workflow_fingerprint(changed)
 
 
+def test_default_structured_translation_keeps_v050_project_identity():
+    current = graph(); old = deepcopy(current)
+    translate = next(n for n in current.values() if n['class_type'] == 'MangaTranslate')
+    next(n for n in old.values() if n['class_type'] == 'MangaTranslate')['inputs'].pop('response_format', None)
+    assert translate['inputs']['response_format'] == 'json_schema'
+    assert P.workflow_fingerprint(current) == P.workflow_fingerprint(old)
+    translate['inputs']['response_format'] = 'prompt_only'
+    assert P.workflow_fingerprint(current) != P.workflow_fingerprint(old)
+
+
 def test_same_book_can_resume_after_browser_reupload_changes_only_server_path(tmp_path):
     first = tmp_path/'upload-a'/'book'; second = tmp_path/'upload-b'/'book'
     make_page(first/'1.png'); make_page(first/'2.png')

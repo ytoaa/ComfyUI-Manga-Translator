@@ -272,6 +272,8 @@ def workflow_fingerprint(graph, bind=None, *, legacy=False):
     for node in canonical.values():
         if node['class_type']=='MangaDetectorDetail' and node['inputs'].get('boundary_policy')=='preserve_review':
             node['inputs'].pop('boundary_policy')
+        if node['class_type']=='MangaTranslate' and node['inputs'].get('response_format')=='json_schema':
+            node['inputs'].pop('response_format')
     return digest(json.dumps(canonical,ensure_ascii=False,sort_keys=True,
                              allow_nan=False,separators=(',',':')).encode())
 

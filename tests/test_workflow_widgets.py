@@ -56,7 +56,7 @@ def test_widget_positions_match_runtime_schema_and_api_literals(path):
 def test_translation_and_review_settings_do_not_shift(path):
     graph = json.loads(path.read_text())
     translate = next(node for node in graph['nodes'] if node['type'] == 'MangaTranslate')
-    assert translate['widgets_values'] == ['http://127.0.0.1:8000/v1', '', 'Korean', 'MANGA_LLM_API_KEY', 4096, 300, '']
+    assert translate['widgets_values'] == ['http://127.0.0.1:8000/v1', '', 'Korean', 'MANGA_LLM_API_KEY', 4096, 300, '', 'json_schema']
     for node in graph['nodes']:
         if node['type'] == 'MangaSaveReview':
             assert len(node['widgets_values']) == 1

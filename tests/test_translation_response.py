@@ -17,6 +17,11 @@ VALID = {'translations': [{'id': 'b', 'target': '안녕하세요'}, {'id': 'a', 
 BODY = json.dumps(VALID, ensure_ascii=False)
 
 
+@pytest.fixture(autouse=True)
+def diagnostic_directory(monkeypatch, tmp_path):
+    monkeypatch.setattr(N.translation_protocol, 'failure_root', lambda: tmp_path/'diagnostics')
+
+
 @pytest.mark.parametrize('wrapped', [BODY, '```json\n'+BODY+'\n```', '```\n'+BODY+'\n```',
     '```JSON\r\n'+BODY+'\r\n```', '```json '+BODY+'```', '```json\n'+BODY,
     '\ufeff'+BODY, '```'+BODY+'```'])
@@ -96,3 +101,79 @@ def test_reasoning_only_response_is_not_used_as_translation(monkeypatch):
     with pytest.raises(ValueError, match='no answer content'):
         translate()
     assert len(calls) == 1
+
+
+def test_schema_constrains_requested_ids_and_keeps_client_validation(monkeypatch):
+    calls, translate = run(monkeypatch, [reply(N.encode({'translations': [VALID['translations'][0]]})), reply()])
+    translate()
+    schema = calls[0]['response_format']['json_schema']['schema']
+    rows = schema['properties']['translations']
+    assert rows['minItems'] == rows['maxItems'] == 2
+    assert rows['items']['properties']['id']['enum'] == ['a', 'b']
+    assert rows['items']['additionalProperties'] is False
+    assert len(calls) == 2  # A server ignoring the schema cannot bypass ID checks.
+
+
+@pytest.mark.parametrize('mode,expected', [('json_object', {'type':'json_object'}), ('prompt_only', None)])
+def test_compatibility_modes_are_explicit(monkeypatch, mode, expected):
+    calls, _ = run(monkeypatch, [reply()])
+    N.MangaTranslate().translate(N.encode(SOURCE), 'http://unused/v1', 'fixture-model', 'Korean', '', 4096, 300,
+                                 response_format=mode)
+    assert calls[0].get('response_format') == expected
+
+
+def test_failed_attempts_save_actual_answers_without_credentials(monkeypatch, tmp_path):
+    monkeypatch.setenv('MANGA_LLM_API_KEY', 'secret-token-test')
+    bad = '{"translations":[{"id":"a","target":"깨진 "인용문""}]}'
+    calls, translate = run(monkeypatch, [reply(bad), reply('{"translations":')])
+    with pytest.raises(ValueError, match='diagnostics=') as exc: translate()
+    path, = (tmp_path/'diagnostics').glob('*.json')
+    raw = path.read_text()
+    saved = json.loads(raw)
+    assert [a['content'] for a in saved['attempts']] == [bad, '{"translations":']
+    assert saved['attempts'][0]['completion_tokens'] == 85
+    assert saved['settings']['response_format'] == 'json_schema'
+    assert saved['regions'][0]['source'] == '先生'
+    assert str(path) in str(exc.value)
+    assert 'secret-token-test' not in raw and 'http://' not in raw
+    assert len(calls) == 2
+
+
+def test_http_rejection_never_silently_downgrades(monkeypatch, tmp_path):
+    calls = []
+    def rejected(*args):
+        calls.append(args[-1])
+        raise RuntimeError('Translation API returned HTTP 400; check URL, model, and server log')
+    monkeypatch.setattr(N, 'api_json', rejected)
+    with pytest.raises(RuntimeError, match='response_format=json_schema'):
+        N.MangaTranslate().translate(N.encode(SOURCE), 'http://unused/v1', 'fixture-model', 'Korean', '', 4096, 300)
+    assert len(calls) == 1
+    saved = json.loads(next((tmp_path/'diagnostics').glob('*.json')).read_text())
+    assert saved['code'] == 'api_error' and 'content' not in saved['attempts'][0]
+
+
+def test_non_normal_completion_also_saves_evidence(monkeypatch, tmp_path):
+    calls, translate = run(monkeypatch, [reply(BODY, 'length')])
+    with pytest.raises(ValueError): translate()
+    saved = json.loads(next((tmp_path/'diagnostics').glob('*.json')).read_text())
+    assert saved['attempts'][0]['content'] == BODY
+    assert saved['attempts'][0]['finish_reason'] == 'length'
+    assert len(calls) == 1
+
+
+def test_diagnostic_failure_keeps_original_translation_error(monkeypatch):
+    def broken(): raise OSError('no disk')
+    monkeypatch.setattr(N.translation_protocol, 'failure_root', broken)
+    calls, translate = run(monkeypatch, [reply('{'), reply('{')])
+    with pytest.raises(ValueError, match='after one retry; diagnostics=unavailable'): translate()
+    assert len(calls) == 2
+
+
+def test_diagnostics_bound_large_answer_and_exclude_provider_extras():
+    response = reply('x'*200001)
+    response['choices'][0]['message']['reasoning_content'] = 'excluded'
+    response['headers'] = {'Authorization':'secret'}
+    saved = N.translation_protocol.evidence(response)
+    assert saved['content_truncated'] and len(saved['content']) == 200000
+    assert saved['content_chars'] == 200001
+    assert 'excluded' not in N.encode(saved) and 'secret' not in N.encode(saved)

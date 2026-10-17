@@ -75,6 +75,8 @@ def test_actual_http_contract_and_unicode_json():
         def do_POST(self):
             body=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
             assert body['model']=='fixture-model'
+            assert body['response_format']['type']=='json_schema'
+            assert body['response_format']['json_schema']['schema']['properties']['translations']['items']['properties']['id']['enum']==['a','b']
             assert json.loads(body['messages'][1]['content'])['regions'][0]['source']=='先生'
             calls.append(self.path)
             self.respond({'choices':[{'finish_reason':'stop','message':{'content':N.encode({'translations':[{'id':'b','target':'안녕'},{'id':'a','target':'선생님'}]})}}]})

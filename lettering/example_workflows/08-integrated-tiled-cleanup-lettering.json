@@ -690,7 +690,7 @@
       ],
       "size": [
         330,
-        270
+        300
       ],
       "flags": {},
       "order": 12,
@@ -721,7 +721,8 @@
         "MANGA_LLM_API_KEY",
         4096,
         300,
-        ""
+        "",
+        "json_schema"
       ],
       "widgets_values_named": {
         "base_url": "http://127.0.0.1:8000/v1",
@@ -730,7 +731,8 @@
         "api_key_env": "MANGA_LLM_API_KEY",
         "max_tokens": 4096,
         "timeout": 300,
-        "translated_override_json": ""
+        "translated_override_json": "",
+        "response_format": "json_schema"
       },
       "title": "⑥ 번역 · 영역 ID 유지"
     },

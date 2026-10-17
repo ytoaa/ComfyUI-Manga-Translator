@@ -6,6 +6,10 @@ import os
 import re
 from pathlib import Path
 from urllib import request, error, parse
+if __package__:
+    from . import translation_protocol
+else:
+    import translation_protocol
 
 
 def encode(value):
@@ -365,13 +369,15 @@ class MangaTranslate:
                              'api_key_env': ('STRING', {'default':'MANGA_LLM_API_KEY'}),
                              'max_tokens': ('INT', {'default':4096,'min':256,'max':16384}),
                              'timeout': ('INT', {'default':300,'min':10,'max':1800}),
-                             'translated_override_json': ('STRING', {'default':'','multiline':True})}}
+                             'translated_override_json': ('STRING', {'default':'','multiline':True})},
+                'optional': {'response_format': (translation_protocol.MODES, {'default':'json_schema',
+                    'tooltip':'JSON 스키마 출력(권장). 서버가 지원하지 않을 때 json_object 또는 prompt_only를 직접 선택하세요.'})}}
     RETURN_TYPES = ('STRING',)
     RETURN_NAMES = ('translated_json',)
     FUNCTION = 'translate'
     CATEGORY = 'Manga Translator/Translation'
 
-    def translate(self, ocr_json, base_url, model, target_language, api_key_env, max_tokens, timeout, translated_override_json=''):
+    def translate(self, ocr_json, base_url, model, target_language, api_key_env, max_tokens, timeout, translated_override_json='', response_format='json_schema'):
         source = layout(ocr_json)
         if not source['regions']:
             logging.getLogger(__name__).info('Manga translation skipped: no_text_detected')
@@ -400,10 +406,27 @@ class MangaTranslate:
                   '{"translations":[{"id":"r1","target":"translated text"}]}. '
                   'Preserve names and meaning; use natural comic dialogue. Preserve paragraph breaks where useful.')
         messages = [{'role':'system','content':system},{'role':'user','content':encode({'regions':[{'id':r['id'],'source':r['source']} for r in requested]})}]
+        format_options = translation_protocol.response_format(response_format, requested)
+        attempts = []
+        settings = {'model':model.strip(), 'target_language':target_language, 'max_tokens':max_tokens,
+                    'response_format':response_format}
         for attempt in range(2):
-            response = api_json(base_url,'/chat/completions',api_key_env,timeout,
-                                {'model':model.strip(),'messages':messages,'temperature':0,'max_tokens':max_tokens})
-            content, metadata = translation_response(response)
+            try:
+                response = api_json(base_url,'/chat/completions',api_key_env,timeout,
+                                    {'model':model.strip(),'messages':messages,'temperature':0,'max_tokens':max_tokens,
+                                     **format_options})
+            except (ValueError, RuntimeError) as exc:
+                attempts.append({'issue':'api_error', 'exception_type':type(exc).__name__})
+                path = translation_protocol.save_failure(source, settings, attempts, 'api_error')
+                raise RuntimeError(f'Translation API request failed; diagnostics={path}; response_format={response_format}. '
+                                   'Check server availability and support for this response format; choose a compatibility mode explicitly if needed. '+str(exc)) from None
+            attempts.append(translation_protocol.evidence(response))
+            try:
+                content, metadata = translation_response(response)
+            except ValueError as exc:
+                attempts[-1]['issue'] = 'invalid_completion'
+                path = translation_protocol.save_failure(source, settings, attempts, 'invalid_completion')
+                raise ValueError(str(exc)+f'; diagnostics={path}') from None
             try:
                 parsed = decode_translation(content)
                 if preserved:
@@ -416,6 +439,7 @@ class MangaTranslate:
                     detail = f'invalid/incomplete JSON at line {exc.lineno}, column {exc.colno}'
                 else:
                     detail = str(exc)
+                attempts[-1]['issue'] = detail
                 # Retry only the current page's translation once. Original OCR
                 # and IDs are resent; broken output is never used as page data.
                 if attempt == 0:
@@ -426,7 +450,8 @@ class MangaTranslate:
                         'with a translations array containing each original id exactly once and a nonempty target. '
                         'Do not use Markdown fences, reasoning, commentary, partial JSON, or change the original IDs.'}]
                     continue
-                raise ValueError('Translation response rejected after one retry ('+detail+'; '+metadata+'). '
+                path = translation_protocol.save_failure(source, settings, attempts, 'invalid_translation')
+                raise ValueError('Translation response rejected after one retry; diagnostics='+path+' ('+detail+'; '+metadata+'). '
                                  'Check translation server output, max_tokens and chat template; no partial translation was accepted') from None
             return (encode(result),)
 

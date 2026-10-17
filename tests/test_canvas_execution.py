@@ -121,6 +121,28 @@ def test_pause_prevents_next_page_without_cancelling_current_job(tmp_path):
     assert not blocked['ticket'] and len(list(folder.glob('pages/*/attempt-*/state.json')))==1
 
 
+def test_v050_upgrade_retries_only_failed_page_in_same_project(tmp_path):
+    engine,client,inputs,folder=setup_book(tmp_path)
+    old=graph()
+    next(n for n in old.values() if n['class_type']=='MangaTranslate')['inputs'].pop('response_format',None)
+    source=P.workflow_bindings(old)['load']; first=str(uuid.uuid4())
+    result=engine.begin(inputs,folder,old,client,first,source,'시작·재개')
+    execute_visible_graph(client,first,result)
+    run_id=result['ticket']['run_id']
+    engine.resolve(folder,run_id,first,client)
+    second=str(uuid.uuid4())
+    result=engine.begin(inputs,folder,old,client,second,source,'시작·재개',{'run_id':run_id,'source_node':source})
+    client.server.prompt_queue.histories[second]={'outputs':{},'status':{'status_str':'error','completed':False,
+        'messages':[('execution_error',{'node_type':'MangaTranslate','exception_type':'ValueError',
+                                     'exception_message':'invalid/incomplete JSON'})]}}
+    report=engine.resolve(folder,run_id,second,client)
+    assert report['report']['counts']=={'completed':1,'failed':1}
+    retry=begin(engine,client,inputs,folder,action='실패 재시도')[1]
+    assert retry['ticket']['relative_path']=='2.png'
+    assert retry['report']['pages_selected']==1
+    assert len(list(folder.glob('pages/*/attempt-*/state.json')))==3
+
+
 def test_reload_reconciles_completed_native_prompt_without_rerunning_page(tmp_path):
     engine,client,inputs,folder=setup_book(tmp_path)
     ident,result=begin(engine,client,inputs,folder)
