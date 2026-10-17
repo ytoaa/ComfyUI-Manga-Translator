@@ -391,7 +391,7 @@ class Project:
                 'resource_contract_version':RESOURCE_CONTRACT_VERSION,
                 'created_at':datetime.now(timezone.utc).isoformat(timespec='seconds')}
 
-    def _prepare_project(self):
+    def _prepare_project(self, inventory=None):
         path = self.destination/'project.json'
         previous = read_json(path) if path.exists() else None
         if previous is not None and (not isinstance(previous,dict) or previous.get('schema') != 1
@@ -413,7 +413,9 @@ class Project:
             if not compatible:
                 raise ProjectError('Project model/workflow settings changed; use a new project directory to preserve prior results and active job identities')
             self._retry_policy_failures = raised_limit
-        pages = scan_images(self.inputs, self.recursive, allow_empty=previous is not None)
+        if inventory is not None and (previous is None or inventory != previous['pages']):
+            raise ProjectError('Continuation inventory differs from the saved manifest')
+        pages = inventory if inventory is not None else scan_images(self.inputs, self.recursive, allow_empty=previous is not None)
         self.project_id = previous['project_id'] if previous else uuid.uuid4().hex
         self.pages = pages
         past = ({p['relative_path'] for p in previous['pages']} | set(previous.get('removed_inputs',[]))) if previous else set()

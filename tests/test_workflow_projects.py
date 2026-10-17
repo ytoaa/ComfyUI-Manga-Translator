@@ -213,7 +213,8 @@ def test_folder_controls_return_blocker_and_native_status(monkeypatch,tmp_path):
     monkeypatch.setitem(sys.modules,'comfy_execution.graph',types.SimpleNamespace(ExecutionBlocker=Blocker))
     monkeypatch.setitem(sys.modules,'folder_paths',types.SimpleNamespace(get_output_directory=lambda:str(tmp_path/'output')))
     monkeypatch.setitem(sys.modules,'server',types.SimpleNamespace(PromptServer=types.SimpleNamespace(instance=object())))
-    pixels,mask,report=W.MangaWorkflowInput().load('폴더 프로젝트','','not needed for status','book','상태 확인')
+    result=W.MangaWorkflowInput().load('폴더 프로젝트','','not needed for status','book','상태 확인')
+    pixels,mask,report=result['result'][:3]
     assert isinstance(pixels,Blocker) and isinstance(mask,Blocker)
     assert json.loads(report)['status']=='ready'
     assert not W.PROJECTS.active

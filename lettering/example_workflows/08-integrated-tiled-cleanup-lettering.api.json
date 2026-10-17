@@ -155,7 +155,10 @@
   "11": {
     "class_type": "MangaSaveReview",
     "inputs": {
-      "filename_prefix": "manga_translator/ocr",
+      "filename_prefix": [
+        "1",
+        4
+      ],
       "translated_json": [
         "10",
         0
@@ -181,7 +184,10 @@
   "13": {
     "class_type": "MangaSaveReview",
     "inputs": {
-      "filename_prefix": "manga_translator/translation",
+      "filename_prefix": [
+        "1",
+        5
+      ],
       "translated_json": [
         "12",
         0
@@ -467,7 +473,10 @@
   "31": {
     "class_type": "SaveImage",
     "inputs": {
-      "filename_prefix": "manga_translator/integrated_tiles",
+      "filename_prefix": [
+        "1",
+        3
+      ],
       "images": [
         "30",
         0

@@ -237,7 +237,7 @@ class GraphRunner:
         if kind == 'MangaWorkflowInput':
             override = getattr(self,'page_input',None)
             if override: return override(a)
-            return tensor(self.original), torch.zeros((1, 640, 1600)), '{"status":"single_image"}'
+            return tensor(self.original), torch.zeros((1, 640, 1600)), '{"status":"single_image"}', 'manga_translator/integrated_tiles', 'manga_translator/ocr', 'manga_translator/translation'
         if kind == 'MangaDetectorLoader': return (self.detector,)
         if kind == 'MangaOCRLoader': return (self.ocr,)
         if kind in ('UNETLoader', 'CLIPLoader', 'VAELoader', 'KSamplerSelect'): return (object(),)

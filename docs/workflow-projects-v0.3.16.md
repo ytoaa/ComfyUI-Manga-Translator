@@ -1,5 +1,7 @@
 # 폴더 프로젝트 control-plane v0.3.16
 
+> 이 문서는 당시 버전의 기록이다. 현재 캔버스 실행과 실시간 상태 사용법은 [v0.4.0](canvas-execution-v0.4.0.md)을 따른다.
+
 v0.3.16은 08 통합 워크플로우의 폴더 실행에서 확인된 세 가지 구조 문제를 함께 수정한다.
 
 1. 부모 `MangaWorkflowInput` 제어 prompt가 성공하기 전에 페이지 child prompt를 제출하지 않는다.

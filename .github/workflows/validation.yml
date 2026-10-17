@@ -26,7 +26,9 @@ jobs:
       - name: Verify committed source checksums
         run: sha256sum --check SHA256SUMS
       - name: Compile Python sources
-        run: python -m compileall -q lettering tools tests
+        run: python -m compileall -q lettering tools tests workflow_native.py workflow_project.py __init__.py
+      - name: Verify native canvas frontend contract
+        run: node tools/check_canvas_frontend.cjs
       - name: Run regression tests
         run: python -m pytest -q --tb=short
       - name: Execute integrated graph simulation

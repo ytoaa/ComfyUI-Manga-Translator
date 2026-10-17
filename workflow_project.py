@@ -39,10 +39,16 @@ class NativeComfyClient:
         except ImportError:
             return None
         try:
-            started = psutil.Process(os.getpid()).create_time()
+            proc_pid = os.getpid()
+            self_stat = Path('/proc/self/stat')
+            if self_stat.is_file():
+                # /proc may expose host PIDs while getpid() is namespaced.
+                # Read our own proc entry, never an unrelated recycled PID.
+                proc_pid = int(self_stat.read_text().split(' ', 1)[0])
+            started = psutil.Process(proc_pid).create_time()
             if not math.isfinite(started) or not 0 < started <= time.time():
                 return None
-            return {'kind':'native_process', 'pid':os.getpid(),
+            return {'kind':'native_process', 'pid':os.getpid(), 'proc_pid':proc_pid,
                     'started_at':datetime.fromtimestamp(started, timezone.utc).isoformat()}
         except (psutil.Error, OSError, ValueError, TypeError, OverflowError):
             return None
@@ -361,8 +367,8 @@ def _encode(report): return json.dumps(report,ensure_ascii=False,indent=2,allow_
 
 class MangaWorkflowInput:
     CATEGORY = 'Manga Translator/Project'
-    RETURN_TYPES = ('IMAGE','MASK','STRING')
-    RETURN_NAMES = ('image','mask','project_report')
+    RETURN_TYPES = ('IMAGE','MASK','STRING','STRING','STRING','STRING')
+    RETURN_NAMES = ('image','mask','project_report','result_prefix','ocr_prefix','translation_prefix')
     FUNCTION = 'load'
 
     @classmethod
@@ -410,32 +416,43 @@ class MangaWorkflowInput:
                 raise ProjectError('프로젝트 페이지 실행 정보가 올바르지 않습니다.')
             import nodes
             pixels,mask = nodes.LoadImage().load_image(image)
-            return pixels,mask,_encode({'page':marker,'status':'page_running'})
+            return pixels,mask,_encode({'page':marker,'status':'page_running'}),'manga_translator/integrated_tiles','manga_translator/ocr','manga_translator/translation'
         if input_mode == '이미지 한 장':
             import nodes
             pixels,mask = nodes.LoadImage().load_image(image)
-            return pixels,mask,_encode({'status':'single_image'})
+            return pixels,mask,_encode({'status':'single_image'}),'manga_translator/integrated_tiles','manga_translator/ocr','manga_translator/translation'
         from comfy_execution.graph import ExecutionBlocker
         import folder_paths
         from server import PromptServer
+        from .workflow_native import CANVAS
         server = PromptServer.instance
-        folder = PROJECTS.destination(folder_paths.get_output_directory(),project_name)
-        if action == '일시정지': report = PROJECTS.stop(folder)
-        elif action == '상태 확인': report = PROJECTS.snapshot(folder)
+        folder = WorkflowProjects.destination(folder_paths.get_output_directory(),project_name)
+        ticket, reference = None, None
+        prefixes=('manga_translator/integrated_tiles','manga_translator/ocr','manga_translator/translation')
+        if action == '일시정지': report=CANVAS.pause(folder)
+        elif action == '상태 확인':
+            if hasattr(server,'prompt_queue'):
+                client=NativeComfyClient(server,folder_paths.get_input_directory(),folder_paths.get_output_directory(),unique_id)
+                report=CANVAS.refresh(folder,client)
+            else: report=CANVAS.snapshot(folder)
         else:
-            inputs = PROJECTS.inputs(folder_paths.get_input_directory(),input_folder)
-            ident,client_id = _context(server,prompt,unique_id)
-            graph = _queued_prompt(server,ident)
-            client = NativeComfyClient(server,folder_paths.get_input_directory(),folder_paths.get_output_directory(),unique_id,extra_pnginfo,client_id)
-            client.parent_prompt_id = ident
-            previews = [key for key,node in graph.items() if node['class_type']=='PreviewAny' and node['inputs'].get('source') == [str(unique_id),2]]
-            def publish(value):
-                if client_id is None: return
-                for node in previews:
-                    server.send_sync('executed',{'node':node,'display_node':node,'prompt_id':ident,
-                                     'output':{'text':[_encode(value)]}},client_id)
-            report = PROJECTS.start(folder,inputs,graph,client,action == '실패 재시도',publish)
-        return ExecutionBlocker(None),ExecutionBlocker(None),_encode(report)
+            inputs=WorkflowProjects.inputs(folder_paths.get_input_directory(),input_folder)
+            ident,client_id=_context(server,prompt,unique_id)
+            graph=_queued_prompt(server,ident)
+            client=NativeComfyClient(server,folder_paths.get_input_directory(),folder_paths.get_output_directory(),unique_id,extra_pnginfo,client_id)
+            workflow=(extra_pnginfo or {}).get('workflow') or {}
+            source=next((n for n in workflow.get('nodes',[]) if str(n.get('id'))==str(unique_id)),{})
+            continuation=source.get('properties',{}).get('manga_canvas_run')
+            result=CANVAS.begin(inputs,folder,graph,client,ident,unique_id,action,continuation)
+            report,ticket,reference=result['report'],result.get('ticket'),result.get('image_reference')
+            prefixes=result.get('prefixes',prefixes)
+        if reference:
+            import nodes
+            pixels,mask=nodes.LoadImage().load_image(str(PurePosixPath(reference['subfolder'])/reference['filename']))
+        else: pixels,mask=ExecutionBlocker(None),ExecutionBlocker(None)
+        ui={'text':[_encode(report)]}
+        if ticket: ui['manga_workflow']=[{**ticket,'input_folder':input_folder,'report':report}]
+        return {'ui':ui,'result':(pixels,mask,_encode(report),*prefixes)}
 
 
 NODE_CLASS_MAPPINGS = {'MangaWorkflowInput':MangaWorkflowInput}

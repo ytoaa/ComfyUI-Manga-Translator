@@ -7,6 +7,7 @@ import time
 import types
 
 import pytest
+import psutil
 
 from tests.test_project_runner import P, FakeComfy, project, make_page
 from tests.test_workflow_projects import W
@@ -170,7 +171,7 @@ def test_native_context_uses_os_process_creation_time(monkeypatch):
         return types.SimpleNamespace(create_time=lambda:started)
     monkeypatch.setitem(sys.modules, 'psutil', types.SimpleNamespace(Process=process, Error=RuntimeError))
     context = W.NativeComfyClient._execution_context()
-    assert calls == [os.getpid()] and context['pid'] == os.getpid()
+    assert calls == [context['proc_pid']] and context['pid'] == os.getpid()
     assert datetime.fromisoformat(context['started_at']).timestamp() == pytest.approx(started)
 
 
@@ -181,7 +182,7 @@ def test_unavailable_native_process_clock_disables_restart_recovery(monkeypatch)
 
 def test_real_os_clock_proves_only_attempts_from_before_current_process():
     context = W.NativeComfyClient._execution_context()
-    assert context is not None  # CPU verification installs ComfyUI's psutil dependency.
+    assert context is not None
     assert context['pid'] == os.getpid()
     boot = datetime.fromisoformat(context['started_at']).timestamp()
     assert 0 < boot <= time.time()

@@ -10,8 +10,8 @@ def build():
     template = json.loads((ROOT / 'tools/integrated_model_nodes.json').read_text(encoding='utf-8'))
     g = Graph()
     original = g.add('MangaWorkflowInput', {'image': ''}, (0, 50), '① 워크플로우 입력 · 이미지 한 장 / 폴더 프로젝트')
-    g.nodes[original - 1]['size'] = [400, 270]
-    detector_model = g.import_model_node(template, 24, (0, 400))
+    g.nodes[original - 1]['size'] = [420, 560]
+    detector_model = g.import_model_node(template, 24, (0, 700))
     detector = g.add('MangaDetectorDetail', {'include_sfx': False}, pos=(420, 50), title='② 전체+작은 타일 검출 · 공통 글자 선택')
     g.connect(original, 0, detector, 'images')
     g.connect(detector_model, 0, detector, 'model')
@@ -80,6 +80,8 @@ def build():
     g.connect(typography, 0, lettering, 'plan')
     save = g.add('SaveImage', {'filename_prefix': 'manga_translator/integrated_tiles'}, (5880, 50), '⑬ 통합 결과 저장')
     g.connect(lettering, 0, save, 'images')
+    for destination, slot in ((save, 3), (source_save, 4), (target_save, 5)):
+        g.connect(original, slot, destination, 'filename_prefix')
     clean_preview = g.add('PreviewImage', pos=(5040, 650), title='검수 · 식자 직전 전체 배경')
     g.connect(assemble, 0, clean_preview, 'images')
     mask_image = g.add('MaskToImage', pos=(1260, 1050), title='마스크 → 이미지 · 기본 노드')
@@ -99,7 +101,7 @@ def build():
         g.nodes[preview - 1]['size'] = [400, 260]
         g.nodes[preview - 1]['properties']['cnr_id'] = 'comfy-core'
         g.connect(source, 0, preview, 'source')
-    scope = g.add('PrimitiveBoolean', {'value': False}, pos=(0, 650), title='효과음·표지 큰 글자 포함 · 공통 스위치')
+    scope = g.add('PrimitiveBoolean', {'value': False}, pos=(0, 950), title='효과음·표지 큰 글자 포함 · 공통 스위치')
     g.nodes[scope - 1]['properties']['cnr_id'] = 'comfy-core'
     for node in (detector, regions, raw_mask):
         g.connect(scope, 0, node, 'include_sfx')
@@ -108,7 +110,7 @@ def build():
     g.nodes[status - 1]['size'] = [420, 300]
     g.nodes[status - 1]['properties']['cnr_id'] = 'comfy-core'
     g.connect(original, 2, status, 'source')
-    g.note('폴더 처리도 이 워크플로우 안에서 실행합니다. 입력 노드의 input_mode=폴더 프로젝트로 설정하세요.\ninput_folder는 ComfyUI/input 아래의 원본 폴더, project_name은 결과·재개 기록의 이름입니다.\naction=시작·재개로 실행하면 현재 08 설정을 저장하고 한 페이지씩 같은 그래프를 큐에 제출합니다.\n진행 보고서는 미리보기 아무거나에 표시합니다. 일시정지/상태 확인도 action을 바꾸고 실행하세요.\n일시정지는 현재 페이지를 마친 뒤 적용합니다. 실패 재시도는 실패 페이지에만 새 시도를 추가합니다.\n재개는 저장된 설정을 사용합니다. 모델·번역·식자 설정을 바꾼 새 실행은 새 project_name을 사용하세요.\n이미지를 한꺼번에 텐서 목록으로 합치지 않습니다. OCR/타일 집계는 페이지마다 독립 실행합니다.', (420, -550))
+    g.note('폴더 처리도 이 워크플로우 안에서 실행합니다. 입력 노드의 input_mode=폴더 프로젝트로 설정하세요.\ninput_folder는 ComfyUI/input 아래의 원본 폴더, project_name은 결과·재개 기록의 이름입니다.\n한 페이지가 현재 Run에서 검출부터 저장까지 실행됩니다. 다음 페이지는 캔버스가 기본 Run 큐로 이어갑니다.\n입력 노드 안에서 현재 페이지·실행 노드·진행률을 실시간 확인합니다. 기본 중지는 현재 페이지에 적용됩니다.\n연속 처리 중지는 다음 페이지 제출을 멈춥니다. 브라우저를 닫으면 다음 페이지는 자동 실행하지 않습니다.\n현재 캔버스의 처리 설정을 확인합니다. 모델·번역·식자 설정을 바꾸려면 새 project_name을 사용하세요.\n이미지를 한꺼번에 텐서 목록으로 합치지 않습니다. OCR/타일 집계는 페이지마다 독립 실행합니다.', (420, -550))
     g.connect(crops, 3, ocr, 'region_plan_json')
     g.save(name)
     for suffix in ('.json', '.api.json'):
