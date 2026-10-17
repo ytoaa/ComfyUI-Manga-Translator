@@ -418,3 +418,74 @@ def test_compact_retry_does_not_duplicate_an_existing_detail_or_full_window():
         P._recover_boundaries(Image.new('RGB',(800,1125)),model,{},[root,other])
     assert model.calls==3
     assert P._compact_recovery_window(clipped((0,0,1300,40)),1600,640) is None
+
+
+@pytest.mark.parametrize('box,edges,window',[
+    ([1088.,1556.7964172363281,1122.7857704162598,1600.107421875],['left'],[1088,1088,2240,2240]),
+    ([465.2398681640625,946.426025390625,747.282470703125,1152.],['bottom'],[0,0,1152,1152]),
+    ([2392.643814086914,4048.0709838867188,2446.857879638672,4416.],['bottom'],[2176,3264,3328,4416]),
+    ([1791.9966430664062,1088.,2012.600830078125,1135.912956237793],['top'],[1088,1088,2240,2240]),
+    ([3638.3788452148438,3181.4952392578125,3719.,3326.7012939453125],['bottom'],[3264,2176,4416,3328]),
+])
+def test_reported_large_page_seams_try_balanced_model_scale_context_before_stretched_strip(box,edges,window):
+    width,height=4800,6030
+    observed=list(box)
+    for edge in edges:
+        i={'left':0,'top':1,'right':2,'bottom':3}[edge]
+        observed[i]+=100 if i>=2 else -100
+    root={**item(box),'tile_provenance':{'stage':'detail','window':window,'clipped_edges':edges}}
+    class Model:
+        calls=[]
+        def detect(self,image,_):
+            self.calls.append(image.size)
+            origin=int(image.getpixel((0,0)));x,y=origin%width,origin//width
+            a,b,c,d=observed
+            if image.size==(1152,1152) and x<a<c<x+1152 and y<b<d<y+1152:
+                return result(image.size,[item([a-x,b-y,c-x,d-y])])
+            return result(image.size,[])
+    image=Image.fromarray(np.arange(width*height,dtype=np.int32).reshape(height,width))
+    model=Model();model.calls=[]
+    trusted,report=P._recover_boundaries(image,model,{},[root])
+    assert model.calls==[(1152,1152)]
+    assert report['attempts'][0]['strategy']=='native_centered'
+    assert report['attempts'][0]['coverage']==1.
+    assert np.allclose(trusted[0]['bbox'],observed)
+
+
+def test_new_native_context_keeps_partial_coverage_and_budget_failures_explicit(monkeypatch):
+    root={**item([465,946,747,1152]),'tile_provenance':{
+        'stage':'detail','window':[0,0,1152,1152],'clipped_edges':['bottom']}}
+    class Model:
+        calls=0
+        def detect(self,image,_):self.calls+=1;return result(image.size,[])
+    monkeypatch.setattr(P,'_MAX_RECOVERY_CALLS',2)
+    model=Model()
+    with pytest.raises(ValueError,match='boundary recovery limit'):
+        P._recover_boundaries(Image.new('RGB',(1600,2200)),model,{},[root])
+    assert model.calls==2
+
+
+def test_unresolved_boundary_persists_bounded_context_and_complete_probe_log(tmp_path,monkeypatch):
+    import types
+    monkeypatch.setitem(sys.modules,'folder_paths',types.SimpleNamespace(get_output_directory=lambda:str(tmp_path)))
+    class Model:
+        def detect(self,image,_):return result(image.size,[])
+    with pytest.raises(ValueError,match='unresolved clipped text') as error:
+        P._recover_boundaries(Image.new('RGB',(1600,640)),Model(),{},[clipped(USER_FRAGMENT)])
+    reports=list((tmp_path/'manga_translator/detection_failures').glob('*.json'))
+    assert len(reports)==1 and str(reports[0]) in str(error.value)
+    data=json.loads(reports[0].read_text());preview=Image.open(data['context_image'])
+    assert max(preview.size)<=1152 and data['image_size']==[1600,640]
+    assert len(data['attempts'])==4 and data['coverage']==0
+    assert data['bbox']==USER_FRAGMENT and data['unresolved_regions']==1
+
+
+def test_diagnostic_storage_failure_preserves_the_original_boundary_error(tmp_path,monkeypatch):
+    import types
+    blocked=tmp_path/'not-a-directory';blocked.write_text('occupied')
+    monkeypatch.setitem(sys.modules,'folder_paths',types.SimpleNamespace(get_output_directory=lambda:str(blocked)))
+    class Model:
+        def detect(self,image,_):return result(image.size,[])
+    with pytest.raises(ValueError,match='unresolved clipped text') as error:
+        P._recover_boundaries(Image.new('RGB',(1600,640)),Model(),{},[clipped(USER_FRAGMENT)])
+    assert '진단=저장 불가' in str(error.value) and blocked.read_text()=='occupied'

@@ -20,6 +20,26 @@
       "source": "https://github.com/google/fonts/blob/main/ofl/nanumgothic/OFL.txt",
       "license": "SIL Open Font License 1.1",
       "modified": false
+    },
+    {
+      "file": "MangaSansKR-Fallback.ttf",
+      "sha256": "cea7375fe35b7deac9cf7935ecd9c47c23d3ac81c3c3375430ed3e5dfca0e554",
+      "source": "https://github.com/google/fonts/blob/main/ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf",
+      "source_git_blob": "b386890ba945e1f39448a6b59f20c5d194f58808",
+      "source_sha256": "194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252",
+      "license": "SIL Open Font License 1.1",
+      "modified": true,
+      "modifications": "static wght=400; renamed MangaSansKR Fallback; upstream glyph coverage and copyright/license retained",
+      "recipe": "tools/build_fallback_font.py",
+      "fonttools_version": "4.61.1"
+    },
+    {
+      "file": "NotoSansKR-OFL.txt",
+      "sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9",
+      "source": "https://github.com/google/fonts/blob/main/ofl/notosanskr/OFL.txt",
+      "source_git_blob": "1c9f43281b8f216c5461fe9ac729afbade7724e4",
+      "license": "SIL Open Font License 1.1",
+      "modified": false
     }
   ]
 }

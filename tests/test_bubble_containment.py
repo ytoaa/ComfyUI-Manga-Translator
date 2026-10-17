@@ -67,13 +67,16 @@ def test_ink_ownership_does_not_select_a_neighbour_from_padded_box_centre():
     assert not alpha[right].any() and not alpha[~left].any()
 
 
-def test_ambiguous_overlapping_detections_stop_instead_of_picking_an_arbitrary_bubble():
+def test_overlapping_detections_use_only_the_certified_common_interior():
     yy,xx=np.mgrid[:240,:400]
     a=((xx-155)/150)**2+((yy-120)/100)**2<1
     b=((xx-245)/150)**2+((yy-120)/100)**2<1
-    with pytest.raises(ValueError,match='Ambiguous'):
-        T.run(T.fixture('번역',width=400,height=240,source='TEST',font_size=26),
+    _,_,alpha,report,_,_=T.run(T.fixture('번역',width=400,height=240,source='TEST',font_size=26),
               respect_bubbles=True,detection_result=detector(a,b))
+    assert alpha.sum()>0 and not alpha[~(a&b)].any()
+    guard=report['regions'][0]['bubble_containment']
+    assert guard['overlap_resolution']['strategy']=='common_mask_intersection'
+    assert guard['source_ink_coverage']>=.95
 
 
 def test_duplicate_detections_of_the_same_bubble_are_not_ambiguous():
@@ -104,3 +107,23 @@ def test_impossible_fit_does_not_clip_off_letters_at_the_mask_edge():
     values=T.fixture('너무 긴 번역문입니다 '*20)
     with pytest.raises(ValueError,match='no safe lettering fit'):
         T.run(values,respect_bubbles=True,bubble_mask=mask,fit_policy='readable')
+
+
+def test_overlapping_masks_with_disjoint_source_omissions_are_still_ambiguous():
+    B=T.hybrid.bubble_constraints
+    ink=np.ones((10,10),bool)
+    a=np.ones((30,40),bool);b=np.ones((30,40),bool)
+    a[10,10:15]=False;b[19,15:20]=False  # Each owns 95%, intersection only 90%.
+    a[:,:8]=False;b[:,32:]=False
+    items=B.candidates(None,detector(a,b),(30,40,3))
+    with pytest.raises(ValueError,match='common interior does not cover source ink'):
+        B.constrain(ink,[10,10,10,10],items,(30,40,3),1)
+
+
+def test_common_interior_that_cannot_fit_text_remains_a_fit_error():
+    yy,xx=np.mgrid[:240,:400]
+    a=((xx-155)/150)**2+((yy-120)/100)**2<1
+    b=((xx-245)/150)**2+((yy-120)/100)**2<1
+    with pytest.raises(ValueError,match='no safe lettering fit'):
+        T.run(T.fixture('긴 번역문 '*200,width=400,height=240,source='TEST',font_size=26),
+              respect_bubbles=True,detection_result=detector(a,b))

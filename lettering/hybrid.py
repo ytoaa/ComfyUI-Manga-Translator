@@ -192,7 +192,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         allowed={'font','mode','direction','font_cap','min_font','min_scale','alignment','rotation','shear','bend','padding','max_lines','line_spacing','tracking','line_breaks','fit_policy','respect_bubbles','require_bubble'}
         if not isinstance(opts,dict) or set(opts)-allowed: raise ValueError(f'{ident}: unknown typography override')
         font=opts.get('font',item.get('font',default_font))
-        core.font_path(font,item['text'])
+        font,font_fallback=core.resolve_font(font,item['text'])
         ref,clean,mask,_=core.crop_region(original,cleaned,support,item['bbox'])
         style,analysis=core.analyze_style(ref,clean,mask)
         measured,ink=profile(ref,clean,mask,font,style['foreground'])
@@ -257,7 +257,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
             phases.append((guard['rectangle'],forced_lines or (original_lines if selected_mode=='strict' else 0),
                            'bubble-interior'))
         prepared={'id':ident,'text':rendered_text,'original_text':item['text'],'line_breaks':breaks,
-                  'font':font,'style':style,'source':source,
+                  'font':font,'font_fallback':font_fallback,'style':style,'source':source,
                   'phases':phases,'cap':cap,'floor':floor,'fallback_floor':fallback_floor,
                   'fit_policy':policy,'options':render_options,'bend':curve,
                   'bubble_guard':guard,'bubble_containment':guard_report,
@@ -275,7 +275,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
             x,y,w,h=guard['rectangle']
             draw.rectangle((x,y,x+w-1,y+h-1),outline=(40,220,80),width=2)
         reports.append({'id':ident,'source':source,'source_profile':measured,'font':font,
-                        'font_cap':cap,'min_font':floor,'mode':selected_mode,
+                        'font_cap':cap,'min_font':floor,'mode':selected_mode,'font_fallback':font_fallback,
                         'fallback_min_font':fallback_floor,'fit_policy':policy,
                         'bubble_containment':guard_report,
                         'direction':actual_direction,'line_breaks':breaks,'soft_wraps_reflowed':flow,
@@ -341,6 +341,7 @@ def render_plan(plan):
         page_alpha=changed+page_alpha*(1-changed)
         occupied |= ndimage.binary_dilation(changed>.01,iterations=2)
         reports.append({'id':region['id'],'source_profile':region['profile'],'bbox':bounds,
+                        'font_fallback':region.get('font_fallback'),
                         'fit_phase':phase,'scale':round(scale,4),'render':render,
                         'fit_policy':region.get('fit_policy','source_ratio'),
                         'source_floor':region['floor'],'minimum_font':fallback_floor,

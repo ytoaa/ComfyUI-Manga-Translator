@@ -65,13 +65,44 @@ def constrain(ink,source,items,shape,padding,expand=False):
         if crossing:raise ValueError('Source ink crosses a known bubble mask; review region ownership or bubble segmentation')
         return None,{'status':'unavailable','reason':'no_bubble_covers_source_ink'}
     matched.sort(key=lambda pair:pair[0]['pixels']);chosen,coverage=matched[0]
+    ambiguous=False
     for other,_ in matched[1:]:
         left,top,right,bottom=overlap(chosen['bounds'],other['bounds'])
         a,b,_,_=chosen['bounds'];u,v,_,_=other['bounds']
         common=np.count_nonzero(chosen['mask'][top-b:bottom-b,left-a:right-a] &
                                  other['mask'][top-v:bottom-v,left-u:right-u]) if left<right and top<bottom else 0
         if common/max(1,min(chosen['pixels'],other['pixels']))<.9:
-            raise ValueError('Ambiguous overlapping bubble masks; cannot certify translation containment')
+            ambiguous=True
+    resolution=None
+    if ambiguous:
+        # Every candidate covers the source ink. Their intersection is a
+        # containment certificate common to all candidates, never a union or
+        # an arbitrary guess about which bubble owns the paragraph.
+        left=max(item['bounds'][0] for item,_ in matched)
+        top=max(item['bounds'][1] for item,_ in matched)
+        right=min(item['bounds'][0]+item['bounds'][2] for item,_ in matched)
+        bottom=min(item['bounds'][1]+item['bounds'][3] for item,_ in matched)
+        if left>=right or top>=bottom or (right-left)*(bottom-top)>core.MAX_REGION_PIXELS:
+            raise ValueError('Ambiguous overlapping bubble masks; no bounded common interior')
+        common=np.ones((bottom-top,right-left),bool)
+        for item,_ in matched:
+            a,b,_,_=item['bounds']
+            common &= item['mask'][top-b:bottom-b,left-a:right-a]
+        # Reject overlaps that lose actual source ink, including disconnected
+        # intersections whose largest rectangle belongs to another component.
+        labels,_=ndimage.label(common)
+        ix0,iy0,ix1,iy1=overlap(source,[left,top,right-left,bottom-top])
+        source_labels=labels[iy0-top:iy1-top,ix0-left:ix1-left]
+        source_ink=ink[iy0-y:iy1-y,ix0-x:ix1-x]
+        weights=np.bincount(source_labels[source_ink].ravel(),minlength=1)
+        weights[0]=0
+        label=int(weights.argmax())
+        coverage=float(weights[label]/max(1,count))
+        if not label or coverage<.95:
+            raise ValueError('Ambiguous overlapping bubble masks; common interior does not cover source ink')
+        chosen={'bounds':[left,top,right-left,bottom-top],'mask':labels==label,
+                'safe':{},'index':chosen['index'],'source':'detector_intersection'}
+        resolution={'strategy':'common_mask_intersection','bubble_indices':[item['index'] for item,_ in matched]}
     a,b,c,d=chosen['bounds']
     window=[max(0,x-w),max(0,y-h),min(shape[1],x+2*w)-max(0,x-w),
             min(shape[0],y+2*h)-max(0,y-h)] if expand else source
@@ -86,7 +117,8 @@ def constrain(ink,source,items,shape,padding,expand=False):
     if rect is None:raise ValueError('Verified bubble has no safe text interior after clearance')
     rect[0]+=left;rect[1]+=top
     report={'status':'verified','mask_source':chosen['source'],'bubble_index':chosen['index'],
-            'source_ink_coverage':round(coverage,4),'clearance':clearance,'safe_rectangle':rect}
+            'source_ink_coverage':round(coverage,4),'clearance':clearance,'safe_rectangle':rect,
+            **({'overlap_resolution':resolution} if resolution else {})}
     return {'bounds':[left,top,right-left,bottom-top],'mask':safe,'rectangle':rect},report
 
 

@@ -234,6 +234,26 @@ def font_path(selection, text):
     return path
 
 
+def resolve_font(selection, text):
+    """Choose one real font covering the entire region, without rewriting text."""
+    available=fonts()
+    if selection not in available:
+        font_path(selection,text)  # Preserve the explicit missing-font error.
+    try:
+        font_path(selection,text)
+        return selection, None
+    except ValueError as primary_error:
+        preferred=['MangaSansKR-Fallback.ttf']
+        alternatives=preferred+[name for name in available if name not in preferred and name!=selection]
+        for name in alternatives:
+            if name not in available or name==selection: continue
+            try: font_path(name,text)
+            except ValueError: continue
+            return name, {'requested_font':selection,'selected_font':name,
+                          'reason':'requested_font_missing_glyphs','text_preserved':True}
+        raise primary_error
+
+
 def clean_text(text):
     if not isinstance(text, str) or not text.strip() or len(text) > MAX_TEXT:
         raise ValueError('Translation must contain 1–2048 Unicode characters')

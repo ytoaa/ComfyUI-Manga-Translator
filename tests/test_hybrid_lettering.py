@@ -277,3 +277,19 @@ def test_readable_fit_keeps_strict_layout_explicit_ratio_and_absolute_minimum(op
 def test_readable_policy_does_not_relax_ratio_when_original_search_already_fits():
     _,_,_,report,_,_=run(fixture('짧은 번역'),fit_policy='readable')
     assert not report['regions'][0]['source_ratio_relaxed']
+
+
+@pytest.mark.parametrize('text',['길게 ー 소리','グルン 하고 굴렀다','선생님 先生 カナ'])
+def test_missing_japanese_glyphs_use_a_real_covering_font_without_changing_text(text):
+    _,_,alpha,report,_,_=run(fixture(text,width=640,height=200,font_size=38),fit_policy='readable',line_breaks='reflow')
+    row=report['regions'][0]
+    assert alpha.sum()>0 and row['render']['text']==text
+    assert row['render']['font']=='MangaSansKR-Fallback.ttf'
+    assert row['font_fallback']['requested_font']=='NanumGothic-Bold.ttf'
+    assert row['font_fallback']['text_preserved']
+
+
+def test_supported_korean_font_selection_is_retained():
+    _,_,_,report,_,_=run(fixture('한글 번역'))
+    assert report['regions'][0]['render']['font']=='NanumGothic-Bold.ttf'
+    assert report['regions'][0]['font_fallback'] is None

@@ -35,3 +35,13 @@ NHN Corporation. SIL Open Font License 1.1 전문과 Reserved Font Name 고지�
 스타일 식자 코드는 TextCtrl/AnyText/STELLAR의 코드나 가중치를 포함하지 않는다.
 색·외곽선·미세 질감은 로컬 픽셀 측정이며 실제 글자 모양은 선택한 한글 폰트다.
 선택형 Qwen 워크플로는 사용자가 기존에 설치한 모델을 참조하며 가중치를 재배포하지 않는다.
+
+`lettering/fonts/MangaSansKR-Fallback.ttf`는 Google Fonts의 Noto Sans KR 변수 폰트
+(Git blob `b386890ba945e1f39448a6b59f20c5d194f58808`)에서 wght=400 정적 인스턴스를
+만들고 패밀리 이름을 MangaSansKR Fallback으로 바꾼 파생 폰트다. 원문의 글리프 범위와
+저작권·라이선스 name 레코드를 보존한다. Copyright 2014–2021 Adobe.
+SIL Open Font License 1.1 전문과 Reserved Font Name 'Source' 고지는
+`lettering/fonts/NotoSansKR-OFL.txt`에 보존한다. 재현 도구는
+`tools/build_fallback_font.py`, 원본/파생 SHA256과 도구 버전은 `sources.json`에 기록한다.
+통합 식자에서 선택 폰트에 없는 글자가 있을 때 전체 번역문을 지원하는 폰트로만
+해당 영역을 대체하며, 문자열을 지우거나 다른 문자로 바꾸지 않는다.

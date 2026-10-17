@@ -188,6 +188,51 @@ def _compact_recovery_window(fragment, width, height):
     return (x,y,x+w,y+h)
 
 
+def _native_recovery_window(fragment, width, height, directed=False):
+    """Shift a square model-size context off a large-page seam before stretching strips."""
+    span=_DETECTOR_NATIVE_SIZE
+    a,b,c,d=fragment['bbox']
+    if min(width,height)<span or max(c-a,d-b)>span-128: return None
+    cx,cy=(a+c)/2,(b+d)/2
+    if directed:
+        edges=fragment['tile_provenance']['clipped_edges']
+        cx+=span*.2*(('right' in edges)-('left' in edges))
+        cy+=span*.2*(('bottom' in edges)-('top' in edges))
+    x=max(0,min(width-span,math.floor(cx-span/2)))
+    y=max(0,min(height-span,math.floor(cy-span/2)))
+    if not (x<=a and y<=b and c<=x+span and d<=y+span): return None
+    return (x,y,x+span,y+span)
+
+
+def _save_recovery_failure(image, diagnostic):
+    """Persist bounded context and exact recovery results when a node cannot preview."""
+    try:
+        from pathlib import Path
+        import uuid
+        import folder_paths
+        root=Path(folder_paths.get_output_directory())/'manga_translator'/'detection_failures'
+        root.mkdir(parents=True,exist_ok=True)
+        stem='boundary_'+uuid.uuid4().hex
+        fragment={'bbox':diagnostic['bbox'],'tile_provenance':{'clipped_edges':diagnostic['edges']}}
+        window=_native_recovery_window(fragment,*image.size) or _compact_recovery_window(fragment,*image.size)
+        if window is None:
+            a,b,c,d=diagnostic['bbox'];span=_DETECTOR_NATIVE_SIZE
+            x=max(0,min(image.width-span,math.floor((a+c-span)/2)))
+            y=max(0,min(image.height-span,math.floor((b+d-span)/2)))
+            window=(x,y,min(image.width,x+span),min(image.height,y+span))
+        preview=root/(stem+'_context.png')
+        image.crop(window).save(preview)
+        path=root/(stem+'.json')
+        path.write_text(json.dumps({'schema':1,'image_size':list(image.size),
+            **diagnostic,'context_window':list(window),'context_image':str(preview)},
+            ensure_ascii=False,indent=2),encoding='utf-8')
+        LOG.error('Manga boundary recovery inputs saved: %s',path)
+        return str(path)
+    except (ImportError,OSError,ValueError,AttributeError) as exc:
+        LOG.warning('Could not save boundary recovery inputs: %s',type(exc).__name__)
+        return None
+
+
 def _recover_boundaries(image, model, thresholds, detections):
     width, height = image.size
     clipped = [item for item in detections
@@ -235,6 +280,17 @@ def _recover_boundaries(image, model, thresholds, detections):
         LOG.info('Manga boundary recovery: %s',json.dumps(diagnostic,ensure_ascii=False))
         return _covered(fragment,trusted,width,height)
 
+    # Large native tiles can still cut a bubble or vertical text column. Try
+    # balanced, shifted contexts at the original model scale for each fragment
+    # before magnifying a narrow strip to several thousand pixels in one axis.
+    initial_windows={tuple(item['tile_provenance']['window']) for item in detections
+                     if item.get('tile_provenance',{}).get('window')}
+    for directed in (False,True):
+        for fragment in clipped:
+            if budget_exhausted or _covered(fragment,trusted,width,height): continue
+            window=_native_recovery_window(fragment,width,height,directed)
+            if window is not None and window not in initial_windows:
+                probe(fragment,window,'native_shifted' if directed else 'native_centered')
     for fragment in clipped:
         if _covered(fragment, trusted, width, height):
             continue
@@ -268,12 +324,13 @@ def _recover_boundaries(image, model, thresholds, detections):
                       'unresolved_regions':len(unresolved),'budget_exhausted':budget_exhausted,
                       'attempts':attempts}
         LOG.error('Manga boundary recovery failed: %s',json.dumps(diagnostic,ensure_ascii=False))
+        failure_path=_save_recovery_failure(image,diagnostic)
         reason = ('검출 타일 경계 복구 한도 초과 (boundary recovery limit=16; unresolved clipped text) '
                   if budget_exhausted else '검출 타일 경계 복구 실패 (unresolved clipped text) ')
         raise ValueError(reason +
                          f"bbox={fragment['bbox']}, edges={fragment['tile_provenance']['clipped_edges']}, "
                          f"coverage={diagnostic['coverage']:.1%}, recovery_windows={calls}; "
-                         '상세 재검출 결과는 Manga boundary recovery 로그를 확인하세요. OCR/번역은 중단했습니다.')
+                         f'진단={failure_path or "저장 불가"}; 상세 재검출 결과는 Manga boundary recovery 로그를 확인하세요. OCR/번역은 중단했습니다.')
     if len(trusted) > _MAX_REGIONS:
         raise ValueError('Resolved detector produced too many regions (limit=512)')
     return trusted, {'clipped_regions':len(clipped),'recovery_calls':len(calls),
