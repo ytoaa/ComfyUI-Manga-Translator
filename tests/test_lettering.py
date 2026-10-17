@@ -63,6 +63,26 @@ def test_layouts_preserve_text_and_do_not_clip_region_edges(fixture, direction):
     assert max(alpha[0].max(), alpha[-1].max(), alpha[:, 0].max(), alpha[:, -1].max()) < .001
 
 
+@pytest.mark.parametrize('alignment',['left','right'])
+@pytest.mark.parametrize('size',[10,15])
+def test_dense_small_type_keeps_resampling_tails_off_frame_edges(fixture,alignment,size):
+    style={**fixture[3],'size':[589,219],'outline_width':0.}
+    text=('가로 문장과 12/28 항목을 확인합니다. '*18).strip()
+    _,alpha,raw=core.render_text(text,style,min_font=size,max_font=size,padding=2,
+                               alignment=alignment,supersample=2)
+    report=json.loads(raw)
+    assert report['text']==text and report['font_size']==size
+    assert not alpha[0].any() and not alpha[-1].any()
+    assert not alpha[:,0].any() and not alpha[:,-1].any()
+    assert report['requested_padding']==2 and report['effective_padding']==4
+
+
+def test_larger_requested_padding_is_preserved(fixture):
+    _,_,raw=core.render_text('여백 확인',fixture[3],padding=8)
+    report=json.loads(raw)
+    assert report['requested_padding']==report['effective_padding']==8
+
+
 def test_composition_uses_page_coordinates_and_preserves_all_other_pixels(fixture):
     style = fixture[3]
     layer, alpha, _ = core.render_text('안녕!', style)

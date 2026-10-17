@@ -333,7 +333,7 @@ def render_plan(plan):
         if chosen is None:
             raise ValueError(f"{region['id']}: no safe lettering fit above {fallback_floor}px ({reason}); "
                              f"source_cap={region['cap']}px, source_floor={region['floor']}px, "
-                             f"direction={region['options']['direction']}, bounds={region['source']}; "
+                             f"direction={region['options']['direction']}, bounds_xywh={region['source']}; "
                              'review text, direction or region options')
         bounds,layer,alpha,render,style,scale,phase=chosen
         place={'version':1,'bbox_xywh':bounds,'page_size':[result.shape[1],result.shape[0]]}

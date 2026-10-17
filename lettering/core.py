@@ -330,7 +330,12 @@ def render_text(text, style, font_name='NanumGothic-Bold.ttf', direction='horizo
     w, h = style['size']
     if w*h*supersample**2 > MAX_PIXELS:
         raise ValueError('Supersampled region exceeds 16 Mi pixels; reduce supersample or region size')
-    border = padding + math.ceil(style['outline_width'] + max(0, style['weight_px']) +
+    # LANCZOS spreads coverage up to three output pixels beyond the high-res
+    # glyph. Keep a clear pixel after that footprint. A fixed two-pixel left
+    # origin otherwise touches the boundary at every font size after resize.
+    raster_guard=4 if supersample>1 else 0
+    effective_padding=max(padding,raster_guard)
+    border = effective_padding + math.ceil(style['outline_width'] + max(0, style['weight_px']) +
                                   max(abs(style['shadow_x']), abs(style['shadow_y'])) + 3*style['shadow_blur'])
     available_w, available_h = w - 2*border, h - 2*border
     if min(available_w, available_h) < 4:
@@ -416,6 +421,7 @@ def render_text(text, style, font_name='NanumGothic-Bold.ttf', direction='horizo
     layer = np.divide(premult, alpha[..., None], out=np.zeros_like(premult), where=alpha[..., None] > 1e-6)
     layer = np.clip(layer, 0, 1).astype(np.float32)
     report = {'text': text, 'font': font_name, 'font_size': size, 'direction': direction,
+              'requested_padding':padding,'effective_padding':effective_padding,'raster_guard_px':raster_guard,
               'wrap_policy': wrap_policy, 'vertical_policy': vertical_policy, 'line_count': len(lines), 'line_step_px': line_step/s, 'rotation': rotation, 'shear': shear,
               'glyph_geometry': 'font-rendered; no generative rewriting',
               'font_identification': 'user selection, not inferred original font'}

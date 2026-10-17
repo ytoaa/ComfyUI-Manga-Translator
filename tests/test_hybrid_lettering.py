@@ -42,6 +42,18 @@ def test_short_target_never_grows_above_measured_source_and_background_is_exact(
     assert alpha.max()>.99
 
 
+def test_reported_r3_frame_can_render_dense_left_aligned_text_at_source_cap():
+    target=('가로 문장과 12/28 항목을 확인합니다. '*18).strip()
+    values=fixture(target,width=1060,height=500,source='SAMPLE',font_size=15,box=[471,137,589,219])
+    _,result,alpha,report,_,_=run(values,line_breaks='reflow',fit_policy='readable',
+        region_options_json='{"r1":{"alignment":"left","font_cap":15}}')
+    row=report['regions'][0]
+    assert row['render']['font_size']==15 and row['render']['text']==target
+    assert not alpha[:137].any() and not alpha[356:].any() and not alpha[:,:471].any()
+    assert not alpha[:,1059].any()
+    assert np.array_equal(result[alpha==0],values[1][alpha==0])
+
+
 def test_longer_translation_shrinks_before_adding_rows():
     values=fixture('원본보다 아주 긴 한국어 문장입니다',width=400,font_size=42)
     plan,_,_,report,_,_=run(values,min_font=8,min_scale=.3)

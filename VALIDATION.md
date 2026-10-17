@@ -319,3 +319,18 @@ OCR/translation/tiled-cleanup/lettering outputs. Its graph simulation uses synth
 instead of the example cover frames and verifies zero detector calls, both JSON previews, final save and
 unchanged pixels outside the permitted mask. Actual cover model inference is not run here.
 See [manual-mask contract and live limits](docs/row-noise-manual-v0.3.9.md).
+
+# v0.3.10 lettering resampling margin — 2026-10-17
+
+Base: `f663f79fd0d77a83835485415962612e00d39d86`. Full CPU regression: **285 passed**.
+The provided 455-character reflowed r3 target in the reported 589×219 frame, bundled font/plain style,
+left alignment/padding 2 reproduces the boundary failure at every size from 15 down to 10.
+Old edge alpha maxima range 0.0134..0.0196. With minimum effective supersampling padding 4,
+all six edge maxima are exactly zero and the complete text is retained. This uses real CPU font pixels,
+not a model double, but the actual measured source style and complete plan were not supplied.
+Six added regression cases cover both side alignments at two sizes, preservation of larger explicit padding,
+and the reported r3 xywh frame with a synthetic dense translation fitting at its 15px cap.
+Existing containment, collision, minimum font and impossible-fit checks remain active.
+The cover screenshot confirms the user manual path reached final save. The guide's duplicate/implausible
+translation content remains unresolved pending its saved OCR JSON; neither detection nor text is silently discarded.
+See [changes and remaining source-content investigation](docs/lettering-raster-margin-v0.3.10.md).
