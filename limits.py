@@ -5,6 +5,7 @@ runner, cleanup planner and lettering code must agree on these contracts so a
 page accepted by one layer is not rejected later for a stale legacy limit.
 """
 
+RESOURCE_CONTRACT_VERSION = 2
 LEGACY_PAGE_PIXELS = 16 * 1024 * 1024
 MAX_SOURCE_PIXELS = 64 * 1024 * 1024
 MAX_INPUT_BYTES = 256 * 1024 * 1024
