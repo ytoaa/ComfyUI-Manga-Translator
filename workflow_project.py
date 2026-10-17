@@ -6,6 +6,7 @@ import logging
 import re
 from pathlib import Path, PurePosixPath
 import threading
+import time
 import types
 
 from .tools.run_project import (Project, ProjectError, Paused, Rejected, ProtocolError,
@@ -23,6 +24,7 @@ class NativeComfyClient:
         self.source_id, self.extra_pnginfo, self.client_id = str(source_id), deepcopy(extra_pnginfo or {}), client_id
         self.submit_handler = next((r.handler for r in server.routes if r.method == 'POST' and r.path == '/prompt'),None)
         if self.submit_handler is None: raise ProjectError('ComfyUI 기본 prompt 경로를 찾을 수 없습니다.')
+        self.parent_prompt_id = None
 
     def object_info(self):
         import nodes
@@ -34,6 +36,47 @@ class NativeComfyClient:
     def queue(self):
         running,pending = self.server.prompt_queue.get_current_queue()
         return {'queue_running':[list(row) for row in running], 'queue_pending':[list(row) for row in pending]}
+
+    def wait_for_parent_success(self, should_stop=None, timeout=120):
+        """Do not submit a page until the control prompt is durably successful."""
+        ident = self.parent_prompt_id
+        if not ident: raise ProjectError('폴더 시작 작업 ID가 없습니다.')
+        should_stop = should_stop or (lambda: False)
+        deadline = time.monotonic()+timeout
+        missing_polls = 0
+        while time.monotonic() < deadline:
+            if should_stop():
+                raise Paused('폴더 시작 중 일시정지가 요청되어 페이지를 제출하지 않았습니다.')
+            history = self.history(ident)
+            if history:
+                status = history.get('status',{})
+                if not isinstance(status,dict): raise ProtocolError('폴더 시작 작업의 실행 상태가 올바르지 않습니다.')
+                if status.get('status_str') == 'success' and status.get('completed') is True:
+                    return
+                if status.get('status_str') == 'error' or status.get('completed') is False:
+                    raise Paused('폴더 시작 작업이 중지되거나 실패했습니다. 페이지는 추가 제출하지 않습니다.')
+            queue = self.queue()
+            matches = [item for key in ('queue_running','queue_pending') for item in queue.get(key,[])
+                       if isinstance(item,list) and len(item) >= 2 and item[1] == ident]
+            if len(matches) > 1:
+                raise ProtocolError('폴더 시작 작업이 큐에 중복되어 있습니다.')
+            if matches:
+                missing_polls = 0
+            else:
+                # History and queue may change between reads. Confirm once more before declaring it lost.
+                history = self.history(ident)
+                if history:
+                    status = history.get('status',{})
+                    if status.get('status_str') == 'success' and status.get('completed') is True:
+                        return
+                    if status.get('status_str') == 'error' or status.get('completed') is False:
+                        raise Paused('폴더 시작 작업이 중지되거나 실패했습니다. 페이지는 추가 제출하지 않습니다.')
+                else:
+                    missing_polls += 1
+                    if missing_polls >= 3:
+                        raise Paused('폴더 시작 작업이 큐와 이력에서 모두 사라졌습니다. 페이지를 제출하지 않고 중단합니다.')
+            time.sleep(.1)
+        raise Paused('폴더 시작 작업의 성공 여부를 확인하지 못했습니다. 페이지를 제출하지 않고 중단합니다.')
 
     def upload(self, data, name, subfolder):
         path = self._path({'type':'input','filename':name,'subfolder':subfolder})
@@ -142,7 +185,7 @@ class WorkflowProjects:
                 else: atomic_write(metadata,json_bytes(client.extra_pnginfo))
             self.stop_event = threading.Event()
             project = Project(inputs,folder,configured,client,retry_failed=retry_failed,should_stop=self.stop_event.is_set)
-            self._control(folder,'running','ComfyUI 큐에서 페이지를 순차 처리합니다.')
+            self._control(folder,'running','폴더 시작 작업의 성공을 확인한 뒤 ComfyUI 큐에서 페이지를 순차 처리합니다.')
             self.active = folder
             self.worker = threading.Thread(target=self._run,args=(folder,project,publish),daemon=True,name='manga-workflow-project')
             self.worker.start()
@@ -159,10 +202,9 @@ class WorkflowProjects:
         project.progress = progress
         status,message = 'paused','작업이 중단되었습니다. 재개 시 기존 작업부터 확인합니다.'
         try:
-            # ComfyUI accepts new /prompt requests while the current prompt is running.
-            # Queueing the first page immediately is safer than waiting for the parent
-            # control prompt to appear in history; execution remains serialized by the
-            # native prompt queue and the page cannot run before the current job ends.
+            if hasattr(project.client,'wait_for_parent_success'):
+                project.client.wait_for_parent_success(self.stop_event.is_set)
+                logging.info('Manga folder project parent confirmed: %s', folder.name)
             report = project.run(export=True)
             partial = any(n and s not in ('completed','unchanged_blank') for s,n in report['counts'].items())
             status = 'needs_review' if partial else 'completed'
@@ -330,6 +372,7 @@ class MangaWorkflowInput:
             ident,client_id = _context(server,prompt,unique_id)
             graph = _queued_prompt(server,ident)
             client = NativeComfyClient(server,folder_paths.get_input_directory(),folder_paths.get_output_directory(),unique_id,extra_pnginfo,client_id)
+            client.parent_prompt_id = ident
             previews = [key for key,node in graph.items() if node['class_type']=='PreviewAny' and node['inputs'].get('source') == [str(unique_id),2]]
             def publish(value):
                 if client_id is None: return
