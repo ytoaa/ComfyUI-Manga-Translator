@@ -534,6 +534,23 @@ def parse_regions(document, shape):
     return data
 
 
+def preserved_punctuation_boxes(data,shape):
+    values=data.get('preserved_punctuation',[])
+    if not isinstance(values,list) or len(values)>64:
+        raise ValueError('Invalid preserved punctuation list')
+    output=[];ids=set()
+    for item in values:
+        if not isinstance(item,dict):raise ValueError('Invalid preserved punctuation')
+        count=item.get('count');ident=item.get('id')
+        if (type(count) is not int or not 3<=count<=24 or item.get('text')!='・'*count
+                or not isinstance(ident,str) or not ident or ident in ids):
+            raise ValueError('Invalid preserved punctuation')
+        ids.add(ident)
+        x,y,w,h=bbox(item.get('bbox'),shape)
+        output.append([x,y,x+w,y+h])
+    return output
+
+
 def render_page(original, cleaned, source_mask, document, default_font='NanumGothic-Bold.ttf',
                 texture_strength=1.):
     original, cleaned = rgb(original), rgb(cleaned)
@@ -544,6 +561,8 @@ def render_page(original, cleaned, source_mask, document, default_font='NanumGot
     result = cleaned.copy()
     page_alpha = np.zeros(cleaned.shape[:2], np.float32)
     reports = []
+    preserved=preserved_punctuation_boxes(data,original.shape)
+    for a,b,c,d in preserved:result[b:d,a:c]=original[b:d,a:c]
     # All references come from original/cleaned snapshots, never the cumulative result.
     for item in data['regions']:
         ref, clean, mask, place = crop_region(original, cleaned, source_mask, item['bbox'])
@@ -554,7 +573,10 @@ def render_page(original, cleaned, source_mask, document, default_font='NanumGot
         result, changed = composite(result, layer, alpha, place)
         page_alpha = changed + page_alpha*(1-changed)
         reports.append({'id': item['id'], 'analysis': json.loads(measured), 'render': json.loads(report)})
+    for a,b,c,d in preserved:
+        if page_alpha[b:d,a:c].any():raise ValueError('Lettering overlaps preserved source punctuation')
     return result, page_alpha, json.dumps({'schema': 1, 'regions': reports,
+        'preserved_punctuation':data.get('preserved_punctuation',[]),
         'style_method': 'measured colors/outline/pigment + selected font; no trained style-transfer model'}, ensure_ascii=False, indent=2)
 
 

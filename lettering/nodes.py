@@ -220,7 +220,7 @@ class MangaLetterPrepare:
     RETURN_NAMES = ('식자_영역_JSON', '원문_스타일_참조_마스크')
     FUNCTION = 'prepare'
     def prepare(self, original, translated_json, region_padding=12, region_options_json='{}', text_pixel_mask=None):
-        from ..nodes import layout, pixel_box, decode
+        from ..nodes import layout, pixel_box, decode, verified_dot_text
         original_array = image(original)
         height, width = original_array.shape[:2]
         core.integer(region_padding, 0, 128, 'region_padding')
@@ -235,6 +235,7 @@ class MangaLetterPrepare:
         if not isinstance(overrides, dict) or set(overrides)-ids:
             raise ValueError('Style overrides must be keyed only by existing region IDs')
         rows = []
+        preserved=[]
         support = np.zeros((height, width), np.float32)
         for row in data['regions']:
             core.clean_text(row.get('target'))
@@ -243,6 +244,10 @@ class MangaLetterPrepare:
                 raise ValueError('Invalid edit_bbox_pixels')
             x0, y0, x1, y1 = bounds
             bounds = list(core.bbox([x0, y0, x1-x0, y1-y0], original_array.shape))
+            punctuation=verified_dot_text(row)
+            if punctuation is not None and row['target']==punctuation:
+                preserved.append({'id':row['id'],'bbox':bounds,'text':punctuation,'count':len(punctuation)})
+                continue
             opts = overrides.get(row['id'], {})
             if not isinstance(opts, dict) or set(opts)-{'font', 'layout', 'style'}:
                 raise ValueError('Region options may contain only font, layout and style')
@@ -252,6 +257,7 @@ class MangaLetterPrepare:
         if text_pixel_mask is not None:
             support *= core.mask_array(mask(text_pixel_mask), (height, width))
         output = json.dumps({'schema': 1, 'coordinate_format': 'xywh', 'page_size': [width, height], 'regions': rows,
+                            **({'preserved_punctuation':preserved} if preserved else {}),
                             **({'boundary_review':data['boundary_review'],'needs_review':True}
                                if data.get('boundary_review') is not None else {})}, ensure_ascii=False)
         core.parse_regions(output, original_array.shape)

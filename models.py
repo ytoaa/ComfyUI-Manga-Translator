@@ -486,7 +486,7 @@ class MangaOCRAdaptive:
             return ('',json.dumps({'status':'no_text_detected','ocr_skipped':True,
                                   'preview':'unchanged_page_not_ocr_input'}),[images])
         from .adapters.options import OcrOptions
-        from .ocr_policy import plan_line, text_problem, join_chunks, recovery_parts
+        from .ocr_policy import plan_line, text_problem, join_chunks, recovery_parts, dot_punctuation
         from .adapters.hayai import preprocess_size
         import torch
         if type(base_patches) is not int or base_patches not in (256,512,1024):
@@ -530,6 +530,11 @@ class MangaOCRAdaptive:
         def recognize(image,line_index,box):
             attempts=[];generation=[]
             try:
+                dots=dot_punctuation(image) if quality_guard else None
+                if dots:
+                    LOG.info('OCR source punctuation: %s dots=%s; preserving observed count',dots['axis'],dots['count'])
+                    return dots['text'],[{'strategy':'source_dot_punctuation','characters':dots['count'],
+                        'issue':None,'model_called':False,'quality_evidence':{'verified_punctuation':dots}}],None
                 short=min(image.size)
                 patches=max(base_patches,small_text_patches) if short <= small_text_px else base_patches
                 LOG.info('Adaptive OCR input: line=%s box=%s crop=%sx%s patch_budget=%s',line_index,box,image.width,image.height,patches)
@@ -623,6 +628,8 @@ class MangaOCRAdaptive:
                 'recognition_work_items':work_count,'chunks':records,
                 **({'region_plan':region_plan} if region_plan else {}),
                 'quality_scope':'heuristic_checks_only_not_recognition_accuracy'}
+        dots=dot_punctuation(source) if quality_guard else None
+        if dots and ''.join(texts)==dots['text']:report['verified_punctuation']=dots
         return ('\n'.join(texts),json.dumps(report,ensure_ascii=False),previews)
 
 

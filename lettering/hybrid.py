@@ -186,7 +186,11 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         if detected and protected != detected:
             raise ValueError('Boundary protection missing or changed in lettering document')
     boundary_review.restore(plan['cleaned'],original,protected)
-    plan['protected_boxes_pixels']=protected
+    punctuation=core.preserved_punctuation_boxes(data,original.shape)
+    boundary_review.restore(plan['cleaned'],original,punctuation)
+    plan['boundary_review_required']=bool(protected)
+    plan['protected_boxes_pixels']=protected+punctuation
+    plan['preserved_punctuation']=data.get('preserved_punctuation',[])
     # Prepare masks once, rather than decoding every detection for every text.
     bubble_items=(bubble_constraints.candidates(bubble_mask,detection_result,original.shape)
                   if respect_bubbles or any(v.get('respect_bubbles') or v.get('require_bubble')
@@ -288,11 +292,15 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
                         'bubble_containment':guard_report,
                         'direction':actual_direction,'line_breaks':breaks,'soft_wraps_reflowed':flow,
                         'warning':warning})
+    for a,b,c,d in punctuation:
+        draw.rectangle((a,b,c-1,d-1),outline=(80,160,255),width=2)
     for a,b,c,d in protected:
         draw.rectangle((a,b,c-1,d-1),outline=(255,60,80),width=3)
-    report={'schema':1,'regions':reports,'preview':'orange=source frame; cyan=expanded bubble frame; green=safe bubble interior; red=preserved boundary review',
+    report={'schema':1,'regions':reports,'preview':'orange=source frame; cyan=expanded bubble frame; green=safe bubble interior; red=preserved boundary review; blue=original dot punctuation',
             'protected_boxes_pixels':protected,'needs_review':bool(protected),
-            **({'page_status':'no_text_detected','lettering_skipped':True} if not reports else {}),
+            'preserved_punctuation':plan['preserved_punctuation'],
+            **({'page_status':'no_text_detected','lettering_skipped':True} if not reports and not punctuation else {}),
+            **({'lettering_skipped':True,'skip_reason':'source_punctuation_preserved'} if not reports and punctuation else {}),
             'font_identity':'selected font; source size/direction/alignment are measured estimates',
             'curves':'manual bend only; no automatic curve reconstruction'}
     return plan,np.asarray(preview,np.float32)/255,json.dumps(report,ensure_ascii=False,indent=2)
@@ -368,7 +376,9 @@ def render_plan(plan):
                         'original_text':region['original_text'],'line_breaks':region['line_breaks'],
                         'outline_width':style['outline_width'],'bend':region['bend'],'warning':region['warning']})
     return result,page_alpha,json.dumps({'schema':1,'regions':reports,
-        'protected_boxes_pixels':protected,'needs_review':bool(protected),
-        **({'page_status':'no_text_detected','lettering_skipped':True} if not reports else {}),
+        'protected_boxes_pixels':protected,'needs_review':plan.get('boundary_review_required',bool(protected)),
+        'preserved_punctuation':plan.get('preserved_punctuation',[]),
+        **({'page_status':'no_text_detected','lettering_skipped':True} if not reports and not plan.get('preserved_punctuation') else {}),
+        **({'lettering_skipped':True,'skip_reason':'source_punctuation_preserved'} if not reports and plan.get('preserved_punctuation') else {}),
         'quality_scope':'geometry/style approximation; OCR, translation and GPU cleanup require separate review'},
         ensure_ascii=False,indent=2)

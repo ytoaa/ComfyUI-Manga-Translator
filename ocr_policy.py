@@ -4,6 +4,45 @@ import numpy as np
 from scipy import ndimage
 
 
+def dot_punctuation(image):
+    """Recognize only 3..24 isolated, filled, evenly spaced round dots.
+
+    This bounded geometry reader does not accept model output or infer words.
+    A mixed, cropped, hollow, textured or ambiguous input keeps normal OCR.
+    """
+    width,height=image.size
+    if width*height>262144 or min(width,height)<8 or max(width,height)<3*min(width,height):
+        return None
+    pixels=np.asarray(image.convert('RGB'),np.float32)
+    background=np.median(pixels.reshape(-1,3),axis=0)
+    delta=np.max(np.abs(pixels-background),axis=2)
+    if np.mean(delta<=12)<.70: return None
+    foreground=delta>=64
+    labels,count=ndimage.label(foreground,structure=np.ones((3,3),bool))
+    if not 3<=count<=24: return None
+    boxes=[];sizes=[];areas=[];centers=[]
+    for i,slices in enumerate(ndimage.find_objects(labels),1):
+        y,x=slices;w,h=x.stop-x.start,y.stop-y.start
+        local=labels[slices]==i
+        if (min(w,h)<3 or not .75<=w/h<=1.33 or not .60<=local.mean()<=.91 or
+                not np.array_equal(ndimage.binary_fill_holes(local),local)):
+            return None
+        margin=max(2,round(min(w,h)*.12))
+        if min(x.start,y.start,width-x.stop,height-y.stop)<margin: return None
+        boxes.append([x.start,y.start,x.stop,y.stop]);sizes.append((w+h)/2);areas.append(int(local.sum()))
+        yy,xx=np.where(local)
+        centers.append([float(xx.mean()+x.start),float(yy.mean()+y.start)])
+    if min(sizes)/max(sizes)<.70 or min(areas)/max(areas)<.60: return None
+    axis=1 if height>width else 0
+    centers=np.asarray(centers);diameter=float(np.median(sizes))
+    if np.ptp(centers[:,1-axis])>max(1,diameter*.20): return None
+    order=np.argsort(centers[:,axis]);gaps=np.diff(centers[order,axis]);spacing=float(np.median(gaps))
+    if not 1.8*diameter<=spacing<=6*diameter or np.ptp(gaps)>spacing*.25: return None
+    return {'strategy':'source_dot_punctuation','text':'・'*count,'count':count,
+            'axis':'vertical' if axis else 'horizontal','component_boxes':[boxes[i] for i in order],
+            'scope':'geometric_dot_count_only_not_general_OCR'}
+
+
 def ink(image):
     pixels = np.asarray(image.convert('RGB'), dtype=np.float32)
     gray = pixels @ np.array([.299, .587, .114], dtype=np.float32)
@@ -54,6 +93,11 @@ def text_problem(text, image, evidence=None):
     if not isinstance(text,str) or not text.strip():
         return 'empty'
     compact = ''.join(text.split())
+    if compact and set(compact)=={'・'}:
+        dots=dot_punctuation(image)
+        if dots and compact==dots['text']:
+            if evidence is not None:evidence['verified_punctuation']=dots
+            return None
     # Short pathological loops from the actual report used to evade the
     # adapter's 32-character loop check. Keep ordinary manga elongations.
     for period in range(1,9):

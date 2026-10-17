@@ -344,6 +344,19 @@ class MangaCollectOCR:
                 for i,(row,value) in enumerate(zip(data['regions'],text))]}),)
 
 
+def verified_dot_text(row):
+    report=row.get('ocr_diagnostics',{})
+    if not isinstance(report,dict):raise ValueError('Invalid OCR diagnostic object')
+    evidence=report.get('verified_punctuation')
+    if evidence is None:return None
+    count=evidence.get('count') if isinstance(evidence,dict) else None
+    if (type(count) is not int or not 3<=count<=24 or evidence.get('strategy')!='source_dot_punctuation'
+            or evidence.get('axis') not in ('horizontal','vertical')
+            or row.get('source')!='・'*count or evidence.get('text')!=row.get('source')):
+        raise ValueError('Invalid verified punctuation evidence')
+    return row['source']
+
+
 class MangaTranslate:
     @classmethod
     def INPUT_TYPES(cls):
@@ -367,6 +380,13 @@ class MangaTranslate:
             raise ValueError('Connect collected OCR text before translation')
         if translated_override_json.strip():
             return (encode(translations(source,decode(translated_override_json))),)
+        preserved=[{'id':row['id'],'target':value} for row in source['regions']
+                   if (value:=verified_dot_text(row)) is not None]
+        preserved_ids={row['id'] for row in preserved}
+        requested=[row for row in source['regions'] if row['id'] not in preserved_ids]
+        if not requested:
+            return (encode({**translations(source,{'translations':preserved}),
+                            'translation_skipped':True,'translation_skip_reason':'verified_source_punctuation'}),)
         if not target_language.strip() or len(target_language)>100 or type(max_tokens) is not int or not 256<=max_tokens<=16384 or type(timeout) is not int or not 10<=timeout<=1800:
             raise ValueError('Invalid translation settings')
         if not model.strip():
@@ -379,13 +399,17 @@ class MangaTranslate:
                   'Return one complete JSON object only, with no Markdown fences or commentary: '
                   '{"translations":[{"id":"r1","target":"translated text"}]}. '
                   'Preserve names and meaning; use natural comic dialogue. Preserve paragraph breaks where useful.')
-        messages = [{'role':'system','content':system},{'role':'user','content':encode({'regions':[{'id':r['id'],'source':r['source']} for r in source['regions']]})}]
+        messages = [{'role':'system','content':system},{'role':'user','content':encode({'regions':[{'id':r['id'],'source':r['source']} for r in requested]})}]
         for attempt in range(2):
             response = api_json(base_url,'/chat/completions',api_key_env,timeout,
                                 {'model':model.strip(),'messages':messages,'temperature':0,'max_tokens':max_tokens})
             content, metadata = translation_response(response)
             try:
                 parsed = decode_translation(content)
+                if preserved:
+                    if not isinstance(parsed,dict) or not isinstance(parsed.get('translations'),list):
+                        raise ValueError('Translation must contain a translations list')
+                    parsed={**parsed,'translations':parsed['translations']+preserved}
                 result = translations(source, parsed)
             except ValueError as exc:
                 if isinstance(exc, json.JSONDecodeError):
