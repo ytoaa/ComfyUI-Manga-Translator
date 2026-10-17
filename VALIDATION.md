@@ -253,3 +253,22 @@ The supplied workflow is pasted Markdown with escaped JSON; its PreviewAny/sourc
 were inspected as text. The new attachment is a canvas screenshot, not the failing OCR crop or r1 source/target JSON.
 Actual 580×203 OCR root cause, r1 geometry/direction and user GPU/ComfyUI outcomes remain unverified.
 See [settings, evidence and limitations](docs/ocr-fit-preview-v0.3.5.md).
+
+# v0.3.6 selection audit / actual bubble containment — 2026-10-17
+
+Base: `c7dd3149ba4dff43f8a8aea88c15c3f79fe23749`. Full CPU regression: **260 passed**.
+Fifteen added cases cover jagged masks supplied directly or by detected RLE, source padding beyond the bubble,
+ink-based neighbouring-bubble ownership, ambiguous versus duplicate masks, source crossing a known mask,
+nonbubble titles/explicit bubble requirements, and impossible fits without clipping off glyphs.
+Every positive alpha pixel is checked after outlines, shadows, rotation and bending, in addition to frame/collision checks.
+An illustrative synthetic jagged bubble changes 3,174 rectangle-only outside pixels to zero with the full target retained;
+this is not a reconstruction of the user's screenshot or a certification of the detector's mask accuracy.
+Added tests distinguish disabled layout recovery from no alternative and verify the runtime flags in failure JSON.
+Small/native pages with zero selected text get bounded compact retries, positive-text pages retain the native early exit,
+and excluded effects retain raw label counts/review metadata. The shared native PrimitiveBoolean drives all three
+include_sfx inputs. Existing full-graph text and no-text paths, six successful/two expected-stop simulations,
+workflow regeneration, compilation and package import/checksums are verified locally.
+The cover attachment is an 800×1125 source image, but its actual model detections were not supplied.
+The reported teacher failure still needs its existing JSON and corresponding input/source PNGs.
+No actual RF-DETR/Hayai/Qwen GPU execution or resolution of that 580×203 OCR failure is claimed.
+See [configuration and remaining evidence](docs/selection-bubble-diagnostics-v0.3.6.md).

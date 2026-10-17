@@ -280,11 +280,16 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
     # Selection must precede boundary certification: an intentionally excluded
     # effect must neither stop dialogue OCR nor contribute cleanup pixels.
     ignored_sfx = 0
-    def selected(result):
+    counts={}
+    def selected(result,stage='detail'):
         nonlocal ignored_sfx
         if (not isinstance(result,dict) or not isinstance(result.get('detections'),list)
                 or any(not isinstance(item,dict) for item in result['detections'])):
             raise ValueError('Invalid detector response; expected an explicit detections list')
+        stage_counts=counts.setdefault(stage,{})
+        for item in result['detections']:
+            label=item.get('label','unknown')
+            stage_counts[label]=stage_counts.get(label,0)+1
         if include_sfx:
             return result
         detections = result.get('detections', [])
@@ -292,15 +297,24 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
         ignored_sfx += len(detections)-len(kept)
         return {**result, 'detections': kept}
 
-    full = selected(model.detect(image, thresholds))
+    def finish(result):
+        audit={'include_sfx':include_sfx,'raw_counts_by_stage':counts,
+               'excluded_onomatopoeia_detections':ignored_sfx,
+               'selected_text_detections':sum(item.get('label') in
+                    ({'text','onomatopoeia'} if include_sfx else {'text'}) for item in result['detections']),
+               'counts_scope':'raw inference counts; duplicate detections across windows are included'}
+        LOG.info('Manga detection selection: %s',audit)
+        return {**result,'detection_audit':audit}
+
+    full = selected(model.detect(image, thresholds),'full')
     width, height = image.size
     if (full.get('image_width'), full.get('image_height')) != (width, height):
         raise ValueError('Detector result dimensions differ from source image')
     if type(detail_overlap) is not int or not 0 <= detail_overlap <= 384:
         raise ValueError('Detector detail overlap must be 0..384 pixels')
     if detail_mode == 'off':
-        return {**full, 'detail_detection': {
-            'mode': detail_mode, 'strategy': 'off', 'tiles': 0, 'detail_regions': 0}}
+        return finish({**full, 'detail_detection': {
+            'mode': detail_mode, 'strategy': 'off', 'tiles': 0, 'detail_regions': 0}})
 
     tile = _tile_size(detail_mode)
     x_windows = _sliding_windows(width, tile, detail_overlap) if width > tile else [(0, width)]
@@ -308,13 +322,16 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
 
     # If the page already fits a single native-size window in auto mode, the
     # full-page inference is the detail inference; do not run it twice.
-    if detail_mode == 'auto' and len(x_windows) == 1 and len(y_windows) == 1:
-        return {**full, 'detail_detection': {
+    single_native=detail_mode=='auto' and len(x_windows)==1 and len(y_windows)==1
+    empty_selected=not any(item.get('label') in {'text','onomatopoeia'} for item in full['detections'])
+    retry_small=single_native and empty_selected and max(width,height)>_DETECTOR_NATIVE_SIZE//2
+    if single_native and not retry_small:
+        return finish({**full, 'detail_detection': {
             'mode': detail_mode, 'strategy': 'native_sliding',
             'tile_size': tile, 'windows': [[0, width, 0, height]],
-            'tiles': 0, 'detail_regions': 0}}
+            'tiles': 0, 'detail_regions': 0}})
 
-    windows = [[x0, x1, y0, y1] for y0, y1 in y_windows for x0, x1 in x_windows]
+    windows = [] if retry_small else [[x0, x1, y0, y1] for y0, y1 in y_windows for x0, x1 in x_windows]
     # On large pages auto also checks compact crops. A single native-width pass
     # can still miss tiny paragraphs; these are actual extra detector calls,
     # not a claim that every text region is guaranteed to be recovered.
@@ -347,11 +364,11 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
     # to every recovery response rather than only the initial detail pass.
     class RecoveryModel:
         def detect(self, crop, options):
-            return selected(model.detect(crop, options))
+            return selected(model.detect(crop, options),'recovery')
     complete, recovery = _recover_boundaries(image, RecoveryModel(), thresholds, list(full.get('detections', [])) + recovered)
     recovery['include_sfx'] = include_sfx
     recovery['ignored_sfx_detections'] = ignored_sfx
-    return {**full,
+    return finish({**full,
             'detections': complete,
             # Do not send fragment geometry to OCR, but retain its segmentation
             # pixels for cleanup even if a complete detection has a sparser mask.
@@ -364,8 +381,9 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
                 'windows': windows,
                 'tiles': len(windows),
                 'detail_regions': len(recovered),
+                'zero_selected_compact_retry':retry_small,
                 'boundary_recovery': recovery,
-            }}
+            }})
 
 
 class MangaDetectorDetailResolved(_BaseDetectorDetail):

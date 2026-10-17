@@ -32,6 +32,13 @@ def test_complete_api_graph_preserves_regions_and_unmasked_pixels(tmp_path, fill
         if node['class_type']=='PreviewAny':
             saved_source=node['inputs']['source'][0]
             assert graph[saved_source]['class_type']=='MangaSaveReview'
+    selectors=[(ident,node) for ident,node in graph.items() if node['class_type']=='PrimitiveBoolean']
+    assert len(selectors)==1
+    ident,node=selectors[0]
+    assert node['inputs']['value'] is False
+    for target in graph.values():
+        if target['class_type'] in ('MangaDetectorDetail','MangaDetectionRegions','MangaDetectionMask'):
+            assert target['inputs']['include_sfx']==[ident,0]
 
 
 def test_failed_cleanup_never_reaches_final_save(tmp_path):

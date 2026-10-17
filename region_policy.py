@@ -172,6 +172,8 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
                 for i, item in enumerate(selected)]
         value = encode({'regions': rows, 'origin': 'rfdetr',
                         **({'page_status':'no_text_detected'} if not rows else {}),
+                        **({'needs_review':True,'no_text_reason':'excluded_onomatopoeia_present'}
+                           if not rows and result.get('detection_audit',{}).get('excluded_onomatopoeia_detections',0) else {}),
                         'image_width': width, 'image_height': height,
                         'region_resolution': {
                             'input_regions': len(candidates),
@@ -180,6 +182,7 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
                             'dedupe_iou': dedupe_iou,
                             'containment_overlap': _CONTAINMENT_OVERLAP,
                             'boundary_recovery': result.get('detail_detection', {}).get('boundary_recovery'),
+                            'detection_audit':result.get('detection_audit'),
                         }})
         layout(value)
         return (value,)

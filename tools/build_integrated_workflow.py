@@ -7,7 +7,9 @@ CORE_SCHEMAS.update({
                               'tapered_corners': ('BOOLEAN', {'default': True})}},
     'MaskToImage': {'required': {'mask': ('MASK',)}}})
 CORE_SCHEMAS['PreviewAny']={'required':{'source':('*',)}}
-CORE_RETURNS.update({'GrowMask': ('MASK',), 'MaskToImage': ('IMAGE',),'PreviewAny':('STRING',)})
+CORE_SCHEMAS['PrimitiveBoolean']={'required':{'value':('BOOLEAN',{'default':False})}}
+CORE_RETURNS.update({'GrowMask': ('MASK',), 'MaskToImage': ('IMAGE',),'PreviewAny':('STRING',),
+                     'PrimitiveBoolean':('BOOLEAN',)})
 
 
 def build():
@@ -15,7 +17,7 @@ def build():
     g = Graph()
     original = g.add('LoadImage', {'image': ''}, (0, 50), '① 원본 페이지')
     detector_model = g.import_model_node(template, 24, (0, 400))
-    detector = g.add('MangaDetectorDetail', {'include_sfx':False}, pos=(420, 50), title='② 전체+문맥/작은 타일 검출 · 효과음 제외')
+    detector = g.add('MangaDetectorDetail', {'include_sfx':False}, pos=(420, 50), title='② 전체+작은 타일 검출 · 공통 글자 선택')
     g.connect(original, 0, detector, 'images'); g.connect(detector_model, 0, detector, 'model')
     regions = g.add('MangaDetectionRegions', {'merge_adjacent_lines':True}, pos=(840, 50), title='③ 중복 해소 · 가까운 행을 문단으로')
     g.connect(detector, 0, regions, 'result')
@@ -73,7 +75,8 @@ def build():
     prepare = g.add('MangaLetterPrepare', pos=(4620, 50), title='⑩ 번역문과 원문 스타일 연결')
     g.connect(original, 0, prepare, 'original'); g.connect(target_save, 0, prepare, 'translated_json')
     g.connect(plan, 9, prepare, 'text_pixel_mask')
-    typography = g.add('MangaLetterPlan', {'line_breaks':'reflow','fit_policy':'readable'}, pos=(5040, 50), title='⑪ 원문 크기·폭 활용 · 최소 가독 크기까지 맞춤')
+    typography = g.add('MangaLetterPlan', {'line_breaks':'reflow','fit_policy':'readable','respect_bubbles':True},
+                       pos=(5040, 50), title='⑪ 실제 말풍선 경계 검사 · 가독 크기 맞춤')
     g.connect(original, 0, typography, 'original'); g.connect(assemble, 0, typography, 'cleaned')
     g.connect(prepare, 1, typography, 'source_mask'); g.connect(prepare, 0, typography, 'regions_json')
     g.connect(detector, 0, typography, 'detection_result')
@@ -101,7 +104,7 @@ def build():
            '단색이 확인된 OCR 영역 안에서 누락된 획/잔점을 제거 범위에 보완합니다. 실효 마스크를 미리보기로 확인하세요.\n'
            'bubble은 검출된 실제 말풍선 마스크 또는 직접 연결한 내부 마스크에서 확장합니다. 겹침/최소 크기 실패는 저장 전에 중단합니다.\n'
            '영역별 폰트·방향·회전·수동 곡선은 식자 계획 노드의 JSON으로 지정합니다.\n'
-           '효과음은 검출·영역·마스크 세 노드에서 함께 설정합니다. 기본은 제외.\n'
+           '효과음·표지 큰 글자 포함 스위치 하나가 검출·영역·마스크를 함께 설정합니다. 기본은 제외. 표지는 포함 설정도 검토하세요.\n'
            '긴 가로 행은 빈 열에서 분할. OCR 반복/누락 의심은 patch 변경 1회 후 계속 실패하면 중단합니다.\n'
            'OCR JSON에 영역별 입력 크기/분할/재시도 진단을 저장합니다. 휴리스틱 통과는 인식 정확도 보증이 아닙니다.\n'
            '한 번 실행: 검출→줄별 OCR→번역→타일별 제거→좌표 복원→식자.\n'
@@ -111,6 +114,7 @@ def build():
            '마스크 밖 누락 글씨는 자동 삭제되지 않습니다. 마스크 미리보기와 OCR JSON으로 확인하세요.\n'
            '반복이 지속되면 확인된 행/열 간격에서 한 번 다시 분할합니다. 실패 입력은 output/manga_translator/ocr_failures에 저장합니다.\n'
            'fit_policy=readable은 원문 비율 제한으로 맞지 않을 때 min_font까지 추가 축소합니다. strict/명시적 최소 크기는 유지합니다.\n'
+           '확인된 말풍선은 실제 마스크 내부로 글자 알파 전체를 제한합니다. 초록색은 안전한 내부 사각형입니다.\n'
            '통합 모의 실행 결과와 실제 GPU 품질 검증은 구분합니다.', (3360, 1150))
     for source,pos,title in [(source_save,(2520,250),'OCR 저장 JSON · 미리보기 아무거나'),
                              (target_save,(3360,250),'번역 저장 JSON · 미리보기 아무거나')]:
@@ -118,6 +122,9 @@ def build():
         g.nodes[preview-1]['size']=[400,260]
         g.nodes[preview-1]['properties']['cnr_id']='comfy-core'
         g.connect(source,0,preview,'source')
+    scope=g.add('PrimitiveBoolean',{'value':False},pos=(0,650),title='효과음·표지 큰 글자 포함 · 공통 스위치')
+    g.nodes[scope-1]['properties']['cnr_id']='comfy-core'
+    for node in (detector,regions,raw_mask):g.connect(scope,0,node,'include_sfx')
     g.save('08-integrated-tiled-cleanup-lettering')
     # The committed 08 graph uses LF; keep regeneration byte-for-byte stable.
     for suffix in ('.json','.api.json'):

@@ -499,6 +499,12 @@ class MangaOCRAdaptive:
             raise ValueError('Invalid OCR text direction')
         options=OcrOptions(max_new_tokens=max_new_tokens,repetition_penalty=repetition_penalty)
         source=pil_image(images)
+        runtime={'line_split':line_split,'text_direction':text_direction,'tight_crop':tight_crop,
+                 'split_long_lines':split_long_lines,'quality_guard':quality_guard,
+                 'retry_on_layout_failure':retry_on_layout_failure,'max_new_tokens':max_new_tokens,
+                 'base_patches':base_patches,'small_text_patches':small_text_patches,
+                 'retry_on_token_limit':retry_on_token_limit,'repetition_penalty':repetition_penalty,
+                 'retry_on_repetition':retry_on_repetition}
         crops=(_ocr_line_images(source) if text_direction=='auto' else _ocr_line_images(source,text_direction)) if line_split else [source]
         if tight_crop:
             crops=[_tight_ocr_image(image) for image in crops]
@@ -534,6 +540,7 @@ class MangaOCRAdaptive:
             except Exception as exc:
                 path=_save_ocr_failure(source,image,{'code':getattr(exc,'code',type(exc).__name__),
                     'line':line_index,'line_local_bbox':box,'attempts':attempts,
+                    'runtime_settings':runtime,'layout_recovery':{'strategy':'adapter_error_before_layout_recovery'},
                     'generation_attempts':generation})
                 if path and hasattr(exc,'add_note'):exc.add_note('OCR diagnostic: '+path)
                 raise
@@ -541,8 +548,12 @@ class MangaOCRAdaptive:
         def reject(image,line_index,box,attempts,issue,recovery=None,text=None):
             path=_save_ocr_failure(source,image,{'code':issue,'line':line_index,'line_local_bbox':box,
                                                'attempts':attempts,'layout_recovery':recovery,
+                                               'runtime_settings':runtime,
                                                'rejected_text':text})
+            recovery_summary={key:recovery[key] for key in ('strategy','rejected') if recovery and key in recovery}
             raise ValueError(f'OCR 품질 검사 실패 ({issue}); line={line_index}, box={box}, attempts={attempts}. '
+                             f'line_split={line_split}, retry_on_layout_failure={retry_on_layout_failure}, '
+                             f'layout_recovery={recovery_summary}. '
                              f'진단={path or "저장 불가"}. 원본 OCR 크롭과 Hayai 로그를 확인하세요. '
                              '번역할 원문을 확정하지 않았습니다.')
 
@@ -550,7 +561,8 @@ class MangaOCRAdaptive:
             chunks=[]
             for image, box in parts:
                 text,attempts,issue=recognize(image,line_index,box)
-                recovery=None
+                recovery=({'strategy':'disabled_by_retry_option'} if not retry_on_layout_failure else
+                          {'strategy':'disabled_by_line_split'} if not line_split else None)
                 if issue and retry_on_layout_failure and line_split:
                     alternative,recovery=recovery_parts(image,text_direction)
                     if alternative and work_count+len(alternative)<=128:
@@ -578,7 +590,8 @@ class MangaOCRAdaptive:
                     previews.append(torch.from_numpy(np.asarray(image,dtype=np.float32)/255)[None])
                 chunks.append(text)
                 records.append({'line':line_index,'line_local_bbox':box,'input_size':list(image.size),
-                                'attempts':attempts,**({'layout_recovery':recovery} if recovery else {})})
+                                'attempts':attempts,**({'layout_recovery':recovery}
+                                    if recovery and 'chunks' in recovery else {})})
             texts.append(join_chunks(chunks))
         recovered_lines=sum(len(r['layout_recovery']['chunks'])-1 for r in records
             if r.get('layout_recovery',{}).get('strategy') in ('verified_rows','verified_columns')

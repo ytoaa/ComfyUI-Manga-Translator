@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 from . import core
+from . import bubble_constraints
 
 MODES = ('source', 'bubble', 'strict')
 DIRECTIONS = ('auto', 'horizontal', 'vertical_rtl', 'vertical_ltr')
@@ -155,7 +156,7 @@ def _curve(layer,alpha,bend):
 def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-Bold.ttf',
                mode='source',direction='auto',min_font=10,min_scale=.55,padding=2,
                region_options_json='{}',bubble_mask=None,detection_result=None,line_breaks='preserve',
-               fit_policy='source_ratio'):
+               fit_policy='source_ratio',respect_bubbles=False):
     original,cleaned=core.rgb(original),core.rgb(cleaned)
     if original.shape!=cleaned.shape: raise ValueError('Original and cleaned dimensions differ')
     support=core.mask_array(source_mask,original.shape[:2])
@@ -163,6 +164,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
     if mode not in MODES or direction not in DIRECTIONS: raise ValueError('Invalid lettering mode/direction')
     if line_breaks not in LINE_BREAKS: raise ValueError('Invalid line break policy')
     if fit_policy not in FIT_POLICIES: raise ValueError('Invalid lettering fit policy')
+    if type(respect_bubbles) is not bool:raise ValueError('Invalid bubble containment switch')
     core.integer(min_font,4,128,'min_font');core.finite(min_scale,.2,1,'min_scale')
     core.integer(padding,0,32,'padding')
     if not isinstance(region_options_json,str) or len(region_options_json.encode('utf-8'))>262144:
@@ -177,13 +179,17 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         if (detection_result.get('image_width'),detection_result.get('image_height'))!=(original.shape[1],original.shape[0]):
             raise ValueError('Bubble detections belong to a different page size')
     plan={'version':1,'cleaned':cleaned.copy(),'regions':[]}
+    # Prepare masks once, rather than decoding every detection for every text.
+    bubble_items=(bubble_constraints.candidates(bubble_mask,detection_result,original.shape)
+                  if respect_bubbles or any(v.get('respect_bubbles') or v.get('require_bubble')
+                                            for v in overrides.values() if isinstance(v,dict)) else [])
     reports=[]
     preview=Image.fromarray((original*255).round().astype('uint8'))
     draw=ImageDraw.Draw(preview)
     total_area=0
     for item in data['regions']:
         ident=item['id'];opts=overrides.get(ident,{})
-        allowed={'font','mode','direction','font_cap','min_font','min_scale','alignment','rotation','shear','bend','padding','max_lines','line_spacing','tracking','line_breaks','fit_policy'}
+        allowed={'font','mode','direction','font_cap','min_font','min_scale','alignment','rotation','shear','bend','padding','max_lines','line_spacing','tracking','line_breaks','fit_policy','respect_bubbles','require_bubble'}
         if not isinstance(opts,dict) or set(opts)-allowed: raise ValueError(f'{ident}: unknown typography override')
         font=opts.get('font',item.get('font',default_font))
         core.font_path(font,item['text'])
@@ -217,6 +223,16 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         source=list(item['bbox'])
         bounds=source
         pad=opts.get('padding',layout.pop('padding',padding));core.integer(pad,0,32,'padding')
+        respect=opts.get('respect_bubbles',respect_bubbles)
+        require=opts.get('require_bubble',False)
+        if type(respect) is not bool or type(require) is not bool:raise ValueError(f'{ident}: invalid bubble controls')
+        guard=None;guard_report={'status':'disabled'}
+        if respect or require:
+            try:
+                guard,guard_report=bubble_constraints.constrain(ink,source,bubble_items,original.shape,pad,
+                                                               selected_mode=='bubble')
+            except ValueError as exc:raise ValueError(f'{ident}: {exc}') from None
+            if require and guard is None:raise ValueError(f'{ident}: no verified enclosing bubble; require_bubble is enabled')
         bubble=None
         if selected_mode=='bubble' and bubble_mask is not None:
             bubble=bubble_rect(bubble_mask,source,original.shape,pad)
@@ -237,13 +253,17 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         phases=[(source,forced_lines or (0 if flow else original_lines),'source-flow' if flow else 'source-lines')]
         if selected_mode!='strict' and not forced_lines and not flow: phases.append((source,0,'reflow'))
         if bubble and bubble!=source: phases.append((bubble,forced_lines,'bubble'))
+        if guard and guard['rectangle']!=source:
+            phases.append((guard['rectangle'],forced_lines or (original_lines if selected_mode=='strict' else 0),
+                           'bubble-interior'))
         prepared={'id':ident,'text':rendered_text,'original_text':item['text'],'line_breaks':breaks,
                   'font':font,'style':style,'source':source,
                   'phases':phases,'cap':cap,'floor':floor,'fallback_floor':fallback_floor,
                   'fit_policy':policy,'options':render_options,'bend':curve,
+                  'bubble_guard':guard,'bubble_containment':guard_report,
                   'profile':measured,'analysis':json.loads(analysis),'warning':warning}
         # Bound repeated search work and plan memory, including optional expanded rectangles.
-        total_area+=max(b[2]*b[3] for b,_,_ in phases)
+        total_area+=max(max(b[2]*b[3] for b,_,_ in phases),guard['mask'].size if guard else 0)
         if total_area>core.MAX_PIXELS: raise ValueError('Total typography area exceeds 16 Mi pixels')
         plan['regions'].append(prepared)
         x,y,w,h=source
@@ -251,12 +271,16 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         if bubble:
             x,y,w,h=bubble
             draw.rectangle((x,y,x+w-1,y+h-1),outline=(0,200,220),width=2)
+        if guard:
+            x,y,w,h=guard['rectangle']
+            draw.rectangle((x,y,x+w-1,y+h-1),outline=(40,220,80),width=2)
         reports.append({'id':ident,'source':source,'source_profile':measured,'font':font,
                         'font_cap':cap,'min_font':floor,'mode':selected_mode,
                         'fallback_min_font':fallback_floor,'fit_policy':policy,
+                        'bubble_containment':guard_report,
                         'direction':actual_direction,'line_breaks':breaks,'soft_wraps_reflowed':flow,
                         'warning':warning})
-    report={'schema':1,'regions':reports,'preview':'orange=source frame; cyan=verified bubble rectangle',
+    report={'schema':1,'regions':reports,'preview':'orange=source frame; cyan=expanded bubble frame; green=safe bubble interior',
             **({'page_status':'no_text_detected','lettering_skipped':True} if not reports else {}),
             'font_identity':'selected font; source size/direction/alignment are measured estimates',
             'curves':'manual bend only; no automatic curve reconstruction'}
@@ -279,6 +303,8 @@ def render_plan(plan):
                           for bounds,lines,phase in region['phases'])
         for bounds,lines,phase,ceiling,floor in phases:
             x,y,w,h=core.bbox(bounds,result.shape)
+            guard=region.get('bubble_guard')
+            allowed=bubble_constraints.canvas_mask(guard,[x,y,w,h]) if guard else None
             options=dict(region['options'])
             # Reserve vertical clearance before bending, never crop the warped glyph.
             options['padding']=options['padding']+math.ceil(abs(region['bend']))
@@ -297,6 +323,8 @@ def render_plan(plan):
                 if not active.any(): reason='empty glyph';continue
                 if active[0].any() or active[-1].any() or active[:,0].any() or active[:,-1].any():
                     reason='transformed glyph touches canvas boundary';continue
+                if allowed is not None and np.any((alpha>0)&~allowed):
+                    reason='lettering would leave the verified bubble mask';continue
                 if np.any(active & occupied[y:y+h,x:x+w]):
                     reason='neighbouring translation collision';continue
                 chosen=(bounds,layer,alpha,json.loads(render),style,scale,phase)
@@ -317,6 +345,7 @@ def render_plan(plan):
                         'fit_policy':region.get('fit_policy','source_ratio'),
                         'source_floor':region['floor'],'minimum_font':fallback_floor,
                         'source_ratio_relaxed':render['font_size']<region['floor'],
+                        'bubble_containment':region.get('bubble_containment',{'status':'disabled'}),
                         'original_text':region['original_text'],'line_breaks':region['line_breaks'],
                         'outline_width':style['outline_width'],'bend':region['bend'],'warning':region['warning']})
     return result,page_alpha,json.dumps({'schema':1,'regions':reports,

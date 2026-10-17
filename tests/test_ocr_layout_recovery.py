@@ -83,6 +83,7 @@ def test_persistent_bad_rows_stop_without_recursing_and_save_actual_failed_input
     assert report['input_size'][1]<203 and report['source_size']==[580,203]
     assert np.array_equal(np.asarray(Image.open(report['source_image'])),np.asarray(source))
     assert Image.open(report['failed_input_image']).size==tuple(report['input_size'])
+    assert report['runtime_settings']['retry_on_layout_failure'] is True
 
 
 def test_no_evidence_means_no_arbitrary_slices_and_diagnostic_failure_does_not_hide_error(monkeypatch):
@@ -156,3 +157,17 @@ def test_one_large_connected_glyph_is_not_turned_into_separate_text_rows():
     draw.line((1,0,1,202),fill='black',width=2)
     for y in (10,90,170):draw.rectangle((1,y,560,y+20),fill='black')
     assert not P.recovery_parts(image)[0]
+
+
+@pytest.mark.parametrize('enabled,line_split,strategy',[(False,True,'disabled_by_retry_option'),
+    (True,False,'disabled_by_line_split'),(True,True,'no_verified_alternative')])
+def test_failure_report_distinguishes_disabled_recovery_from_no_safe_split(monkeypatch,tmp_path,enabled,line_split,strategy):
+    monkeypatch.setattr(M,'pil_image',lambda _:Image.new('RGB',(580,203),'white'))
+    monkeypatch.setitem(sys.modules,'folder_paths',types.SimpleNamespace(get_output_directory=lambda:str(tmp_path)))
+    class Model:
+        def ocr(self,*a,**kw):return {'text':'顔の集の集の集の集の集落'}
+    with pytest.raises(ValueError,match=strategy):
+        M.MangaOCRAdaptive().read(object(),Model(),quality_guard=True,retry_on_layout_failure=enabled,line_split=line_split)
+    report=json.loads(next((tmp_path/'manga_translator/ocr_failures').glob('*.json')).read_text())
+    assert report['layout_recovery']['strategy']==strategy
+    assert report['runtime_settings']['line_split']==line_split

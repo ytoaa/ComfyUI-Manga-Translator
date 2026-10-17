@@ -262,6 +262,7 @@ class GraphRunner:
             return (a['source']*alpha + a['destination']*(1-alpha),)
         if kind == 'PreviewImage': return ()
         if kind == 'PreviewAny': return {'ui':{'text':(a['source'],)},'result':(a['source'],)}
+        if kind == 'PrimitiveBoolean': return (a['value'],)
         if kind == 'SaveImage':
             path = self.destination/'final.png'
             pil(a['images']).save(path)

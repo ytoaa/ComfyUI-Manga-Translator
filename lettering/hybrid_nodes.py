@@ -23,16 +23,18 @@ class MangaLetterPlan:
             'optional':{'bubble_mask':field('MASK','선택: 테두리·꼬리·그림을 제외한 실제 말풍선 내부. 자동 검출 마스크보다 우선합니다.'),
                         'detection_result':field('MANGA_DETECTION','선택: RF-DETR의 실제 bubble segmentation을 자동 재사용. 명시적 내부 마스크가 우선합니다.'),
                         'line_breaks':field(list(hybrid.LINE_BREAKS),'preserve=입력 줄바꿈 유지. reflow=단일 줄바꿈을 풀고 가용 폭을 먼저 채움; 빈 줄 문단/strict/세로는 유지.',default='preserve'),
-                        'fit_policy':field(list(hybrid.FIT_POLICIES),'readable=원문 비율 제한으로 맞지 않으면 min_font까지 추가 축소. source_ratio/strict/영역별 min_scale은 비율 제한 유지.',default='source_ratio')}}
+                        'fit_policy':field(list(hybrid.FIT_POLICIES),'readable=원문 비율 제한으로 맞지 않으면 min_font까지 추가 축소. source_ratio/strict/영역별 min_scale은 비율 제한 유지.',default='source_ratio'),
+                        'respect_bubbles':field('BOOLEAN','확인된 말풍선의 실제 픽셀 마스크 밖에 글자 알파가 생기면 거부합니다. 단순 사각형 경계와 다릅니다.',default=False)}}
     RETURN_TYPES=('MANGA_LETTER_PLAN','IMAGE','STRING')
     RETURN_NAMES=('식자_계획','배치_검수','계획_보고서')
     FUNCTION='plan'
     def plan(self,original,cleaned,source_mask,regions_json,default_font='NanumGothic-Bold.ttf',
              mode='source',direction='auto',min_font=10,min_scale=.55,padding=2,
-             region_options_json='{}',bubble_mask=None,detection_result=None,line_breaks='preserve',fit_policy='source_ratio'):
+             region_options_json='{}',bubble_mask=None,detection_result=None,line_breaks='preserve',fit_policy='source_ratio',
+             respect_bubbles=False):
         plan,preview,report=hybrid.build_plan(image(original),image(cleaned),mask(source_mask),regions_json,
             default_font,mode,direction,min_font,min_scale,padding,region_options_json,
-            mask(bubble_mask) if bubble_mask is not None else None,detection_result,line_breaks,fit_policy)
+            mask(bubble_mask) if bubble_mask is not None else None,detection_result,line_breaks,fit_policy,respect_bubbles)
         return plan,tensor(preview),report
 
 

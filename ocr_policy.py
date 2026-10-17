@@ -160,7 +160,8 @@ def recovery_parts(image, direction='auto'):
         candidates.sort(key=lambda row:row[0],reverse=True)
         best=candidates[0]
         other=next((v for v in candidates[1:] if v[1]!=best[1]),None)
-        if other and (best[0]<other[0]*1.5 or best[0]-other[0]<.05):return [],{}
+        if other and (best[0]<other[0]*1.5 or best[0]-other[0]<.05):
+            return [],{'strategy':'ambiguous_rows_and_columns'}
         _,horizontal,boxes,threshold,removed=best
         return [(image.crop(box),box) for box in boxes],{
             'strategy':'verified_rows' if horizontal else 'verified_columns',

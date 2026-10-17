@@ -20,7 +20,10 @@
       "panel": 0.5,
       "detail_mode": "auto",
       "detail_overlap": 64,
-      "include_sfx": false,
+      "include_sfx": [
+        "41",
+        0
+      ],
       "images": [
         "1",
         0
@@ -34,7 +37,10 @@
   "4": {
     "class_type": "MangaDetectionRegions",
     "inputs": {
-      "include_sfx": false,
+      "include_sfx": [
+        "41",
+        0
+      ],
       "dedupe_iou": 0.75,
       "reading_order": "top_to_bottom",
       "merge_adjacent_lines": true,
@@ -47,7 +53,10 @@
   "5": {
     "class_type": "MangaDetectionMask",
     "inputs": {
-      "include_sfx": false,
+      "include_sfx": [
+        "41",
+        0
+      ],
       "result": [
         "3",
         0
@@ -414,6 +423,7 @@
       "region_options_json": "{}",
       "line_breaks": "reflow",
       "fit_policy": "readable",
+      "respect_bubbles": true,
       "original": [
         "1",
         0
@@ -525,6 +535,12 @@
         "13",
         0
       ]
+    }
+  },
+  "41": {
+    "class_type": "PrimitiveBoolean",
+    "inputs": {
+      "value": false
     }
   }
 }
