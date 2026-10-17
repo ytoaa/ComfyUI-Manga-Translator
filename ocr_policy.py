@@ -50,7 +50,7 @@ def plan_line(image, max_aspect=12.):
     return [(image.crop((a,0,b,height)), [a,0,b,height]) for a,b in zip(cuts,cuts[1:])]
 
 
-def text_problem(text, image):
+def text_problem(text, image, evidence=None):
     if not isinstance(text,str) or not text.strip():
         return 'empty'
     compact = ''.join(text.split())
@@ -70,9 +70,23 @@ def text_problem(text, image):
     # Connected script/stylized graphics may evade it. No rejection for a few
     # punctuation components or a short name with several kanji radicals.
     foreground = ink(image)
-    columns = foreground.any(axis=0)
-    bands = int(np.count_nonzero(columns & ~np.r_[False,columns[:-1]]))
-    if image.width >= image.height*3 and bands >= 12 and len(compact) < math.ceil(bands/4):
+    raw_columns=foreground.any(axis=0)
+    raw_bands=int(np.count_nonzero(raw_columns & ~np.r_[False,raw_columns[:-1]]))
+    # A paper speck used to count as a whole glyph-sized band regardless of
+    # area. Exclude only tiny disconnected components from this weak estimate;
+    # do not alter the recognition image, masks, splitting or returned text.
+    labels,count=ndimage.label(foreground,structure=np.ones((3,3),bool))
+    supported=np.bincount(labels.ravel(),minlength=count+1)>=4
+    supported[0]=False
+    columns=supported[labels].any(axis=0)
+    bands=int(np.count_nonzero(columns & ~np.r_[False,columns[:-1]]))
+    eligible=image.width>=image.height*3 and bands>=12
+    minimum=math.ceil(bands/4) if eligible else 0
+    if evidence is not None:
+        evidence['omission']={'raw_projection_bands':raw_bands,'supported_projection_bands':bands,
+                              'analysis_min_component_pixels':4,'minimum_characters':minimum,
+                              'scope':'weak_omission_estimate_not_recognition_confidence'}
+    if eligible and len(compact)<minimum:
         return 'possible_omission'
     return None
 

@@ -524,18 +524,22 @@ class MangaOCRAdaptive:
                 generation=[]
                 text=_ocr_once(model,image,options,patches,repetition_penalty,retry_on_repetition,
                                retry_on_token_limit,generation)
-                issue=text_problem(text,image) if quality_guard else None
+                quality_evidence={}
+                issue=text_problem(text,image,quality_evidence) if quality_guard else None
                 attempts=[{'patch_budget':patches,'model_size':list(preprocess_size(image.size,patches)),
-                           'characters':len(text),'issue':issue,'generation_attempts':generation}]
+                           'characters':len(text),'issue':issue,'generation_attempts':generation,
+                           **({'quality_evidence':quality_evidence} if quality_evidence else {})}]
                 if issue:
                     alternate=256 if patches != 256 else 512
                     LOG.warning('OCR quality retry: reason=%s line=%s box=%s patches=%s->%s',issue,line_index,box,patches,alternate)
                     generation=[]
                     text=_ocr_once(model,image,options,alternate,repetition_penalty,retry_on_repetition,
                                    retry_on_token_limit,generation)
-                    issue=text_problem(text,image)
+                    quality_evidence={}
+                    issue=text_problem(text,image,quality_evidence)
                     attempts.append({'patch_budget':alternate,'model_size':list(preprocess_size(image.size,alternate)),
-                                     'characters':len(text),'issue':issue,'generation_attempts':generation})
+                                     'characters':len(text),'issue':issue,'generation_attempts':generation,
+                                     **({'quality_evidence':quality_evidence} if quality_evidence else {})})
                 return text,attempts,issue
             except Exception as exc:
                 path=_save_ocr_failure(source,image,{'code':getattr(exc,'code',type(exc).__name__),

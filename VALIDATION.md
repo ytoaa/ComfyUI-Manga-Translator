@@ -287,3 +287,16 @@ reach a single 576×576 compact context, while duplicate windows, work limits an
 The simulator registers the new input shape and continues to test that unresolved seams stop before model
 loading, OCR, translation, cleanup and saving. Existing workflow inputs/connections are unchanged.
 See [behavior, update and live verification limits](docs/column-compact-recovery-v0.3.7.md).
+
+# v0.3.8 omission guard speckle false positive — 2026-10-17
+
+Base: `7a49dc7d82797c7d802397ff70dcb68968deb3c5`. Full CPU regression: **273 passed**.
+On the supplied 280×51 actual input, raw projection has 38 bands and incorrectly requires at least 10 characters.
+Removing disconnected components below four pixels from the omission estimate alone yields 12 supported bands
+and a weak lower bound of three characters; both supplied 7/8-character lengths no longer trigger omission.
+Recognition input bytes are unchanged. This does not certify the spelling of either output; the saved seven-character
+result is visibly incorrect and the first eight-character string was not supplied.
+Four added regression cases cover bright/dark speckled paper, omission from real small components and the complete
+adaptive-node path retaining a first result without an unnecessary alternate patch. Repetition and genuine omission
+regressions remain active. Evidence counts are exposed in attempt diagnostics. Attached images are not committed.
+See [behavior and remaining recognition limits](docs/omission-speckles-v0.3.8.md).

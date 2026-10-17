@@ -69,6 +69,51 @@ def test_visible_long_line_with_reported_four_character_ocr_triggers_omission_al
     assert P.text_problem('画像の文字を読み取り、自然な韓国語に翻訳します。',long_line()) is None
 
 
+def short_line_on_speckled_paper(bright=False):
+    image=Image.new('RGB',(280,51),'#d7c7a5');draw=ImageDraw.Draw(image)
+    for x in range(19,124,15):
+        draw.rectangle((x,6,x+10,19),outline='#202020',width=2)
+        draw.line((x+5,6,x+5,19),fill='#202020',width=1)
+    draw.rectangle((130,17,131,18),fill='#202020')
+    for x in range(140,278,4):draw.point((x,35+(x%3)),fill='#202020')
+    if bright:image=Image.fromarray(255-np.asarray(image))
+    return image
+
+
+@pytest.mark.parametrize('bright',[False,True])
+def test_short_sentence_on_speckled_paper_does_not_trigger_false_omission(bright):
+    image=short_line_on_speckled_paper(bright);original=image.tobytes();evidence={}
+    assert P.text_problem('房间找到莱斯里。',image,evidence) is None
+    check=evidence['omission']
+    assert check['raw_projection_bands']>=32
+    assert check['supported_projection_bands']<12
+    assert image.tobytes()==original
+    assert P.text_problem('内内内内内内内内内内',image)=='short_repetition'
+
+
+def test_small_disconnected_glyphs_still_support_a_real_omission_alarm():
+    image=Image.new('RGB',(280,20),'white');draw=ImageDraw.Draw(image)
+    for x in range(2,278,6):draw.rectangle((x,8,x+1,9),fill='black')
+    assert P.text_problem('字',image)=='possible_omission'
+
+
+def test_false_omission_does_not_overwrite_first_result_with_unneeded_retry(monkeypatch):
+    source=short_line_on_speckled_paper();monkeypatch.setattr(M,'pil_image',lambda _:source)
+    class Model:
+        calls=0
+        def ocr(self,image,options,max_patches):
+            self.calls+=1
+            assert image.tobytes()==source.tobytes()
+            return {'text':'房间找到莱斯里。' if self.calls==1 else '房间找到薪里。'}
+    model=Model()
+    text,raw,previews=M.MangaOCRAdaptive().read(object(),model,line_split=False,quality_guard=True,
+        base_patches=256,small_text_patches=512)
+    assert model.calls==1 and text=='房间找到莱斯里。' and len(previews)==1
+    attempts=json.loads(raw)['chunks'][0]['attempts']
+    assert len(attempts)==1 and attempts[0]['issue'] is None
+    assert attempts[0]['quality_evidence']['omission']['raw_projection_bands']>=32
+
+
 def test_chunk_join_retains_english_word_spaces_without_cjk_overlap_deletion():
     assert P.join_chunks(['THE RAIN','IS GETTING','WORSE.']) == 'THE RAIN IS GETTING WORSE.'
     assert P.join_chunks(['原文を','確認します。']) == '原文を確認します。'
