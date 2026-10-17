@@ -8,7 +8,8 @@ ROOT = Path(__file__).resolve().parents[1]
 TOP = {'__init__.py', 'nodes.py', 'models.py', 'requirements.txt', 'README.md', 'LICENSE',
        'LICENSE-THIRD-PARTY-APACHE', 'LICENSE-THIRD-PARTY-MIT', 'THIRD_PARTY_NOTICES.md',
        'VALIDATION.md', 'provenance.json', 'pytest.ini', '.gitattributes', '.gitignore',
-       'detection_policy.py', 'region_policy.py', 'mask_nodes.py', 'inpaint_tiles.py', 'ocr_policy.py', 'layout_refinement.py', 'workflow_project.py'}
+       'limits.py', 'detection_policy.py', 'region_policy.py', 'mask_nodes.py', 'inpaint_tiles.py',
+       'ocr_policy.py', 'layout_refinement.py', 'workflow_project.py'}
 DIRECTORIES = ('adapters', 'docs', 'examples', 'lettering', 'tests', 'tools', 'web', 'workflows')
 
 
@@ -30,7 +31,7 @@ def package(destination):
     files.append(ROOT/'SHA256SUMS')
     destination = Path(destination).resolve()
     destination.mkdir(parents=True, exist_ok=True)
-    output = destination/'ComfyUI-Manga-Translator-integrated-v0.3.16.zip'
+    output = destination/'ComfyUI-Manga-Translator-integrated-v0.3.17.zip'
     temporary = output.with_suffix('.zip.tmp')
     with zipfile.ZipFile(temporary, 'w', zipfile.ZIP_DEFLATED) as archive:
         for path in files:
