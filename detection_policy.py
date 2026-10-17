@@ -17,6 +17,7 @@ import math
 import numpy as np
 
 from .adapters.model import rle
+from . import boundary_review
 
 LOG = logging.getLogger(__name__)
 
@@ -226,14 +227,17 @@ def _save_recovery_failure(image, diagnostic):
         path.write_text(json.dumps({'schema':1,'image_size':list(image.size),
             **diagnostic,'context_window':list(window),'context_image':str(preview)},
             ensure_ascii=False,indent=2),encoding='utf-8')
-        LOG.error('Manga boundary recovery inputs saved: %s',path)
+        (LOG.warning if diagnostic.get('boundary_policy')=='preserve_review' else LOG.error)(
+            'Manga boundary recovery inputs saved: %s',path)
         return str(path)
     except (ImportError,OSError,ValueError,AttributeError) as exc:
         LOG.warning('Could not save boundary recovery inputs: %s',type(exc).__name__)
         return None
 
 
-def _recover_boundaries(image, model, thresholds, detections):
+def _recover_boundaries(image, model, thresholds, detections, boundary_policy='strict'):
+    if boundary_policy not in ('strict', 'preserve_review'):
+        raise ValueError('Invalid boundary failure policy')
     width, height = image.size
     clipped = [item for item in detections
                if item.get('tile_provenance', {}).get('clipped_edges')]
@@ -316,26 +320,59 @@ def _recover_boundaries(image, model, thresholds, detections):
     # A later fragment may yield a complete region covering an earlier failed
     # crop. Judge the collected evidence once the recovery pass is finished.
     unresolved = [fragment for fragment in clipped if not _covered(fragment,trusted,width,height)]
+    review = None
     if unresolved:
         fragment = unresolved[0]
         diagnostic = {'bbox':fragment['bbox'], 'label':fragment['label'],'score':fragment['score'],
+                      'boundary_policy':boundary_policy,
                       'edges':fragment['tile_provenance']['clipped_edges'],
                       'coverage':round(_coverage(fragment,trusted,width,height),4),
                       'unresolved_regions':len(unresolved),'budget_exhausted':budget_exhausted,
                       'attempts':attempts}
-        LOG.error('Manga boundary recovery failed: %s',json.dumps(diagnostic,ensure_ascii=False))
+        if boundary_policy=='strict': LOG.error('Manga boundary recovery failed: %s',json.dumps(diagnostic,ensure_ascii=False))
+        else: LOG.warning('Manga boundary recovery needs review: %s',json.dumps(diagnostic,ensure_ascii=False))
         failure_path=_save_recovery_failure(image,diagnostic)
         reason = ('검출 타일 경계 복구 한도 초과 (boundary recovery limit=16; unresolved clipped text) '
                   if budget_exhausted else '검출 타일 경계 복구 실패 (unresolved clipped text) ')
-        raise ValueError(reason +
+        if boundary_policy == 'strict':
+            raise ValueError(reason +
                          f"bbox={fragment['bbox']}, edges={fragment['tile_provenance']['clipped_edges']}, "
                          f"coverage={diagnostic['coverage']:.1%}, recovery_windows={calls}; "
                          f'진단={failure_path or "저장 불가"}; 상세 재검출 결과는 Manga boundary recovery 로그를 확인하세요. OCR/번역은 중단했습니다.')
+        # A seam-only candidate may be artwork or a mislabelled effect. Absence
+        # in new contexts cannot certify either. Preserve it and every complete
+        # text region touching it; never erase a partially supported paragraph.
+        protected = []
+        def protect(item):
+            a,b,c,d=item['bbox']
+            box=[max(0,math.floor(a)-16),max(0,math.floor(b)-16),
+                 min(width,math.ceil(c)+16),min(height,math.ceil(d)+16)]
+            if box not in protected: protected.append(box)
+        for item in unresolved: protect(item)
+        retained = list(trusted)
+        while True:
+            blocked = [item for item in retained if item['label'] in _TEXT_LABELS and
+                       any(boundary_review.intersects(item['bbox'],box) for box in protected)]
+            if not blocked: break
+            blocked_ids={id(item) for item in blocked}
+            retained=[item for item in retained if id(item) not in blocked_ids]
+            for item in blocked: protect(item)
+        review={'schema':1,'reason':'unresolved_detection_boundary',
+                'protected_boxes_pixels':protected,
+                'excluded_complete_regions':len(trusted)-len(retained),
+                'diagnostic_path':failure_path,
+                'fragments':[{'bbox':item['bbox'],'label':item['label'],'score':item['score'],
+                              'edges':item['tile_provenance']['clipped_edges'],
+                              'coverage':round(_coverage(item,trusted,width,height),4)} for item in unresolved]}
+        trusted=retained
+        LOG.warning('Manga boundary review: preserving %d unresolved fragments and %d touching regions; page needs review',
+                    len(unresolved),review['excluded_complete_regions'])
     if len(trusted) > _MAX_REGIONS:
         raise ValueError('Resolved detector produced too many regions (limit=512)')
     return trusted, {'clipped_regions':len(clipped),'recovery_calls':len(calls),
                      'stitched_regions':len(stitch_keys),'recovered_regions':recovered,
-                     'windows':calls,'attempts':attempts,'unresolved_regions':0}
+                     'windows':calls,'attempts':attempts,'unresolved_regions':len(unresolved),
+                     **({'boundary_review':review} if review else {})}
 
 
 def _sliding_windows(length, tile_size, overlap):
@@ -366,7 +403,9 @@ def _tile_size(mode):
     raise ValueError('Invalid detector detail mode')
 
 
-def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=64, include_sfx=True):
+def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=64, include_sfx=True, boundary_policy='strict'):
+    if boundary_policy not in ('strict','preserve_review'):
+        raise ValueError('Invalid boundary failure policy')
     if type(include_sfx) is not bool:
         raise ValueError('Invalid detector include_sfx switch')
     # Selection must precede boundary certification: an intentionally excluded
@@ -457,15 +496,19 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
     class RecoveryModel:
         def detect(self, crop, options):
             return selected(model.detect(crop, options),'recovery')
-    complete, recovery = _recover_boundaries(image, RecoveryModel(), thresholds, list(full.get('detections', [])) + recovered)
+    complete, recovery = _recover_boundaries(image, RecoveryModel(), thresholds, list(full.get('detections', [])) + recovered, boundary_policy)
     recovery['include_sfx'] = include_sfx
     recovery['ignored_sfx_detections'] = ignored_sfx
+    review = recovery.get('boundary_review')
+    protected = boundary_review.boxes({'boundary_review':review},width,height) if review else []
     return finish({**full,
+            **({'boundary_review':review,'needs_review':True} if review else {}),
             'detections': complete,
             # Do not send fragment geometry to OCR, but retain its segmentation
             # pixels for cleanup even if a complete detection has a sparser mask.
             'mask_fragments': [item for item in recovered
-                               if item['tile_provenance']['clipped_edges']],
+                               if item['tile_provenance']['clipped_edges'] and
+                               not any(boundary_review.intersects(item['bbox'],box) for box in protected)],
             'detail_detection': {
                 'mode': detail_mode,
                 'strategy': 'native_sliding',
@@ -480,16 +523,18 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
 
 class MangaDetectorDetailResolved(_BaseDetectorDetail):
     DESCRIPTION = ('전체 페이지 검출 뒤 RF-DETR native 크기의 겹친 sliding tile을 다시 검출합니다. '
-                   '경계에서 잘린 글자는 넓은 문맥으로 재검출한 뒤 OCR에 전달하며 복구 실패 시 중단합니다. '
+                   '미복구 경계는 preserve_review에서 원본 보존·검수, strict에서 페이지 중단으로 처리합니다. '
                    '중복 결과는 다음 MangaDetectionRegions 단계가 containment 기준으로 정리합니다.')
 
     @classmethod
     def INPUT_TYPES(cls):
         schema = super().INPUT_TYPES()
         schema['optional'] = {'include_sfx': ('BOOLEAN', {'default': True,
-            'tooltip': '효과음 검출을 복구·OCR·제거 대상으로 포함. 제외할 때 영역/마스크 노드도 함께 끄세요. 기존 그래프는 포함을 유지합니다.'})}
+            'tooltip': '효과음 검출을 복구·OCR·제거 대상으로 포함. 제외할 때 영역/마스크 노드도 함께 끄세요. 기존 그래프는 포함을 유지합니다.'}),
+            'boundary_policy': (['preserve_review','strict'], {'default':'preserve_review',
+            'tooltip':'preserve_review=복구 불가 영역과 접촉 문단은 원본 보존·검수 처리. 통합 08의 마스크/제거/식자 보호와 함께 사용. strict=복구 실패 시 페이지 중단.'})}
         return schema
 
-    def detect(self, images, model, detail_mode='auto', detail_overlap=64, include_sfx=True, **thresholds):
+    def detect(self, images, model, detail_mode='auto', detail_overlap=64, include_sfx=True, boundary_policy='preserve_review', **thresholds):
         _validate_thresholds(thresholds)
-        return (detail_detect(pil_image(images), model, thresholds, detail_mode, detail_overlap, include_sfx),)
+        return (detail_detect(pil_image(images), model, thresholds, detail_mode, detail_overlap, include_sfx, boundary_policy),)

@@ -138,16 +138,17 @@ def simulate(destination):
     server = SimulatedServer(cases)
     project = Project(inputs,destination/'project',read_json(DEFAULT_WORKFLOW),server)
     report = project.run()
-    assert report['counts'] == {'completed':4,'failed':5,'needs_review':1,'unchanged_blank':1}
+    assert report['counts'] == {'completed':4,'failed':4,'needs_review':2,'unchanged_blank':1}
     assert server.submissions == 10
-    expected = {'unresolved_seam':'failed','ocr_repetition':'failed','unchanged_cleanup':'failed',
+    expected = {'unresolved_seam':'needs_review','ocr_repetition':'failed','unchanged_cleanup':'failed',
                 'impossible_lettering':'failed','corrupt_input':'failed',
                 'no_selected_text':'needs_review','uniform_blank':'unchanged_blank'}
     for page in report['pages']:
         name = SCENARIOS[page['relative_path']]
         assert page['status'] == expected.get(name,'completed')
         if page['status'] == 'failed': assert 'result' not in page
-    assert server.graph_reports['unresolved_seam']['ocr_calls'] == 0
+    assert server.graph_reports['unresolved_seam']['selected_regions']==2
+    assert server.graph_reports['unresolved_seam']['final_saved']
     assert server.graph_reports['ocr_repetition']['qwen_calls'] == 0
     assert server.graph_reports['uniform_blank']['ocr_calls'] == server.graph_reports['uniform_blank']['qwen_calls'] == 0
     assert project.run()['counts'] == report['counts'] and server.submissions == 10

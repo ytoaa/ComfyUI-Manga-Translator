@@ -121,11 +121,22 @@ def test_full_graph_recovers_cross_row_strip_before_ocr(tmp_path):
 
 def test_unresolved_seam_stops_full_graph_before_ocr_translation_qwen_and_save(tmp_path):
     runner = S.GraphRunner(tmp_path, seam_case=True, failed_recovery=True)
+    next(n for n in runner.graph.values() if n['class_type']=='MangaDetectorDetail')['inputs']['boundary_policy']='strict'
     with pytest.raises(ValueError, match='unresolved clipped text'):
         runner.execute()
     assert runner.ocr.calls == runner.qwen_calls == 0 and not runner.saved
     assert not runner.calls['MangaTranslate']
     assert not list((tmp_path/'manga_translator').glob('*.json'))
+
+
+def test_default_graph_preserves_unknown_paragraphs_and_finishes_review_output(tmp_path):
+    runner=S.GraphRunner(tmp_path,seam_case=True,failed_recovery=True)
+    report=runner.execute()
+    assert report['needs_review'] and report['final_saved']
+    assert report['selected_regions']==2 and report['protected_boxes_pixels']
+    assert report['all_unprotected_ink_masked'] and not report['all_fixture_ink_masked']
+    source=__import__('json').loads(next((tmp_path/'manga_translator').glob('ocr*.json')).read_text())
+    assert source['needs_review'] and source['review_reason']=='unresolved_detection_boundary'
 
 
 def test_full_graph_uses_complementary_fragments_when_wide_inference_misses_text(tmp_path):

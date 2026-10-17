@@ -319,8 +319,14 @@ class GraphRunner:
         plan = self.cache[plan_id][6][0]
         cleaned = self.cache[finish_id][0][0]
         selected = json.loads(self.cache[regions_id][0][0])
-        assert len(selected['regions']) == len(self.records), 'Lost or duplicated logical regions'
-        assert np.all(plan['source_mask'][self.raw]), 'Detected source ink was lost from cleanup mask'
+        from integrated_simulation import boundary_review
+        protected=boundary_review.boxes(selected,*self.original.size)
+        expected=[row for row in self.records if not any(boundary_review.intersects(row['bbox'],box) for box in protected)]
+        assert len(selected['regions']) == len(expected), 'Lost or duplicated logical regions outside protection'
+        required=np.zeros_like(self.raw)
+        for row in expected: required |= row['mask']
+        boundary_review.clear(required,protected)
+        assert np.all(plan['source_mask'][required]), 'Unprotected source ink was lost from cleanup mask'
         outside = ~plan['cleanup_mask']
         assert np.array_equal(cleaned[0].numpy()[outside], np.asarray(self.original, np.float32)[outside]/255)
         assert self.saved, 'No final image reached the shipped save node'
@@ -335,14 +341,25 @@ class GraphRunner:
         final=self.cache[lettering_id][0][0][0].numpy()
         alpha=self.cache[lettering_id][1][0][0].numpy()
         assert np.array_equal(final[alpha==0],cleaned[0].numpy()[alpha==0])
+        for a,b,c,d in protected:
+            assert not alpha[b:d,a:c].any()
+            assert np.array_equal(final[b:d,a:c],np.asarray(self.original,np.float32)[b:d,a:c]/255)
+        # The fixture oracle knows whole withheld paragraphs, including text
+        # extending beyond the observed fragment. Those pixels also stay original.
+        for row in self.records:
+            if any(boundary_review.intersects(row['bbox'],box) for box in protected):
+                a,b,c,d=row['bbox']
+                assert np.array_equal(final[b:d,a:c],np.asarray(self.original,np.float32)[b:d,a:c]/255)
         report = {'lettering':lettering,'simulation_only': True, 'model_inference': 'fixture test doubles; NOT RF-DETR/Hayai/vLLM/Qwen GPU results',
                   'execution': 'shipped API graph, real custom nodes, PyTorch CPU and native-equivalent image operations',
                   'selected_regions': len(selected['regions']), 'detector_calls': self.detector.calls,
                   'boundary_recovery': selected.get('region_resolution',{}).get('boundary_recovery',{}),
                   'region_selection':'detector',
+                  'needs_review':bool(protected),'protected_boxes_pixels':protected,
                   'ocr_line_calls': self.ocr.calls, 'qwen_tile_calls': self.qwen_calls,
                   'calls': dict(self.calls), 'cleanup': json.loads(self.cache[finish_id][1][0]),
-                  'outside_mask_unchanged': True, 'all_fixture_ink_masked': True, 'final_saved': True,
+                  'outside_mask_unchanged': True, 'all_fixture_ink_masked': not bool(protected),
+                  'all_unprotected_ink_masked':True,'final_saved': True,
                   'full_page_qwen_was_called': False}
         (self.destination/'simulation-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
         return report
@@ -358,6 +375,7 @@ def simulate(destination):
     reports['fragment-stitching'] = GraphRunner(destination/'fragment-stitching',seam_case=True,empty_recovery=True).execute()
     reports['no-text-page'] = GraphRunner(destination/'no-text-page',no_text=True).execute()
     failed_detection = GraphRunner(destination/'unresolved-seam-stopped', seam_case=True, failed_recovery=True)
+    next(n for n in failed_detection.graph.values() if n['class_type']=='MangaDetectorDetail')['inputs']['boundary_policy']='strict'
     try:
         failed_detection.execute()
     except ValueError as exc:

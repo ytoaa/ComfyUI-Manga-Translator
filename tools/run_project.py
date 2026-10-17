@@ -25,6 +25,7 @@ from PIL import Image, ImageChops, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
 if __package__:
+    from .. import boundary_review
     from ..limits import (RESOURCE_CONTRACT_VERSION, LEGACY_PAGE_PIXELS,
                           MAX_SOURCE_PIXELS, MAX_INPUT_BYTES)
 else:
@@ -32,6 +33,7 @@ else:
         sys.path.insert(0, str(ROOT))
     from limits import (RESOURCE_CONTRACT_VERSION, LEGACY_PAGE_PIXELS,
                         MAX_SOURCE_PIXELS, MAX_INPUT_BYTES)
+    import boundary_review
 
 DEFAULT_WORKFLOW = ROOT/'lettering/example_workflows/08-integrated-tiled-cleanup-lettering.api.json'
 EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tif', '.tiff', '.gif'}
@@ -254,6 +256,11 @@ def workflow_fingerprint(graph, bind=None, *, legacy=False):
             load['inputs'].pop(key, None)
     for key in ('final', 'source', 'target'):
         canonical[bind[key]]['inputs']['filename_prefix'] = key
+    # Omitted optional input on existing 08 canvases has this same runtime
+    # default. Adding its visible widget must not invalidate old project IDs.
+    for node in canonical.values():
+        if node['class_type']=='MangaDetectorDetail' and node['inputs'].get('boundary_policy')=='preserve_review':
+            node['inputs'].pop('boundary_policy')
     return digest(json.dumps(canonical,ensure_ascii=False,sort_keys=True,
                              allow_nan=False,separators=(',',':')).encode())
 
@@ -664,6 +671,15 @@ class Project:
                 if list(picture.size) != state['image_size'] or picture.format != 'PNG' or picture.mode != 'RGB':
                     raise ProtocolError('Final image size/format differs from submitted page')
                 picture.load()
+                protected=boundary_review.boxes(source,*picture.size)
+                if protected:
+                    if source.get('boundary_review') != target.get('boundary_review'):
+                        raise ProtocolError('Translation changed boundary protection metadata')
+                    with Image.open(self._attempt_dir(state)/'input.png') as prepared:
+                        reference=prepared.convert('RGB')
+                        for box in protected:
+                            if ImageChops.difference(picture.crop(box),reference.crop(box)).getbbox():
+                                raise ProtocolError('Final image changed preserved boundary pixels')
                 if not source['regions']:
                     if (source.get('page_status') != 'no_text_detected' or source.get('ocr_skipped') is not True
                             or target.get('translation_skipped') is not True):
@@ -678,7 +694,10 @@ class Project:
         if not source['regions']:
             state['status'] = 'unchanged_blank' if state['uniform_rgb'] and not source.get('needs_review') and not source.get('no_text_reason') else 'needs_review'
             state['reason'] = 'uniform_rgb_pixels' if state['status'] == 'unchanged_blank' else source.get('no_text_reason','no_text_detected_not_verified_blank')
-        else: state['status'] = 'needs_review' if source.get('needs_review') else 'completed'
+        else:
+            state['status'] = 'needs_review' if source.get('needs_review') or source.get('boundary_review') else 'completed'
+        if protected:
+            state.update(status='needs_review',reason='unresolved_detection_boundary')
         self._save(state)
 
     def _resume(self, state):

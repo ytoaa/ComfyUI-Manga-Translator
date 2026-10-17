@@ -251,7 +251,9 @@ class MangaLetterPrepare:
             support[y:y+h, x:x+w] = 1
         if text_pixel_mask is not None:
             support *= core.mask_array(mask(text_pixel_mask), (height, width))
-        output = json.dumps({'schema': 1, 'coordinate_format': 'xywh', 'page_size': [width, height], 'regions': rows}, ensure_ascii=False)
+        output = json.dumps({'schema': 1, 'coordinate_format': 'xywh', 'page_size': [width, height], 'regions': rows,
+                            **({'boundary_review':data['boundary_review'],'needs_review':True}
+                               if data.get('boundary_review') is not None else {})}, ensure_ascii=False)
         core.parse_regions(output, original_array.shape)
         return output, tensor(support)
 

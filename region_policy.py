@@ -8,6 +8,7 @@ and adds containment-aware, transitive merging before OCR/translation.
 """
 from .nodes import MangaDetectionRegions as _BaseDetectionRegions
 from .nodes import _detector_region, encode, layout, iou
+from . import boundary_review
 
 _CONTAINMENT_OVERLAP = 0.90
 
@@ -159,6 +160,9 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
             bubbles = [_detector_region(item, width, height) for item in result['detections']
                        if item.get('label') == 'bubble']
             selected = group_adjacent_lines(selected, bubbles)
+        protected = boundary_review.boxes(result,width,height)
+        if any(boundary_review.intersects(item['bbox'],box) for item in selected for box in protected):
+            raise ValueError('Resolved text overlaps preserved boundary region; review detection geometry')
         selected.sort(key=(lambda row: (row['bbox'][1], row['bbox'][0]))
                       if reading_order == 'top_to_bottom'
                       else (lambda row: (-row['bbox'][0], row['bbox'][1])))
@@ -171,9 +175,12 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
                  **({'line_bboxes_pixels': item['line_bboxes']} if 'line_bboxes' in item else {})}
                 for i, item in enumerate(selected)]
         value = encode({'regions': rows, 'origin': 'rfdetr',
+                        **({'needs_review':True,'review_reason':'unresolved_detection_boundary',
+                            'boundary_review':result['boundary_review']} if protected else {}),
                         **({'page_status':'no_text_detected'} if not rows else {}),
                         **({'needs_review':True,'no_text_reason':'excluded_onomatopoeia_present'}
                            if not rows and result.get('detection_audit',{}).get('excluded_onomatopoeia_detections',0) else {}),
+                        **({'no_text_reason':'unresolved_detection_boundary'} if protected and not rows else {}),
                         'image_width': width, 'image_height': height,
                         'region_resolution': {
                             'input_regions': len(candidates),

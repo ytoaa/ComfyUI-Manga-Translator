@@ -266,6 +266,8 @@ class MangaRegionCrops:
             return ([images], encode({**data,'image_width':width,'image_height':height,
                     'page_status':'no_text_detected','crop_passthrough':True}), mask, ['{}'])
         geometry = {}
+        from . import boundary_review
+        protected = boundary_review.boxes(data,width,height)
         if refine_page_columns:
             from .models import pil_image
             from .layout_refinement import refine_columns
@@ -288,6 +290,8 @@ class MangaRegionCrops:
                             min(owner[2], source[2]+padding), min(owner[3], source[3]+padding)]
                 box, edit = bounded(ocr_padding), bounded(edit_margin)
                 plan = crop_plan(row['id'], item, box)
+            if any(boundary_review.intersects(edit,area) or boundary_review.intersects(box,area) for area in protected):
+                raise ValueError('OCR crop/edit margin overlaps preserved boundary region; reduce padding/margin or review regions')
             crops.append(images[:,box[1]:box[3],box[0]:box[2],:].clone())
             plans.append(encode(plan))
             mask[:,edit[1]:edit[3],edit[0]:edit[2]] = 1

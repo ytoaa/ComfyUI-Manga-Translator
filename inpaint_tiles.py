@@ -10,6 +10,7 @@ import numpy as np
 from scipy import ndimage
 
 from .limits import MAX_SOURCE_PIXELS
+from . import boundary_review
 from .lettering.nodes import image, mask, tensor
 
 
@@ -116,12 +117,17 @@ def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, m
         raise ValueError('Cleanup input contains nonfinite pixels')
     pending = cleanup_mask > .5
     raw = source_mask > .5
+    protected = boundary_review.boxes(json.loads(regions_json),width,height) if regions_json is not None else []
+    boundary_review.clear(raw,protected)
+    boundary_review.clear(pending,protected)
     if np.any(raw & ~pending):
         raise ValueError('Cleanup mask must cover every source-mask pixel')
     # no_text_detected pages are common in books.  Return before ndimage.label,
     # full-page coverage allocation, or any Qwen dependency.
     if not raw.any() and not pending.any():
-        return _empty_plan(original,raw,pending,cleanup_mask,tile_size,context)
+        plan=_empty_plan(original,raw,pending,cleanup_mask,tile_size,context)
+        plan['report']['protected_boxes_pixels']=protected
+        return plan
     base = original.copy()
     permitted=pending.copy()
     recovery=[]
@@ -129,6 +135,8 @@ def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, m
         if regions_json is None:
             raise ValueError('Connect text regions before recovering uniform-background ink')
         base,raw,pending,permitted,recovery=_recover_uniform_regions(original,raw,pending,regions_json)
+        boundary_review.restore(base,original,protected)
+        for value in (raw,pending,permitted): boundary_review.clear(value,protected)
     labels, count = ndimage.label(pending, structure=np.ones((3, 3), bool))
     if count > 4096:
         raise ValueError('Cleanup mask has too many disconnected components; refine the mask or split the page')
@@ -204,6 +212,7 @@ def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, m
     if not np.array_equal(coverage, pending.astype(np.uint8)):
         raise ValueError('Cleanup tile ownership does not cover the pending mask exactly once')
     report = {'schema': 1, 'method': 'bounded_mask_tiles', 'page_size': [width, height],
+              'protected_boxes_pixels':protected,
               **({'cleanup_skipped':True,'skip_reason':'empty_masks'}
                  if not raw.any() and not permitted.any() else {}),
               'tile_core': tile_size, 'context': context, 'tile_count': len(tiles),

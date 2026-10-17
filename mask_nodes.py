@@ -1,5 +1,6 @@
 """Bridge RF-DETR local RLE masks to ordinary ComfyUI MASK values."""
 import numpy as np
+from . import boundary_review
 
 
 def _decode_mask(raw,page_width,page_height):
@@ -57,6 +58,7 @@ class MangaDetectionMask:
                 continue
             local,(x,y,w,h)=_decode_mask(raw,width,height)
             np.maximum(page[y:y+h,x:x+w],local,out=page[y:y+h,x:x+w])
+        boundary_review.clear(page,boundary_review.boxes(result,width,height))
         return (torch.from_numpy(page[None]),)
 
 

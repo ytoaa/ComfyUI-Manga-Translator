@@ -7,6 +7,7 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 from . import core
 from . import bubble_constraints
+from .. import boundary_review
 
 MODES = ('source', 'bubble', 'strict')
 DIRECTIONS = ('auto', 'horizontal', 'vertical_rtl', 'vertical_ltr')
@@ -179,6 +180,13 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         if (detection_result.get('image_width'),detection_result.get('image_height'))!=(original.shape[1],original.shape[0]):
             raise ValueError('Bubble detections belong to a different page size')
     plan={'version':1,'cleaned':cleaned.copy(),'regions':[]}
+    protected=boundary_review.boxes(data,original.shape[1],original.shape[0])
+    if detection_result is not None:
+        detected=boundary_review.boxes(detection_result,original.shape[1],original.shape[0])
+        if detected and protected != detected:
+            raise ValueError('Boundary protection missing or changed in lettering document')
+    boundary_review.restore(plan['cleaned'],original,protected)
+    plan['protected_boxes_pixels']=protected
     # Prepare masks once, rather than decoding every detection for every text.
     bubble_items=(bubble_constraints.candidates(bubble_mask,detection_result,original.shape)
                   if respect_bubbles or any(v.get('respect_bubbles') or v.get('require_bubble')
@@ -280,7 +288,10 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
                         'bubble_containment':guard_report,
                         'direction':actual_direction,'line_breaks':breaks,'soft_wraps_reflowed':flow,
                         'warning':warning})
-    report={'schema':1,'regions':reports,'preview':'orange=source frame; cyan=expanded bubble frame; green=safe bubble interior',
+    for a,b,c,d in protected:
+        draw.rectangle((a,b,c-1,d-1),outline=(255,60,80),width=3)
+    report={'schema':1,'regions':reports,'preview':'orange=source frame; cyan=expanded bubble frame; green=safe bubble interior; red=preserved boundary review',
+            'protected_boxes_pixels':protected,'needs_review':bool(protected),
             **({'page_status':'no_text_detected','lettering_skipped':True} if not reports else {}),
             'font_identity':'selected font; source size/direction/alignment are measured estimates',
             'curves':'manual bend only; no automatic curve reconstruction'}
@@ -294,6 +305,7 @@ def render_plan(plan):
     page_alpha=np.zeros(result.shape[:2],np.float32)
     occupied=np.zeros(result.shape[:2],bool)
     reports=[]
+    protected=plan.get('protected_boxes_pixels',[])
     for region in plan['regions']:
         chosen=None;reason='no candidate'
         phases=[(bounds,lines,phase,region['cap'],region['floor']) for bounds,lines,phase in region['phases']]
@@ -305,6 +317,12 @@ def render_plan(plan):
             x,y,w,h=core.bbox(bounds,result.shape)
             guard=region.get('bubble_guard')
             allowed=bubble_constraints.canvas_mask(guard,[x,y,w,h]) if guard else None
+            if protected:
+                permitted=np.ones((h,w),bool)
+                for a,b,c,d in protected:
+                    left,top,right,bottom=max(x,a),max(y,b),min(x+w,c),min(y+h,d)
+                    if left<right and top<bottom: permitted[top-y:bottom-y,left-x:right-x]=False
+                allowed=permitted if allowed is None else allowed & permitted
             options=dict(region['options'])
             # Reserve vertical clearance before bending, never crop the warped glyph.
             options['padding']=options['padding']+math.ceil(abs(region['bend']))
@@ -324,7 +342,7 @@ def render_plan(plan):
                 if active[0].any() or active[-1].any() or active[:,0].any() or active[:,-1].any():
                     reason='transformed glyph touches canvas boundary';continue
                 if allowed is not None and np.any((alpha>0)&~allowed):
-                    reason='lettering would leave the verified bubble mask';continue
+                    reason='lettering would leave the verified bubble mask or enter preserved boundary pixels';continue
                 if np.any(active & occupied[y:y+h,x:x+w]):
                     reason='neighbouring translation collision';continue
                 chosen=(bounds,layer,alpha,json.loads(render),style,scale,phase)
@@ -350,6 +368,7 @@ def render_plan(plan):
                         'original_text':region['original_text'],'line_breaks':region['line_breaks'],
                         'outline_width':style['outline_width'],'bend':region['bend'],'warning':region['warning']})
     return result,page_alpha,json.dumps({'schema':1,'regions':reports,
+        'protected_boxes_pixels':protected,'needs_review':bool(protected),
         **({'page_status':'no_text_detected','lettering_skipped':True} if not reports else {}),
         'quality_scope':'geometry/style approximation; OCR, translation and GPU cleanup require separate review'},
         ensure_ascii=False,indent=2)
