@@ -55,7 +55,10 @@ def integer(value, low, high, name):
 def bbox(value, shape):
     if not isinstance(value, (tuple, list)) or len(value) != 4:
         raise ValueError('bbox must be [x, y, width, height] in original page pixels')
-    x, y, w, h = [integer(v, 0 if i < 2 else 1, 16384, 'bbox') for i, v in enumerate(value)]
+    x = integer(value[0], 0, max(0, shape[1]-1), 'bbox')
+    y = integer(value[1], 0, max(0, shape[0]-1), 'bbox')
+    w = integer(value[2], 1, min(16384, shape[1]), 'bbox')
+    h = integer(value[3], 1, min(16384, shape[0]), 'bbox')
     if x + w > shape[1] or y + h > shape[0] or w * h > MAX_REGION_PIXELS:
         raise ValueError('Region is outside the page or exceeds 16 Mi pixels')
     return x, y, w, h
@@ -332,8 +335,11 @@ def render_text(text, style, font_name='NanumGothic-Bold.ttf', direction='horizo
     finite(line_spacing, .5, 3, 'line_spacing'); finite(tracking, -4, 32, 'tracking')
     finite(rotation, -180, 180, 'rotation'); finite(shear, -.6, .6, 'shear')
     w, h = style['size']
+    requested_supersample = supersample
+    while supersample > 1 and w*h*supersample**2 > MAX_RASTER_PIXELS:
+        supersample -= 1
     if w*h*supersample**2 > MAX_RASTER_PIXELS:
-        raise ValueError('Supersampled region exceeds 32 Mi pixels; reduce supersample or region size')
+        raise ValueError('Lettering region exceeds the 32 Mi-pixel raster budget even at supersample=1')
     # LANCZOS spreads coverage up to three output pixels beyond the high-res
     # glyph. Keep a clear pixel after that footprint. A fixed two-pixel left
     # origin otherwise touches the boundary at every font size after resize.
@@ -426,6 +432,7 @@ def render_text(text, style, font_name='NanumGothic-Bold.ttf', direction='horizo
     layer = np.clip(layer, 0, 1).astype(np.float32)
     report = {'text': text, 'font': font_name, 'font_size': size, 'direction': direction,
               'requested_padding':padding,'effective_padding':effective_padding,'raster_guard_px':raster_guard,
+              'requested_supersample':requested_supersample,'supersample':s,
               'wrap_policy': wrap_policy, 'vertical_policy': vertical_policy, 'line_count': len(lines), 'line_step_px': line_step/s, 'rotation': rotation, 'shear': shear,
               'glyph_geometry': 'font-rendered; no generative rewriting',
               'font_identification': 'user selection, not inferred original font'}
