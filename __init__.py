@@ -29,4 +29,8 @@ from .workflow_project import NODE_CLASS_MAPPINGS as PROJECT_NODES, NODE_DISPLAY
 NODE_CLASS_MAPPINGS.update(PROJECT_NODES)
 NODE_DISPLAY_NAME_MAPPINGS.update(PROJECT_NAMES)
 
-__all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
+# Only the node-local helper UI lives here; project execution remains in the
+# normal workflow and uses ComfyUI's native queue/server endpoints.
+WEB_DIRECTORY = './web'
+
+__all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS', 'WEB_DIRECTORY']
