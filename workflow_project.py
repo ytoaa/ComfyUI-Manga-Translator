@@ -208,7 +208,10 @@ class WorkflowProjects:
             report = project.run(export=True)
             partial = any(n and s not in ('completed','unchanged_blank') for s,n in report['counts'].items())
             status = 'needs_review' if partial else 'completed'
-            message = '프로젝트 처리가 끝났습니다. 페이지별 결과를 검수하세요.'
+            if report['counts'].get('failed') and not any(report['counts'].get(key) for key in ('completed','unchanged_blank')):
+                message = '성공한 페이지가 없습니다. 실패 원인을 확인한 뒤 같은 입력 노드에서 action=실패 재시도로 실행하세요. 시작·재개는 일반 실패 페이지를 다시 제출하지 않습니다.'
+            else:
+                message = '프로젝트 처리가 끝났습니다. 페이지별 결과를 검수하세요.'
             logging.info('Manga folder project finished: %s (%s)', folder.name, status)
         except (Paused,ProjectError,OSError) as exc:
             status,message = 'paused',str(exc)

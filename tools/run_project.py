@@ -431,7 +431,7 @@ class Project:
             state = self.state(page)
             row = {key:page[key] for key in ('id','relative_path')}
             if state and state['input_sha256'] == page['input_sha256']:
-                row.update({k:state[k] for k in ('status','reason','prompt_id','result','failure_node') if k in state})
+                row.update({k:state[k] for k in ('status','reason','prompt_id','result','failure_node','failure_node_id','failure_diagnostics_missing') if k in state})
                 row['state_file'] = (self._attempt_dir(state)/'state.json').relative_to(self.destination).as_posix()
                 if state.get('failure_message'): row['detail'] = state['failure_message'][:240]
             else: row['status'] = 'pending'
@@ -566,14 +566,32 @@ class Project:
         if status.get('status_str') not in ('success','error') or (status['status_str']=='success' and status['completed'] is not True):
             raise ProtocolError('Contradictory terminal execution status')
         if status.get('status_str') != 'success' or status.get('completed') is not True:
-            errors = [entry[1] for entry in status.get('messages', [])
-                      if isinstance(entry, list) and len(entry) == 2 and entry[0] in ('execution_error','execution_interrupted')]
-            failure = errors[-1] if errors else {}
-            if not isinstance(failure,dict): raise ProtocolError('Invalid execution failure record')
-            message = str(failure.get('exception_message',''))
+            messages = status.get('messages', [])
+            if not isinstance(messages, (list, tuple)):
+                raise ProtocolError('Invalid execution message sequence')
+            # Native PromptQueue keeps (event, data) tuples. HTTP JSON turns
+            # them into lists; both clients must preserve the same failure.
+            errors = [entry for entry in messages
+                      if isinstance(entry, (list, tuple)) and len(entry) == 2
+                      and entry[0] in ('execution_error', 'execution_interrupted')]
+            event, failure = errors[-1] if errors else (None, {})
+            if not isinstance(failure, dict): raise ProtocolError('Invalid execution failure record')
+            missing = not errors or (event != 'execution_interrupted' and not
+                                     (failure.get('exception_type') or failure.get('exception_message')))
+            message = str(failure.get('exception_message') or '')
+            if missing:
+                message = 'ComfyUI returned an error status without usable execution_error details; inspect the prompt history or server log before retrying.'
             if len(message)>4000: message = message[:1950]+'\n[...truncated...]\n'+message[-1950:]
-            state.update(status='failed', reason=str(failure.get('exception_type', 'execution_failed')),
-                         failure_node=failure.get('node_type'), failure_message=message)
+            node_id = failure.get('node_id')
+            node_type = failure.get('node_type') or self.graph.get(str(node_id), {}).get('class_type')
+            reason = failure.get('exception_type') or ('ExecutionInterrupted' if event == 'execution_interrupted' else 'execution_failed')
+            trace = failure.get('traceback', [])
+            if isinstance(trace, (list, tuple)):
+                trace = ''.join(str(line) for line in trace)
+            state.update(status='failed', reason=str(reason), failure_node=node_type,
+                         failure_node_id=node_id, failure_message=message,
+                         failure_event=event, failure_diagnostics_missing=missing,
+                         failure_traceback=str(trace or '')[-12000:])
             # Partial reviews are useful, but are never a completed page.
             for key in ('source','target'):
                 try: self._artifact(state,key+'.json',json_bytes(self._review(history,key,state)))
@@ -585,11 +603,13 @@ class Project:
                     'http error 401','http error 403','http error 429','rate limit')):
                 raise Paused('Server resource/storage/service failure; check the server before continuing the project')
             if state['reason'] in ('InterruptProcessingException','ExecutionInterrupted') or any(
-                    isinstance(entry,list) and entry and entry[0]=='execution_interrupted'
-                    for entry in status.get('messages',[])):
+                    isinstance(entry,(list,tuple)) and entry and entry[0]=='execution_interrupted'
+                    for entry in messages):
                 raise Paused('ComfyUI에서 페이지 실행이 중지되었습니다. 프로젝트의 추가 제출을 멈췄습니다.')
             if state['reason'] in ('FileNotFoundError','ModuleNotFoundError','ImportError'):
                 raise Paused('Server model/font/dependency configuration failed; check it before continuing')
+            if missing:
+                raise Paused('ComfyUI 오류 상세가 없어 원인을 분류할 수 없습니다. 추가 페이지 제출을 멈췄습니다. prompt 이력과 서버 로그를 확인한 뒤 실패 재시도를 선택하세요.')
             if self.stop_on_error: raise Paused('Stopped after a failed page by project policy')
             return
         state['status'] = 'collecting'; self._save(state)
@@ -662,6 +682,18 @@ class Project:
         if state and state['status'] in ACTIVE:
             self._resume(state)
         if state and state['input_sha256'] == page['input_sha256']:
+            if state['status'] == 'failed' and not self.retry_failed:
+                if state.get('failure_diagnostics_missing'):
+                    raise Paused('이전 실패의 ComfyUI 오류 상세가 없습니다. 서버 로그를 확인한 뒤 실패 재시도를 선택하세요.')
+                if state.get('reason') == 'execution_failed' and not state.get('failure_message'):
+                    # Repair pre-fix native tuple failures using their original
+                    # prompt only. Never submit a page just to recover diagnostics.
+                    history = self.client.history(state.get('prompt_id')) if state.get('prompt_id') else None
+                    if not history:
+                        raise Paused('이전 실패의 prompt 이력이 없어 원인을 복원할 수 없습니다. 서버 로그를 확인한 뒤 실패 재시도를 선택하세요.')
+                    if history.get('status', {}).get('status_str') != 'error':
+                        raise Paused('이전 실패 기록과 ComfyUI prompt 이력이 일치하지 않습니다. 추가 제출 없이 작업 상태를 확인하세요.')
+                    self._collect(state, history)
             if state['status'] in FINISHED:
                 missing = False
                 for name, sha in state.get('artifacts', {}).items():
