@@ -6,7 +6,6 @@ import logging
 import re
 from pathlib import Path, PurePosixPath
 import threading
-import time
 import types
 
 from .tools.run_project import (Project, ProjectError, Paused, Rejected, ProtocolError,
@@ -24,20 +23,6 @@ class NativeComfyClient:
         self.source_id, self.extra_pnginfo, self.client_id = str(source_id), deepcopy(extra_pnginfo or {}), client_id
         self.submit_handler = next((r.handler for r in server.routes if r.method == 'POST' and r.path == '/prompt'),None)
         if self.submit_handler is None: raise ProjectError('ComfyUI 기본 prompt 경로를 찾을 수 없습니다.')
-
-    def wait_for_dispatch(self):
-        ident = getattr(self,'parent_prompt_id',None)
-        if not ident: return
-        deadline = time.monotonic()+60
-        while time.monotonic()<deadline:
-            history = self.history(ident)
-            if history:
-                status = history.get('status',{})
-                if status.get('status_str') == 'error':
-                    raise Paused('폴더 시작 작업이 중지되거나 실패했습니다. 페이지는 추가 제출하지 않습니다.')
-                if status.get('completed') is True and status.get('status_str') == 'success': return
-            time.sleep(.1)
-        raise Paused('폴더 시작 작업의 완료 여부를 확인하지 못했습니다. 큐를 확인한 뒤 재개하세요.')
 
     def object_info(self):
         import nodes
@@ -161,24 +146,31 @@ class WorkflowProjects:
             self.active = folder
             self.worker = threading.Thread(target=self._run,args=(folder,project,publish),daemon=True,name='manga-workflow-project')
             self.worker.start()
+            logging.info('Manga folder project worker started: %s', folder.name)
         return self.snapshot(folder)
 
     def _run(self, folder, project, publish):
-        def progress(_):
+        def progress(value):
             project._summary()
+            logging.info('Manga project page state: %s', value)
             if publish:
                 try: publish(self.snapshot(folder))
                 except Exception: logging.warning('Manga project preview update failed',exc_info=True)
         project.progress = progress
         status,message = 'paused','작업이 중단되었습니다. 재개 시 기존 작업부터 확인합니다.'
         try:
-            if hasattr(project.client,'wait_for_dispatch'): project.client.wait_for_dispatch()
+            # ComfyUI accepts new /prompt requests while the current prompt is running.
+            # Queueing the first page immediately is safer than waiting for the parent
+            # control prompt to appear in history; execution remains serialized by the
+            # native prompt queue and the page cannot run before the current job ends.
             report = project.run(export=True)
             partial = any(n and s not in ('completed','unchanged_blank') for s,n in report['counts'].items())
             status = 'needs_review' if partial else 'completed'
             message = '프로젝트 처리가 끝났습니다. 페이지별 결과를 검수하세요.'
+            logging.info('Manga folder project finished: %s (%s)', folder.name, status)
         except (Paused,ProjectError,OSError) as exc:
             status,message = 'paused',str(exc)
+            logging.warning('Manga folder project paused: %s', exc)
         except Exception as exc:
             logging.exception('Manga workflow project failed')
             status,message = 'paused',f'{type(exc).__name__}: {exc}'
@@ -338,7 +330,6 @@ class MangaWorkflowInput:
             ident,client_id = _context(server,prompt,unique_id)
             graph = _queued_prompt(server,ident)
             client = NativeComfyClient(server,folder_paths.get_input_directory(),folder_paths.get_output_directory(),unique_id,extra_pnginfo,client_id)
-            client.parent_prompt_id = ident
             previews = [key for key,node in graph.items() if node['class_type']=='PreviewAny' and node['inputs'].get('source') == [str(unique_id),2]]
             def publish(value):
                 if client_id is None: return
