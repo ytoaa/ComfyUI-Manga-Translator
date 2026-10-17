@@ -42,7 +42,7 @@ def build(manual=False):
         mask_slot,regions_slot=0,0
         grown = g.add('GrowMask', pos=(1260, 400), title='제거 여유 · 기본 GrowMask')
         g.connect(raw_mask, 0, grown, 'mask')
-        crops = g.add('MangaRegionCrops', {'allow_empty_page':True}, pos=(1260, 50), title='④ OCR 영역 · 글자 없으면 원본 통과')
+        crops = g.add('MangaRegionCrops', {'allow_empty_page':True,'refine_page_columns':True}, pos=(1260, 50), title='④ OCR 전 단·문단 정리 · 글자 없으면 원본 통과')
         g.connect(original, 0, crops, 'images'); g.connect(regions, 0, crops, 'layout_json')
     ocr_model = g.import_model_node(template, 13, (1260, -220))
     ocr = g.add('MangaOCRAdaptive', {'tight_crop':False,'base_patches':256,'small_text_patches':512,
@@ -62,7 +62,7 @@ def build(manual=False):
     plan = g.add('MangaInpaintPlan', {'recover_uniform_ink':True}, pos=(1680, 650), title='⑦ 단색 잔상 보완 · 제거 타일 계획')
     g.connect(original, 0, plan, 'original'); g.connect(raw_mask, mask_slot, plan, 'source_mask')
     g.connect(grown, 0, plan, 'cleanup_mask')
-    g.connect(regions, regions_slot, plan, 'regions_json')
+    g.connect(crops, 1, plan, 'regions_json')
     tile_crop = g.add('ImageCrop', pos=(2100, 650), title='영역 자르기 · 기본 ImageCrop')
     g.connect(plan, 0, tile_crop, 'image')
     for field, slot in [('x', 1), ('y', 2), ('width', 3), ('height', 4)]:
@@ -119,6 +119,7 @@ def build(manual=False):
     g.connect(crops, 0, original_crops, 'images')
     g.connect(crops, 1, ocr, 'manifest_json')
     g.note('선택한 글자 검출이 0개면 no_text_detected로 기록하고 원본 그대로 저장합니다. OCR/번역/Qwen/식자를 생략합니다.\n'
+           '다단 본문의 단 사이 여백이 확인되면 OCR 전에 중복 영역을 정리합니다. 행별 OCR과 번역·제거·식자가 같은 명세를 사용합니다.\n'
            '검출 0개는 실제 글자 없음의 보증이 아닙니다. 검출 오류/OCR 실패는 계속 중단합니다.\n'
            '원문 크기 상한에서 가용 폭을 먼저 사용. 단일 줄바꿈은 자동 재배치하고 빈 줄 문단은 유지합니다.\n'
            'line_breaks=preserve로 수동 줄바꿈 유지. strict/세로쓰기에서는 원래 줄바꿈을 유지합니다.\n'
@@ -162,6 +163,7 @@ def build(manual=False):
         g.nodes[scope-1]['properties']['cnr_id']='comfy-core'
         for node in (detector,regions,raw_mask):g.connect(scope,0,node,'include_sfx')
         name='08-integrated-tiled-cleanup-lettering'
+    g.connect(crops, 3, ocr, 'region_plan_json')
     g.save(name)
     # The committed 08 graph uses LF; keep regeneration byte-for-byte stable.
     for suffix in ('.json','.api.json'):

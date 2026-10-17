@@ -117,7 +117,8 @@ class Tensor:
 def test_crop_geometry_and_edit_mask_use_regions_not_glyphs(monkeypatch):
     monkeypatch.setitem(sys.modules,'torch',types.SimpleNamespace(zeros=lambda shape,**kw:Tensor(np.zeros(shape,dtype=kw['dtype']))))
     page=Tensor(np.ones((1,100,100,3),dtype=np.float32))
-    crops,manifest,mask=N.MangaRegionCrops().crop(page,N.encode(source()),4,12)
+    crops,manifest,mask,plans=N.MangaRegionCrops().crop(page,N.encode(source()),4,12)
+    assert plans == ['{}','{}']
     assert crops[0].shape==(1,48,48,3)
     assert crops[1].shape==(1,38,88,3)
     assert mask.shape==(1,100,100) and mask.array[0,0,0]==1

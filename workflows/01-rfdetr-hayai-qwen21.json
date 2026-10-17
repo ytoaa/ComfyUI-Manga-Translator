@@ -597,6 +597,11 @@
           "links": [
             28
           ]
+        },
+        {
+          "name": "ocr_region_plans",
+          "type": "STRING",
+          "links": []
         }
       ],
       "properties": {
@@ -606,13 +611,15 @@
         "{\"regions\":[{\"id\":\"r1\",\"bbox\":[0,0,1000,1000]}]}",
         4,
         12,
+        false,
         false
       ],
       "widgets_values_named": {
         "layout_json": "{\"regions\":[{\"id\":\"r1\",\"bbox\":[0,0,1000,1000]}]}",
         "ocr_padding": 4,
         "edit_margin": 12,
-        "allow_empty_page": false
+        "allow_empty_page": false,
+        "refine_page_columns": false
       },
       "pos": [
         1050,

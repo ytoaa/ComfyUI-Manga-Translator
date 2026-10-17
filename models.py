@@ -457,6 +457,8 @@ class MangaOCRAdaptive:
             'optional': {
                 'manifest_json': ('STRING', {'forceInput':True,
                     'tooltip':'MangaRegionCrops의 페이지 명세. 0개 영역은 OCR 모델을 로드하지 않고 건너뜁니다.'}),
+                'region_plan_json': ('STRING', {'forceInput':True,
+                    'tooltip':'MangaRegionCrops의 ocr_region_plans. 검증된 페이지 본문 행을 실패 전부터 분리해 읽습니다.'}),
                 'split_long_lines': ('BOOLEAN', {'default':False, 'tooltip':'긴 가로 행을 글자 사이 빈 공간에서만 나눠 읽습니다. 기존 그래프는 원래 입력을 유지합니다.'}),
                 'quality_guard': ('BOOLEAN', {'default':False, 'tooltip':'짧은 반복·과도한 누락 의심 시 다른 patch 설정으로 1회 재시도. 선택한 입력 재분할 복구도 실패하면 번역 전에 중단. 정확도 보증은 아닙니다.'}),
                 'text_direction': (['auto','horizontal','vertical_rtl','vertical_ltr'], {'default':'auto',
@@ -478,7 +480,7 @@ class MangaOCRAdaptive:
     def read(self,images,model=None,max_new_tokens=256,base_patches=512,small_text_patches=1024,small_text_px=48,
              line_split=True,tight_crop=False,repetition_penalty=1.,retry_on_repetition=True,
              split_long_lines=False,quality_guard=False,text_direction='auto',retry_on_token_limit=False,
-             manifest_json=None,retry_on_layout_failure=False):
+             manifest_json=None,retry_on_layout_failure=False,region_plan_json=None):
         if _empty_ocr_page(images,manifest_json):
             LOG.info('Adaptive OCR skipped: no_text_detected')
             return ('',json.dumps({'status':'no_text_detected','ocr_skipped':True,
@@ -505,7 +507,17 @@ class MangaOCRAdaptive:
                  'base_patches':base_patches,'small_text_patches':small_text_patches,
                  'retry_on_token_limit':retry_on_token_limit,'repetition_penalty':repetition_penalty,
                  'retry_on_repetition':retry_on_repetition}
-        crops=(_ocr_line_images(source) if text_direction=='auto' else _ocr_line_images(source,text_direction)) if line_split else [source]
+        region_plan = json.loads(region_plan_json) if region_plan_json is not None else {}
+        if not isinstance(region_plan,dict):
+            raise ValueError('Invalid OCR region plan object')
+        if region_plan and (not line_split or text_direction not in ('auto','horizontal')):
+            raise ValueError('Verified page rows require line_split and horizontal/auto OCR direction')
+        if region_plan:
+            from .layout_refinement import planned_inputs
+            crops = planned_inputs(source,region_plan)
+        else:
+            crops=(_ocr_line_images(source) if text_direction=='auto' else _ocr_line_images(source,text_direction)) if line_split else [source]
+        runtime['region_plan'] = {k:region_plan[k] for k in ('strategy','region_id') if k in region_plan}
         if tight_crop:
             crops=[_tight_ocr_image(image) for image in crops]
         texts, records, previews = [], [], []
@@ -594,6 +606,7 @@ class MangaOCRAdaptive:
                     previews.append(torch.from_numpy(np.asarray(image,dtype=np.float32)/255)[None])
                 chunks.append(text)
                 records.append({'line':line_index,'line_local_bbox':box,'input_size':list(image.size),
+                                **({'region_local_bbox':region_plan['rows'][line_index]} if region_plan else {}),
                                 'attempts':attempts,**({'layout_recovery':recovery}
                                     if recovery and 'chunks' in recovery else {})})
             texts.append(join_chunks(chunks))
@@ -608,6 +621,7 @@ class MangaOCRAdaptive:
                 'text_direction':text_direction,'retry_on_token_limit':retry_on_token_limit,
                 'quality_guard':quality_guard,'retry_on_layout_failure':retry_on_layout_failure,
                 'recognition_work_items':work_count,'chunks':records,
+                **({'region_plan':region_plan} if region_plan else {}),
                 'quality_scope':'heuristic_checks_only_not_recognition_accuracy'}
         return ('\n'.join(texts),json.dumps(report,ensure_ascii=False),previews)
 

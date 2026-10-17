@@ -12,6 +12,7 @@
       "ocr_padding": 4,
       "edit_margin": 0,
       "allow_empty_page": false,
+      "refine_page_columns": false,
       "images": [
         "1",
         0
@@ -62,6 +63,10 @@
       "manifest_json": [
         "2",
         1
+      ],
+      "region_plan_json": [
+        "2",
+        3
       ]
     }
   },

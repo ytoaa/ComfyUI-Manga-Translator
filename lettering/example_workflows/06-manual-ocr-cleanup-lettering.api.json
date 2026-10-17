@@ -137,7 +137,8 @@
       "layout_json": "{\n  \"regions\": [\n    {\n      \"id\": \"title\",\n      \"kind\": \"title\",\n      \"bbox\": [\n        539,\n        57,\n        630,\n        211\n      ]\n    },\n    {\n      \"id\": \"p1\",\n      \"kind\": \"paragraph\",\n      \"bbox\": [\n        312,\n        309,\n        931,\n        381\n      ]\n    },\n    {\n      \"id\": \"p2\",\n      \"kind\": \"paragraph\",\n      \"bbox\": [\n        312,\n        412,\n        931,\n        548\n      ]\n    },\n    {\n      \"id\": \"p3\",\n      \"kind\": \"paragraph\",\n      \"bbox\": [\n        312,\n        570,\n        931,\n        715\n      ]\n    },\n    {\n      \"id\": \"p4\",\n      \"kind\": \"paragraph\",\n      \"bbox\": [\n        312,\n        729,\n        931,\n        822\n      ]\n    }\n  ]\n}",
       "ocr_padding": 4,
       "edit_margin": 12,
-      "allow_empty_page": false
+      "allow_empty_page": false,
+      "refine_page_columns": false
     }
   },
   "13": {

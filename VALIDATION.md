@@ -334,3 +334,30 @@ Existing containment, collision, minimum font and impossible-fit checks remain a
 The cover screenshot confirms the user manual path reached final save. The guide's duplicate/implausible
 translation content remains unresolved pending its saved OCR JSON; neither detection nor text is silently discarded.
 See [changes and remaining source-content investigation](docs/lettering-raster-margin-v0.3.10.md).
+
+# v0.3.11 page-column ownership before OCR — 2026-10-17
+
+Base: `b1c50ba8373bdf343a49987f919fc16861c66644`. Full CPU regression: **299 passed**.
+The supplied saved OCR document confirms overlapping cross-column source regions and implausible text
+already present before translation. The earlier input-only recovery did not change logical lettering frames.
+An opt-in page-column refinement now runs in MangaRegionCrops before recognition. It requires recurring
+column anchors, multiple cross-column detections, pixel-supported gutters and horizontal body rows.
+Manual, mixed-SFX, unassigned-fragment and ambiguous layouts retain the complete original layout.
+Bounded paragraph ownership is shared by OCR, translation, cleanup and lettering. The appended output
+provides validated row plans; collector diagnostics must match the corresponding manifest plan and ID.
+The original three output slots and legacy default False are preserved. New 08 opts in; 09 stays manual.
+
+Actual supplied 1060×1500 source pixels + 15 saved detector regions produce 24 logical regions and
+90 planned initial recognition inputs, at most 8 per region. Column cuts are 0,108,422,746,1060 for this input only.
+There are zero overlapping OCR-crop pixels and zero overlapping edit-frame pixels. Every generated
+crop equals the corresponding original RGB; concatenating each row plan reconstructs its complete crop.
+Both-polarity gutter checks and auxiliary-marker row merging retain light section numbers.
+The source image and saved OCR text are not included in the repository.
+
+Fourteen added synthetic regression cases cover unique column ownership, marker-safe planning,
+original pixel reconstruction, bounded edit margins, proactive OCR before quality failure, manifest/plan
+agreement, conservative bypasses, malformed-plan rejection and shipped graph connections. The existing
+full graph tests still exercise final save, empty-page skips and failure stops with explicit model doubles.
+This is CPU pixel/graph verification, not actual RF-DETR/Hayai/vLLM/Qwen inference. The new actual
+recognition/translation quality and final GPU rendering remain to be checked on the user's machine.
+See [behavior, compatibility and limits](docs/page-columns-v0.3.11.md).

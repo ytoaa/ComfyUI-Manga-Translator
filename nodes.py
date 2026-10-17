@@ -235,22 +235,24 @@ class MangaRegionCrops:
                              'ocr_padding': ('INT', {'default': 4, 'min': 0, 'max': 128}),
                              'edit_margin': ('INT', {'default': 12, 'min': 0, 'max': 256})},
                 'optional': {'allow_empty_page': ('BOOLEAN', {'default': False,
-                    'tooltip': '새 08 전용: 0개 영역이면 원본을 미리보기로 전달합니다. OCR에 manifest_json도 연결해야 합니다.'})}}
-    RETURN_TYPES = ('IMAGE', 'STRING', 'MASK')
-    RETURN_NAMES = ('ocr_crops', 'manifest_json', 'edit_region_mask')
-    OUTPUT_IS_LIST = (True, False, False)
+                    'tooltip': '새 08 전용: 0개 영역이면 원본을 미리보기로 전달합니다. OCR에 manifest_json도 연결해야 합니다.'}),
+                    'refine_page_columns': ('BOOLEAN', {'default': False,
+                    'tooltip': '반복되는 다단 본문과 단을 가로지르는 중복 검출을 픽셀 여백으로 확인한 경우 OCR 전에 나눕니다. ocr_region_plans를 OCR에 연결하세요.'})}}
+    RETURN_TYPES = ('IMAGE', 'STRING', 'MASK', 'STRING')
+    RETURN_NAMES = ('ocr_crops', 'manifest_json', 'edit_region_mask', 'ocr_region_plans')
+    OUTPUT_IS_LIST = (True, False, False, True)
     FUNCTION = 'crop'
     CATEGORY = 'Manga Translator/Regions'
 
-    def crop(self, images, layout_json, ocr_padding=4, edit_margin=12, allow_empty_page=False):
+    def crop(self, images, layout_json, ocr_padding=4, edit_margin=12, allow_empty_page=False, refine_page_columns=False):
         import torch
         if images.ndim != 4 or images.shape[0] != 1 or images.shape[-1] != 3:
             raise ValueError('Load one RGB page at a time')
         if type(ocr_padding) is not int or not 0 <= ocr_padding <= 128 or type(edit_margin) is not int or not 0 <= edit_margin <= 256:
             raise ValueError('Invalid crop padding or edit margin')
         data = layout(layout_json)
-        if type(allow_empty_page) is not bool:
-            raise ValueError('Invalid empty-page switch')
+        if type(allow_empty_page) is not bool or type(refine_page_columns) is not bool:
+            raise ValueError('Invalid crop switches')
         if not data['regions'] and not allow_empty_page:
             raise ValueError('No selected text regions; load the updated 08 workflow for unchanged-page output')
         height, width = images.shape[1:3]
@@ -262,15 +264,36 @@ class MangaRegionCrops:
             # One real image keeps native previews/list mapping valid. This is
             # explicitly a page preview, never an OCR region or invented text.
             return ([images], encode({**data,'image_width':width,'image_height':height,
-                    'page_status':'no_text_detected','crop_passthrough':True}), mask)
-        crops, rows = [], []
+                    'page_status':'no_text_detected','crop_passthrough':True}), mask, ['{}'])
+        geometry = {}
+        if refine_page_columns:
+            from .models import pil_image
+            from .layout_refinement import refine_columns
+            data, geometry = refine_columns(pil_image(images), data)
+            if geometry:
+                logging.getLogger(__name__).info('Manga page columns: %s', encode(data['layout_refinement']))
+        crops, rows, plans = [], [], []
         for row in data['regions']:
             box = pixel_box(row['bbox'],width,height,ocr_padding)
-            crops.append(images[:,box[1]:box[3],box[0]:box[2],:].clone())
             edit = pixel_box(row['bbox'],width,height,edit_margin)
+            plan = {}
+            if row['id'] in geometry:
+                from .layout_refinement import crop_plan
+                item = geometry[row['id']]
+                # Integer source bounds avoid float-normalization adding a
+                # pixel across an adjacent paragraph's ownership boundary.
+                source = item['bounds_pixels']; owner = item['ownership_pixels']
+                def bounded(padding):
+                    return [max(owner[0], source[0]-padding), max(owner[1], source[1]-padding),
+                            min(owner[2], source[2]+padding), min(owner[3], source[3]+padding)]
+                box, edit = bounded(ocr_padding), bounded(edit_margin)
+                plan = crop_plan(row['id'], item, box)
+            crops.append(images[:,box[1]:box[3],box[0]:box[2],:].clone())
+            plans.append(encode(plan))
             mask[:,edit[1]:edit[3],edit[0]:edit[2]] = 1
-            rows.append({**row,'crop_bbox_pixels':box,'edit_bbox_pixels':edit})
-        return (crops,encode({**data,'image_width':width,'image_height':height,'regions':rows}),mask)
+            rows.append({**row,'crop_bbox_pixels':box,'edit_bbox_pixels':edit,
+                         **({'ocr_region_plan':plan} if plan else {})})
+        return (crops,encode({**data,'image_width':width,'image_height':height,'regions':rows}),mask,plans)
 
 
 class MangaCollectOCR:
@@ -308,6 +331,10 @@ class MangaCollectOCR:
             reports = [decode(value) for value in ocr_report_json]
             if any(not isinstance(value,dict) for value in reports):
                 raise ValueError('Invalid OCR diagnostic object')
+        for index, row in enumerate(data['regions']):
+            expected = row.get('ocr_region_plan')
+            if expected and (reports is None or reports[index].get('region_plan') != expected):
+                raise ValueError('Refined OCR plan differs from region manifest; connect ocr_region_plans to OCR region_plan_json and preserve list order')
         return (encode({**data,'regions':[{**row,'source':value.strip(),
                 **({'ocr_diagnostics':reports[i]} if reports is not None else {})}
                 for i,(row,value) in enumerate(zip(data['regions'],text))]}),)

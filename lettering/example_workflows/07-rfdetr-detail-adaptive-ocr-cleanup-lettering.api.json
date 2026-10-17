@@ -10,7 +10,7 @@
   "9":{"class_type":"VAEDecode","inputs":{"samples":["8",0],"vae":["3",0]}},
   "10":{"class_type":"ImageScale","inputs":{"upscale_method":"lanczos","width":0,"height":0,"crop":"disabled","image":["11",0]}},
   "11":{"class_type":"LoadImage","inputs":{"image":""}},
-  "12":{"class_type":"MangaRegionCrops","inputs":{"images":["11",0],"layout_json":["26",0],"ocr_padding":4,"edit_margin":12,"allow_empty_page":false}},
+  "12":{"class_type":"MangaRegionCrops","inputs":{"images":["11",0],"layout_json":["26",0],"ocr_padding":4,"edit_margin":12,"allow_empty_page":false,"refine_page_columns":false}},
   "13":{"class_type":"MangaOCRLoader","inputs":{"model_name":"hayai-ocr-v2"}},
   "14":{"class_type":"MangaOCRAdaptive","inputs":{"images":["12",0],"model":["13",0],"max_new_tokens":256,"base_patches":512,"small_text_patches":1024,"small_text_px":48,"line_split":true,"tight_crop":true,"repetition_penalty":1,"retry_on_repetition":true,"split_long_lines":false,"quality_guard":false,"text_direction":"auto","retry_on_token_limit":false,"retry_on_layout_failure":false}},
   "15":{"class_type":"PreviewImage","inputs":{"images":["12",0]}},

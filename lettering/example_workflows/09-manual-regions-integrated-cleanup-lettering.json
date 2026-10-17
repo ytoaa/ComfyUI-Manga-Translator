@@ -2,7 +2,7 @@
   "id": "6e54d8a0-65f5-566d-b909-e7bc53996d7c",
   "revision": 1,
   "last_node_id": 36,
-  "last_link_id": 57,
+  "last_link_id": 58,
   "nodes": [
     {
       "id": 1,
@@ -56,7 +56,7 @@
       ],
       "size": [
         330,
-        180
+        210
       ],
       "flags": {},
       "order": 1,
@@ -93,6 +93,13 @@
             2,
             12
           ]
+        },
+        {
+          "name": "ocr_region_plans",
+          "type": "STRING",
+          "links": [
+            58
+          ]
         }
       ],
       "properties": {
@@ -102,13 +109,15 @@
         "{\n  \"origin\": \"manual\",\n  \"selection\": \"human_supplied_regions\",\n  \"regions\": [\n    {\n      \"id\": \"location\",\n      \"kind\": \"text\",\n      \"bbox\": [\n        858,\n        24,\n        954,\n        61\n      ]\n    },\n    {\n      \"id\": \"booth\",\n      \"kind\": \"text\",\n      \"bbox\": [\n        423,\n        57,\n        970,\n        170\n      ]\n    },\n    {\n      \"id\": \"title\",\n      \"kind\": \"text\",\n      \"bbox\": [\n        44,\n        300,\n        284,\n        970\n      ]\n    }\n  ]\n}",
         4,
         0,
+        false,
         false
       ],
       "widgets_values_named": {
         "layout_json": "{\n  \"origin\": \"manual\",\n  \"selection\": \"human_supplied_regions\",\n  \"regions\": [\n    {\n      \"id\": \"location\",\n      \"kind\": \"text\",\n      \"bbox\": [\n        858,\n        24,\n        954,\n        61\n      ]\n    },\n    {\n      \"id\": \"booth\",\n      \"kind\": \"text\",\n      \"bbox\": [\n        423,\n        57,\n        970,\n        170\n      ]\n    },\n    {\n      \"id\": \"title\",\n      \"kind\": \"text\",\n      \"bbox\": [\n        44,\n        300,\n        284,\n        970\n      ]\n    }\n  ]\n}",
         "ocr_padding": 4,
         "edit_margin": 0,
-        "allow_empty_page": false
+        "allow_empty_page": false,
+        "refine_page_columns": false
       },
       "title": "② 수동 영역 JSON · 표지 예시 좌표를 검수하세요"
     },
@@ -221,6 +230,11 @@
           "name": "manifest_json",
           "type": "STRING",
           "link": 55
+        },
+        {
+          "name": "region_plan_json",
+          "type": "STRING",
+          "link": 58
         }
       ],
       "outputs": [
@@ -2251,6 +2265,14 @@
       0,
       36,
       0,
+      "STRING"
+    ],
+    [
+      58,
+      2,
+      3,
+      5,
+      3,
       "STRING"
     ]
   ],

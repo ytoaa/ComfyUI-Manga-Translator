@@ -54,7 +54,8 @@ def test_no_selected_text_runs_shipped_graph_without_models_or_http(tmp_path,mon
 def test_empty_manifest_rejects_wrong_page_and_unexpected_text():
     page=S.tensor(S.Image.new('RGB',(100,80)))
     source=S.N.encode({'regions':[],'origin':'rfdetr','image_width':100,'image_height':80})
-    crops,manifest,mask=S.N.MangaRegionCrops().crop(page,source,allow_empty_page=True)
+    crops,manifest,mask,plans=S.N.MangaRegionCrops().crop(page,source,allow_empty_page=True)
+    assert plans == ['{}']
     ocr=S.plugin.NODE_CLASS_MAPPINGS['MangaOCRAdaptive']()
     assert ocr.check_lazy_status(images=crops[0],manifest_json=manifest)==[]
     assert ocr.check_lazy_status(images=crops[0])==['model']
