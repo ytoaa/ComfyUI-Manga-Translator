@@ -6,7 +6,7 @@ import sys
 import types
 
 import numpy as np
-from PIL import Image,ImageDraw
+from PIL import Image,ImageDraw,ImageFont
 import pytest
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -237,3 +237,45 @@ def test_column_recovery_uses_original_pixels_and_bounded_validated_child_output
 def test_one_column_with_indented_lines_is_not_promoted_to_multicolumn():
     image=framed_paragraph();parts,report=P.recovery_parts(image)
     assert parts and report['strategy']=='verified_rows'
+
+
+def speckled_single_column(bright=False):
+    source=Image.new('RGB',(305,270),'#d7c7a5');draw=ImageDraw.Draw(source)
+    for y in range(0,239,4):draw.rectangle((16,y,17,y+1),fill='#303030')
+    for row,y in enumerate(range(3,224,23)):
+        for x in range(45+(row%3)*4,291,17):
+            draw.rectangle((x,y,x+11,y+13),outline='#202020',width=2)
+            draw.line((x+5,y,x+5,y+13),fill='#202020',width=1)
+    font=ImageFont.truetype(str(ROOT/'lettering/fonts/NanumGothic-Regular.ttf'),24)
+    draw.text((0,247),'32',font=font,fill='#202020',anchor='lt')
+    if bright:source=Image.fromarray(255-np.asarray(source))
+    return source
+
+
+@pytest.mark.parametrize('bright',[False,True])
+def test_dotted_rule_does_not_bridge_rows_and_footer_pixels_remain(bright):
+    source=speckled_single_column(bright)
+    assert len(M._ocr_line_images(source))==1
+    parts,report=P.recovery_parts(source)
+    assert len(parts)==11 and report['strategy']=='verified_rows'
+    assert report['speckle_pixels_ignored_in_analysis']>0
+    assert parts[-1][1][1]<247 and parts[-1][1][3]==270
+    rebuilt=np.concatenate([np.asarray(part) for part,_ in parts],axis=0)
+    assert np.array_equal(rebuilt,np.asarray(source))
+    for _,box in parts[:-1]:
+        # Body glyphs are left whole; the ruled gutter stays in the input.
+        assert not any(y<box[3]<y+14 for y in range(3,224,23))
+
+
+def test_dotted_paragraph_recovery_retains_validation_and_is_not_recursive(monkeypatch):
+    source=speckled_single_column();monkeypatch.setattr(M,'pil_image',lambda _:source)
+    class Model:
+        calls=0
+        def ocr(self,image,*args,**kwargs):
+            self.calls+=1
+            return {'text':'抗抗抗抗抗抗抗抗抗抗抗抗'}
+    model=Model()
+    with pytest.raises(ValueError,match='short_repetition'):
+        M.MangaOCRAdaptive().read(object(),model,base_patches=256,small_text_patches=512,
+            quality_guard=True,retry_on_layout_failure=True)
+    assert model.calls==4  # Two parent attempts and two first-child attempts.

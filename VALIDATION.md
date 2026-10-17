@@ -300,3 +300,22 @@ Four added regression cases cover bright/dark speckled paper, omission from real
 adaptive-node path retaining a first result without an unnecessary alternate patch. Repetition and genuine omission
 regressions remain active. Evidence counts are exposed in attempt diagnostics. Attached images are not committed.
 See [behavior and remaining recognition limits](docs/omission-speckles-v0.3.8.md).
+
+# v0.3.9 row-gap speckles / explicit manual integrated route — 2026-10-17
+
+Base: `28171e94a16d42c0a3036544fe99b1db59cbd023`. Full CPU regression: **279 passed**.
+Actual supplied 305×270 pixels now yield ten body rows and one footer crop. All 82,350 pixels have
+coverage exactly one; reconstructed bytes match. Recovery ignores 776 tiny component pixels only in
+analysis and retains original recognition pixels. Structural bright/dark fixtures verify the dotted gutter,
+footer retention, unsliced body glyphs and bounded rejection when a recovered child still repeats.
+Earlier 580×203 columns and 280×51 omission inputs remain regression checkpoints.
+The actual footer also exposed an omission false positive for `32`. The omission component threshold now
+scales to 20% of the largest foreground component, bounded to 4..16 pixels. A separate larger-speckle footer
+fixture and the existing real-small-component omission alarm cover this change; no OCR text is substituted.
+The user GPU log confirms that the compact cover attempt actually ran and also returned no selected text.
+That cover remains an unresolved automatic detection case; no success is claimed or fabricated.
+09 uses existing nodes with one human-entered region JSON, rectangular masks and the same integrated
+OCR/translation/tiled-cleanup/lettering outputs. Its graph simulation uses synthetic region coordinates
+instead of the example cover frames and verifies zero detector calls, both JSON previews, final save and
+unchanged pixels outside the permitted mask. Actual cover model inference is not run here.
+See [manual-mask contract and live limits](docs/row-noise-manual-v0.3.9.md).

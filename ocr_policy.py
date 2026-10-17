@@ -76,7 +76,11 @@ def text_problem(text, image, evidence=None):
     # area. Exclude only tiny disconnected components from this weak estimate;
     # do not alter the recognition image, masks, splitting or returned text.
     labels,count=ndimage.label(foreground,structure=np.ones((3,3),bool))
-    supported=np.bincount(labels.ravel(),minlength=count+1)>=4
+    areas=np.bincount(labels.ravel(),minlength=count+1)
+    # Scale the speck threshold to observed foreground components, with a
+    # low cap so ordinary small print still contributes to the estimate.
+    minimum_area=max(4,min(16,math.ceil(areas[1:].max(initial=0)*.2)))
+    supported=areas>=minimum_area
     supported[0]=False
     columns=supported[labels].any(axis=0)
     bands=int(np.count_nonzero(columns & ~np.r_[False,columns[:-1]]))
@@ -84,7 +88,7 @@ def text_problem(text, image, evidence=None):
     minimum=math.ceil(bands/4) if eligible else 0
     if evidence is not None:
         evidence['omission']={'raw_projection_bands':raw_bands,'supported_projection_bands':bands,
-                              'analysis_min_component_pixels':4,'minimum_characters':minimum,
+                              'analysis_min_component_pixels':minimum_area,'minimum_characters':minimum,
                               'scope':'weak_omission_estimate_not_recognition_confidence'}
     if eligible and len(compact)<minimum:
         return 'possible_omission'
@@ -221,6 +225,14 @@ def recovery_parts(image, direction='auto'):
             continue
         foreground=(detail>threshold if positive>negative*1.2 else detail < -threshold
                     if negative>positive*1.2 else np.abs(detail)>threshold)
+        # Texture specks and dotted gutter marks can fill every row gap.
+        # This is analysis only: recognition crops retain all source pixels.
+        labels,count=ndimage.label(foreground,structure=np.ones((3,3),bool))
+        supported=np.bincount(labels.ravel(),minlength=count+1)>=8
+        supported[0]=False
+        clean=supported[labels]
+        speckles=int(np.count_nonzero(foreground & ~clean))
+        foreground=clean
         for horizontal in (True,False):
             name='horizontal' if horizontal else 'vertical_rtl'
             if direction!='auto' and horizontal!=(direction=='horizontal'):
@@ -268,7 +280,7 @@ def recovery_parts(image, direction='auto'):
                    for a,b in zip(cuts,cuts[1:])]
             if not horizontal and direction!='vertical_ltr':boxes.reverse()
             separation=sum(b[0]-a[1] for a,b in zip(runs,runs[1:]))/(runs[-1][1]-runs[0][0])
-            candidates.append((separation,horizontal,boxes,threshold,removed))
+            candidates.append((separation,horizontal,boxes,threshold,removed,speckles))
         if candidates:break
     if candidates:
         candidates.sort(key=lambda row:row[0],reverse=True)
@@ -276,10 +288,11 @@ def recovery_parts(image, direction='auto'):
         other=next((v for v in candidates[1:] if v[1]!=best[1]),None)
         if other and (best[0]<other[0]*1.5 or best[0]-other[0]<.05):
             return [],{'strategy':'ambiguous_rows_and_columns'}
-        _,horizontal,boxes,threshold,removed=best
+        _,horizontal,boxes,threshold,removed,speckles=best
         return [(image.crop(box),box) for box in boxes],{
             'strategy':'verified_rows' if horizontal else 'verified_columns',
-            'separator':'\n','contrast':threshold,'ruling_strips_ignored_in_analysis':removed}
+            'separator':'\n','contrast':threshold,'ruling_strips_ignored_in_analysis':removed,
+            'analysis_min_component_pixels':8,'speckle_pixels_ignored_in_analysis':speckles}
     if direction in ('auto','horizontal'):
         parts=plan_line(image,max_aspect=6.)
         if len(parts)>1:return parts,{'strategy':'shorter_horizontal_chunks','separator':''}

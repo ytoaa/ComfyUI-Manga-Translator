@@ -6,7 +6,7 @@ import sys
 import types
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -95,6 +95,18 @@ def test_small_disconnected_glyphs_still_support_a_real_omission_alarm():
     image=Image.new('RGB',(280,20),'white');draw=ImageDraw.Draw(image)
     for x in range(2,278,6):draw.rectangle((x,8,x+1,9),fill='black')
     assert P.text_problem('字',image)=='possible_omission'
+
+
+def test_page_number_on_paper_with_larger_speckles_is_not_an_omission():
+    image=Image.new('RGB',(305,39),'#d7c7a5');draw=ImageDraw.Draw(image)
+    font=ImageFont.truetype(str(ROOT/'lettering/fonts/NanumGothic-Regular.ttf'),24)
+    draw.text((0,16),'32',font=font,fill='#202020',anchor='lt')
+    for i,x in enumerate(range(60,294,12)):
+        y=4+(i%2)*15
+        draw.rectangle((x,y,x+2,y+2),fill='#606050')
+    evidence={}
+    assert P.text_problem('32',image,evidence) is None
+    assert evidence['omission']['analysis_min_component_pixels']>4
 
 
 def test_false_omission_does_not_overwrite_first_result_with_unneeded_retry(monkeypatch):

@@ -224,7 +224,7 @@ def test_existing_translation_json_bridges_to_lettering(fixture, monkeypatch):
 
 def test_all_example_workflow_links_api_and_new_node_schemas():
     files = sorted((PACKAGE/'example_workflows').glob('*.api.json'))
-    assert len(files) == 8
+    assert len(files) == 9
     for path in files:
         prompt = json.loads(path.read_text())
         ui = json.loads(path.with_name(path.name.replace('.api.json', '.json')).read_text())

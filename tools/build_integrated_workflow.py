@@ -12,21 +12,38 @@ CORE_RETURNS.update({'GrowMask': ('MASK',), 'MaskToImage': ('IMAGE',),'PreviewAn
                      'PrimitiveBoolean':('BOOLEAN',)})
 
 
-def build():
+def build(manual=False):
     template = json.loads((ROOT/'lettering/example_workflows/07-rfdetr-detail-adaptive-ocr-cleanup-lettering.json').read_text(encoding='utf-8'))
     g = Graph()
     original = g.add('LoadImage', {'image': ''}, (0, 50), '① 원본 페이지')
-    detector_model = g.import_model_node(template, 24, (0, 400))
-    detector = g.add('MangaDetectorDetail', {'include_sfx':False}, pos=(420, 50), title='② 전체+작은 타일 검출 · 공통 글자 선택')
-    g.connect(original, 0, detector, 'images'); g.connect(detector_model, 0, detector, 'model')
-    regions = g.add('MangaDetectionRegions', {'merge_adjacent_lines':True}, pos=(840, 50), title='③ 중복 해소 · 가까운 행을 문단으로')
-    g.connect(detector, 0, regions, 'result')
-    raw_mask = g.add('MangaDetectionMask', pos=(840, 400), title='원문 글자 마스크')
-    g.connect(detector, 0, raw_mask, 'result')
-    grown = g.add('GrowMask', pos=(1260, 400), title='제거 여유 · 기본 GrowMask')
-    g.connect(raw_mask, 0, grown, 'mask')
-    crops = g.add('MangaRegionCrops', {'allow_empty_page':True}, pos=(1260, 50), title='④ OCR 영역 · 글자 없으면 원본 통과')
-    g.connect(original, 0, crops, 'images'); g.connect(regions, 0, crops, 'layout_json')
+    if manual:
+        # One editable JSON is authoritative for crops, cleanup and lettering.
+        # These are human-selected frames for the reported 800x1125 cover,
+        # not detector results or guessed transcriptions.
+        layout={'origin':'manual','selection':'human_supplied_regions','regions':[
+            {'id':'location','kind':'text','bbox':[858,24,954,61]},
+            {'id':'booth','kind':'text','bbox':[423,57,970,170]},
+            {'id':'title','kind':'text','bbox':[44,300,284,970]}]}
+        crops=g.add('MangaRegionCrops',{'layout_json':json.dumps(layout,ensure_ascii=False,indent=2),
+            'allow_empty_page':False,'edit_margin':0},pos=(840,50),title='② 수동 영역 JSON · 표지 예시 좌표를 검수하세요')
+        g.connect(original,0,crops,'images')
+        raw_mask,mask_slot=crops,2
+        regions,regions_slot=crops,1
+        grown=g.add('GrowMask',{'expand':0},pos=(1260,400),title='사각형 제거 범위 · 기본 GrowMask (기본 확대 0)')
+        g.connect(raw_mask,mask_slot,grown,'mask')
+    else:
+        detector_model = g.import_model_node(template, 24, (0, 400))
+        detector = g.add('MangaDetectorDetail', {'include_sfx':False}, pos=(420, 50), title='② 전체+작은 타일 검출 · 공통 글자 선택')
+        g.connect(original, 0, detector, 'images'); g.connect(detector_model, 0, detector, 'model')
+        regions = g.add('MangaDetectionRegions', {'merge_adjacent_lines':True}, pos=(840, 50), title='③ 중복 해소 · 가까운 행을 문단으로')
+        g.connect(detector, 0, regions, 'result')
+        raw_mask = g.add('MangaDetectionMask', pos=(840, 400), title='원문 글자 마스크')
+        g.connect(detector, 0, raw_mask, 'result')
+        mask_slot,regions_slot=0,0
+        grown = g.add('GrowMask', pos=(1260, 400), title='제거 여유 · 기본 GrowMask')
+        g.connect(raw_mask, 0, grown, 'mask')
+        crops = g.add('MangaRegionCrops', {'allow_empty_page':True}, pos=(1260, 50), title='④ OCR 영역 · 글자 없으면 원본 통과')
+        g.connect(original, 0, crops, 'images'); g.connect(regions, 0, crops, 'layout_json')
     ocr_model = g.import_model_node(template, 13, (1260, -220))
     ocr = g.add('MangaOCRAdaptive', {'tight_crop':False,'base_patches':256,'small_text_patches':512,
         'split_long_lines':True,'quality_guard':True,'retry_on_token_limit':True,
@@ -43,9 +60,9 @@ def build():
     g.connect(translate, 0, target_save, 'translated_json')
 
     plan = g.add('MangaInpaintPlan', {'recover_uniform_ink':True}, pos=(1680, 650), title='⑦ 단색 잔상 보완 · 제거 타일 계획')
-    g.connect(original, 0, plan, 'original'); g.connect(raw_mask, 0, plan, 'source_mask')
+    g.connect(original, 0, plan, 'original'); g.connect(raw_mask, mask_slot, plan, 'source_mask')
     g.connect(grown, 0, plan, 'cleanup_mask')
-    g.connect(regions, 0, plan, 'regions_json')
+    g.connect(regions, regions_slot, plan, 'regions_json')
     tile_crop = g.add('ImageCrop', pos=(2100, 650), title='영역 자르기 · 기본 ImageCrop')
     g.connect(plan, 0, tile_crop, 'image')
     for field, slot in [('x', 1), ('y', 2), ('width', 3), ('height', 4)]:
@@ -75,14 +92,18 @@ def build():
     prepare = g.add('MangaLetterPrepare', pos=(4620, 50), title='⑩ 번역문과 원문 스타일 연결')
     g.connect(original, 0, prepare, 'original'); g.connect(target_save, 0, prepare, 'translated_json')
     g.connect(plan, 9, prepare, 'text_pixel_mask')
-    typography = g.add('MangaLetterPlan', {'line_breaks':'reflow','fit_policy':'readable','respect_bubbles':True},
+    typography_values={'line_breaks':'reflow','fit_policy':'readable','respect_bubbles':True}
+    if manual:
+        typography_values['region_options_json']=json.dumps({'title':{'direction':'vertical_rtl'},
+            'location':{'direction':'horizontal'},'booth':{'direction':'horizontal'}},ensure_ascii=False)
+    typography = g.add('MangaLetterPlan', typography_values,
                        pos=(5040, 50), title='⑪ 실제 말풍선 경계 검사 · 가독 크기 맞춤')
     g.connect(original, 0, typography, 'original'); g.connect(assemble, 0, typography, 'cleaned')
     g.connect(prepare, 1, typography, 'source_mask'); g.connect(prepare, 0, typography, 'regions_json')
-    g.connect(detector, 0, typography, 'detection_result')
+    if not manual:g.connect(detector, 0, typography, 'detection_result')
     lettering = g.add('MangaLetterApply', pos=(5460, 50), title='⑫ 방향별 식자 · 비례 스타일 · 충돌 검사')
     g.connect(typography, 0, lettering, 'plan')
-    save = g.add('SaveImage', {'filename_prefix': 'manga_translator/integrated_tiles'}, (5880, 50), '⑬ 통합 결과 저장')
+    save = g.add('SaveImage', {'filename_prefix': 'manga_translator/manual_tiles' if manual else 'manga_translator/integrated_tiles'}, (5880, 50), '⑬ 통합 결과 저장')
     g.connect(lettering, 0, save, 'images')
     clean_preview = g.add('PreviewImage', pos=(5040, 650), title='검수 · 식자 직전 전체 배경')
     g.connect(assemble, 0, clean_preview, 'images')
@@ -122,16 +143,36 @@ def build():
         g.nodes[preview-1]['size']=[400,260]
         g.nodes[preview-1]['properties']['cnr_id']='comfy-core'
         g.connect(source,0,preview,'source')
-    scope=g.add('PrimitiveBoolean',{'value':False},pos=(0,650),title='효과음·표지 큰 글자 포함 · 공통 스위치')
-    g.nodes[scope-1]['properties']['cnr_id']='comfy-core'
-    for node in (detector,regions,raw_mask):g.connect(scope,0,node,'include_sfx')
-    g.save('08-integrated-tiled-cleanup-lettering')
+    if manual:
+        # Replace auto-specific guidance with the actual manual contract.
+        note=next(n for n in g.nodes if n['type']=='Note')
+        note['widgets_values']=['수동 경로: RF-DETR를 실행하지 않습니다. 자동 검출 성공을 의미하지 않습니다.\n'
+            '원본을 선택하고 두 번째 노드의 layout_json을 검수하세요. bbox는 원본 가로/세로 각각 0..1000의 xyxy 좌표입니다.\n'
+            '기본값은 보고된 800x1125 표지의 위쪽 두 표시와 왼쪽 세로 제목을 사람이 지정한 예시입니다.\n'
+            '문자열은 하드코딩하지 않습니다. 지정 영역을 Hayai가 읽고 번역 서버에 전달합니다.\n'
+            '사각형 전체가 제거 마스크입니다. 글자 획 segmentation이 아니므로 영역 안의 그림도 재생성될 수 있습니다.\n'
+            'GrowMask 기본 확대 0, edit_margin=0. 제거 마스크와 식자 직전 배경 미리보기를 확인하세요.\n'
+            '정밀 마스크가 있다면 source_mask와 GrowMask 입력을 그 마스크로 교체할 수 있습니다.\n'
+            'title은 세로 식자, location/booth는 가로 식자로 지정했습니다. 다른 ID/이미지에서는 영역별 JSON도 수정하세요.\n'
+            'RF-DETR bubble 마스크는 없습니다. source 모드의 지정 프레임 안에서 식자합니다.\n'
+            'OCR/제거/식자 실패 검사는 유지합니다. 실제 Hayai/Qwen 결과는 사용자 환경에서 확인해야 합니다.']
+        name='09-manual-regions-integrated-cleanup-lettering'
+    else:
+        scope=g.add('PrimitiveBoolean',{'value':False},pos=(0,650),title='효과음·표지 큰 글자 포함 · 공통 스위치')
+        g.nodes[scope-1]['properties']['cnr_id']='comfy-core'
+        for node in (detector,regions,raw_mask):g.connect(scope,0,node,'include_sfx')
+        name='08-integrated-tiled-cleanup-lettering'
+    g.save(name)
     # The committed 08 graph uses LF; keep regeneration byte-for-byte stable.
     for suffix in ('.json','.api.json'):
-        path=ROOT/'lettering/example_workflows'/('08-integrated-tiled-cleanup-lettering'+suffix)
+        path=ROOT/'lettering/example_workflows'/(name+suffix)
         path.write_bytes(path.read_bytes().replace(b'\r\n',b'\n'))
     return g
 
 
 if __name__ == '__main__':
-    build()
+    from argparse import ArgumentParser
+    parser=ArgumentParser(description=__doc__)
+    parser.add_argument('--manual',action='store_true',help='Build manual region variant 09; leave 08 unchanged')
+    args=parser.parse_args()
+    build(args.manual)

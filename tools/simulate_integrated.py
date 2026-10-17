@@ -170,13 +170,24 @@ class OCROracle:
 class GraphRunner:
     def __init__(self, destination, uniform_fill=True, failed_qwen=False, patterned_header=True,
                  seam_case=False, failed_recovery=False, require_recovery=False, empty_recovery=False,
-                 no_text=False):
+                 no_text=False,manual_regions=False):
         self.original, self.clean, self.raw, self.records = fixture(patterned_header)
         if no_text:
             self.original = self.clean.copy()
             self.raw = np.zeros_like(self.raw)
             self.records = []
-        self.graph = json.loads((ROOT/'lettering/example_workflows/08-integrated-tiled-cleanup-lettering.api.json').read_text(encoding='utf-8'))
+        workflow='09-manual-regions-integrated-cleanup-lettering' if manual_regions else '08-integrated-tiled-cleanup-lettering'
+        self.graph = json.loads((ROOT/'lettering/example_workflows'/(workflow+'.api.json')).read_text(encoding='utf-8'))
+        self.manual_regions=manual_regions
+        if manual_regions:
+            # Test the shipped manual wiring with this runner's synthetic
+            # page, replacing only its human-entered frames/directions.
+            layout={'origin':'manual','regions':[{'id':f'r{i+1}','kind':'text',
+                'bbox':[v*1000/(1600 if axis%2==0 else 640) for axis,v in enumerate(row['bbox'])]}
+                for i,row in enumerate(self.records)]}
+            for node in self.graph.values():
+                if node['class_type']=='MangaRegionCrops':node['inputs']['layout_json']=json.dumps(layout)
+                if node['class_type']=='MangaLetterPlan':node['inputs']['region_options_json']='{}'
         self.cache, self.calls, self.destination = {}, Counter(), Path(destination)
         self.destination.mkdir(parents=True, exist_ok=True)
         self.detector = DetectorOracle(self.records,self.original,seam_case,failed_recovery,require_recovery,empty_recovery)
@@ -297,10 +308,11 @@ class GraphRunner:
                     self.run(ident)
         plan_id = next(k for k, n in self.graph.items() if n['class_type'] == 'MangaInpaintPlan')
         finish_id = next(k for k, n in self.graph.items() if n['class_type'] == 'MangaInpaintAssemble')
-        regions_id = next(k for k, n in self.graph.items() if n['class_type'] == 'MangaDetectionRegions')
+        regions_id = next(k for k, n in self.graph.items() if n['class_type'] ==
+                          ('MangaRegionCrops' if self.manual_regions else 'MangaDetectionRegions'))
         plan = self.cache[plan_id][6][0]
         cleaned = self.cache[finish_id][0][0]
-        selected = json.loads(self.cache[regions_id][0][0])
+        selected = json.loads(self.cache[regions_id][1 if self.manual_regions else 0][0])
         assert len(selected['regions']) == len(self.records), 'Lost or duplicated logical regions'
         assert np.all(plan['source_mask'][self.raw]), 'Detected source ink was lost from cleanup mask'
         outside = ~plan['cleanup_mask']
@@ -320,7 +332,8 @@ class GraphRunner:
         report = {'lettering':lettering,'simulation_only': True, 'model_inference': 'fixture test doubles; NOT RF-DETR/Hayai/vLLM/Qwen GPU results',
                   'execution': 'shipped API graph, real custom nodes, PyTorch CPU and native-equivalent image operations',
                   'selected_regions': len(selected['regions']), 'detector_calls': self.detector.calls,
-                  'boundary_recovery': selected['region_resolution']['boundary_recovery'],
+                  'boundary_recovery': selected.get('region_resolution',{}).get('boundary_recovery',{}),
+                  'region_selection':'manual' if self.manual_regions else 'detector',
                   'ocr_line_calls': self.ocr.calls, 'qwen_tile_calls': self.qwen_calls,
                   'calls': dict(self.calls), 'cleanup': json.loads(self.cache[finish_id][1][0]),
                   'outside_mask_unchanged': True, 'all_fixture_ink_masked': True, 'final_saved': True,

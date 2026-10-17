@@ -1,5 +1,7 @@
 # ComfyUI-Manga-Translator
 
+v0.3.9은 종이 잡음/점선으로 막힌 OCR 행 간격을 복구 분석에서 다시 확인한다. 실제 305×270 입력은 본문 10행과 페이지 번호로 분리되며 원본 픽셀은 보존한다. **보고된 표지는 compact 재검출도 실패해 자동 검출 미해결이다.** 검출기를 사용하지 않고 지정한 영역으로 진행하는 [09 수동 통합](lettering/example_workflows/09-manual-regions-integrated-cleanup-lettering.json)을 추가했다. 기본값은 해당 표지의 수동 프레임 예시이고 제거 마스크는 사각형 전체다. [사용법·한계](docs/row-noise-manual-v0.3.9.md).
+
 v0.3.8은 종이 질감을 글자 수로 세어 짧은 정상 문장까지 막던 OCR 누락 검사 오탐을 수정한다. 실제 280×51 실패 크롭에서 후보 띠가 38개에서 12개로 줄어 7/8자 결과를 더 이상 누락으로 판정하지 않는다. 인식 이미지/문자열은 변경하지 않으며 **오탈자 교정이나 인식 정확도 보증은 아니다.** 업데이트 후 ComfyUI를 재시작한다. [근거·검증 범위](docs/omission-speckles-v0.3.8.md).
 
 **현재 기본 워크플로: [08 통합 타일 제거·식자](lettering/example_workflows/08-integrated-tiled-cleanup-lettering.json).** 검출·줄별 OCR·번역·마스크 기반 타일 Qwen·좌표 복원·잔존 원문 검사·식자를 한 번에 연결한다. 이미지 크롭/복원/마스크 합성/저장은 기본 노드를 사용한다. 설치 후 ComfyUI를 재시작하고 08 JSON을 새로 불러온다. [통합 기능·모의 실행·검증 한계](docs/integrated-workflow.md)를 먼저 참고한다. 모의 실행의 모델 응답은 대역이며 실제 GPU 품질 실증과 구분한다.
