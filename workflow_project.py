@@ -1,8 +1,11 @@
 """Workflow-owned page input and serial projects on ComfyUI's native queue."""
 import asyncio
 from copy import deepcopy
+from datetime import datetime, timezone
 import json
 import logging
+import math
+import os
 import re
 from pathlib import Path, PurePosixPath
 import threading
@@ -25,6 +28,55 @@ class NativeComfyClient:
         self.submit_handler = next((r.handler for r in server.routes if r.method == 'POST' and r.path == '/prompt'),None)
         if self.submit_handler is None: raise ProjectError('ComfyUI 기본 prompt 경로를 찾을 수 없습니다.')
         self.parent_prompt_id = None
+        self.execution_context = self._execution_context()
+
+    @staticmethod
+    def _execution_context():
+        # psutil is a ComfyUI core dependency. A missing/denied process clock
+        # disables recovery; module import time is never used as restart proof.
+        try:
+            import psutil
+        except ImportError:
+            return None
+        try:
+            started = psutil.Process(os.getpid()).create_time()
+            if not math.isfinite(started) or not 0 < started <= time.time():
+                return None
+            return {'kind':'native_process', 'pid':os.getpid(),
+                    'started_at':datetime.fromtimestamp(started, timezone.utc).isoformat()}
+        except (psutil.Error, OSError, ValueError, TypeError, OverflowError):
+            return None
+
+    def restart_evidence(self, state):
+        """Prove an attempt predates this process; queue absence alone is insufficient."""
+        current = self.execution_context
+        if not isinstance(current, dict) or current.get('kind') != 'native_process': return None
+        def timestamp(value):
+            parsed = datetime.fromisoformat(value)
+            if parsed.tzinfo is None: raise ValueError('Timezone required')
+            return parsed.timestamp()
+        try:
+            started = timestamp(current['started_at'])
+            created = timestamp(state['created_at'])
+            updated = timestamp(state['updated_at'])
+            if not all(math.isfinite(v) for v in (started,created,updated)):
+                return None
+            # Saved timestamps have second precision. Leave a margin rather
+            # than misclassifying a same-process attempt during its first second.
+            if not 0 < created <= updated < started - 2:
+                return None
+            previous = state.get('execution_context')
+            if previous is not None:
+                if not isinstance(previous,dict) or previous.get('kind') != 'native_process':
+                    return None
+                if timestamp(previous['started_at']) >= started:
+                    return None  # Includes the same process and wall-clock regressions.
+        except (KeyError, ValueError, TypeError, OverflowError):
+            return None
+        return {'kind':'native_process_restart', 'process':deepcopy(current),
+                'previous_updated_at':state['updated_at'],
+                'previous_prompt_id':state['prompt_id'],
+                'requested_action':'실패 재시도'}
 
     def object_info(self):
         import nodes

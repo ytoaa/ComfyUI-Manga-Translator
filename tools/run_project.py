@@ -56,6 +56,13 @@ class Paused(ProjectError):
     """Keep job identity: work may still be running, so never resubmit blindly."""
 
 
+class RestartInterrupted(Paused):
+    """Internal evidence-bearing signal; only explicit native restart recovery uses it."""
+    def __init__(self, evidence):
+        super().__init__('The native ComfyUI process restarted before this attempt could be reconciled')
+        self.evidence = evidence
+
+
 class InputError(ProjectError):
     pass
 
@@ -520,6 +527,14 @@ class Project:
                     else:
                         missing_polls += 1
                         if missing_polls >= 3:
+                            prove_restart = getattr(self.client, 'restart_evidence', None)
+                            evidence = prove_restart(state) if self.retry_failed and callable(prove_restart) else None
+                            if evidence and not self.should_stop():
+                                # Check the original identity/token once more immediately
+                                # before retiring an attempt. Never cancel or clear a queue.
+                                if self.client.history(state['prompt_id']) or self._queue_identity(state):
+                                    continue
+                                raise RestartInterrupted(evidence)
                             raise Paused('Submitted page is absent from both history and queue; do not resubmit until its outcome is known')
             except (OSError, Rejected) as exc:
                 raise Paused('Connection lost while reconciling a submitted page; resume this project') from exc
@@ -675,7 +690,15 @@ class Project:
             if digest(encoded) != state.get('artifacts',{}).get('input.png'):
                 raise ProtocolError('Missing normalized input cannot be reconstructed exactly')
             self._artifact(state,'input.png',encoded)
-        self._collect(state, self._wait(state))
+        try:
+            history = self._wait(state)
+        except RestartInterrupted as exc:
+            state.update(status='failed', reason='server_restarted_outcome_lost',
+                         failure_message='서버 재시작 전 시도의 결과를 확인할 수 없습니다. 큐·이력 부재와 프로세스 시작 시각을 확인하고 명시적 실패 재시도로 새 시도를 허용했습니다.',
+                         restart_recovery=exc.evidence)
+            self._save(state)
+            return
+        self._collect(state, history)
 
     def _process(self, page):
         state = self.state(page)
@@ -748,6 +771,8 @@ class Project:
         token = {'project':self.project_id, 'page':page['id'], 'attempt':state['attempt']}
         state.update(status='submitting', prompt_id=str(uuid.uuid4()), submission_token=token,
                      output_prefix=prefix,uploaded_reference={'filename':filename,'subfolder':subfolder,'type':'input'})
+        context = getattr(self.client, 'execution_context', None)
+        if isinstance(context, dict): state['execution_context'] = deepcopy(context)
         self._save(state)  # Durable identity BEFORE POST, including a lost HTTP reply.
         try:
             answer = self.client.submit(graph, state['prompt_id'], token)
