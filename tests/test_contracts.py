@@ -171,7 +171,10 @@ def test_review_rejects_path_traversal_and_keeps_existing_file(monkeypatch,tmp_p
     monkeypatch.setitem(sys.modules,'folder_paths',types.SimpleNamespace(get_output_directory=lambda:str(tmp_path)))
     node=N.MangaSaveReview()
     with pytest.raises(ValueError):node.save(N.encode(source()),'../secrets')
-    node.save(N.encode(source()),'manga_translator/review')
+    result=node.save(N.encode(source()),'manga_translator/review')
+    assert result['result']==(result['ui']['text'][0],)
+    assert json.loads(result['ui']['text'][0])==source()
+    assert result['ui']['manga_review_files']==[{'filename':'review_00001.json','subfolder':'manga_translator','type':'output'}]
     node.save(N.encode(source()),'manga_translator/review')
     assert len(list(tmp_path.rglob('*.json')))==2
 

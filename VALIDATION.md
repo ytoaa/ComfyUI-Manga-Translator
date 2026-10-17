@@ -361,3 +361,44 @@ full graph tests still exercise final save, empty-page skips and failure stops w
 This is CPU pixel/graph verification, not actual RF-DETR/Hayai/vLLM/Qwen inference. The new actual
 recognition/translation quality and final GPU rendering remain to be checked on the user's machine.
 See [behavior, compatibility and limits](docs/page-columns-v0.3.11.md).
+
+# v0.3.12 folder projects and failure scenarios — 2026-10-17
+
+Base: `e9d93e79772c65128ddcaebd32a5137bbec7c742`. Full CPU regression: **369 passed**.
+Seventy added cases comprise 45 project/API/exception cases, 21 geometry-matrix cases, three zero/positive/
+negative GrowMask checks and one mixed-folder full-graph integration. The axis matrix covers 648 combinations
+of exact threshold and randomized lengths with tile sizes 384/576/1152 and overlap 0/64/384.
+
+The mixed folder executes the shipped 08 with real custom nodes, CPU tensors, font pixels, masks, tile
+planning/assembly, JSON validation and file saves. RF-DETR/Hayai/vLLM/Qwen and the server scheduling layer
+are explicit doubles. Its 11 inputs yield completed 4, unchanged_blank 1, needs_review 1 and five intentional
+failures: unresolved seam, repeated OCR, unchanged cleanup, impossible lettering and corrupt input.
+The corrupt file is not submitted. Later valid pages save successfully. Ten prompts are submitted and
+resuming submits zero more. Natural ordering, duplicate basenames in different folders and input/result
+identity are preserved. This mixed run is now itself a test in the full suite.
+
+Project tests cover response loss after acceptance, unknown/running jobs, bounded timeouts, OOM/disk/model
+failures, missing or modified results, explicit retry, source changes, adding an earlier page while another is
+active, removing an in-flight source, missing normalized inputs, JSON key reordering, corrupt manifests/state,
+multi-frame/high-bit-depth/large/linked inputs, unreadable subfolders, EXIF/CMYK/gray/alpha normalization,
+nonzero partial-success CLI exits and gap-preserving edition exports. Real urllib multipart/JSON/history/view
+round trips run against a local HTTP server double. No global interruption or unrelated queue deletion occurs.
+
+Two simulation gaps were corrected. scipy iterations=0 previously dilated to convergence; zero now preserves
+the mask, and negative values erode. Saved JSON now appears directly in MangaSaveReview UI/API output,
+including its relative file identity. Real failure-path tests verify this remains available before downstream
+PreviewAny executes. The existing STRING result and native previews are retained.
+
+During development one mixed run left a stale `submitting` checkpoint despite partial review files. Its
+underlying cause was not isolated; a single-case trace and fresh full mixed traces did not reproduce it.
+The controller now re-reads each persisted final state before allowing the next submission, and a fault-
+injection regression verifies that an omitted final checkpoint pauses rather than continuing. The final full
+suite, including the mixed-folder subprocess, passes. This is not a live-server durability guarantee.
+
+A real CPU font probe confirms the remaining number-gutter issue: 540 translated-alpha pixels land inside
+the preserved marker rectangle when a shared frame includes it. The probe records this as a known limitation,
+not a pass for layout quality. Mixed heading styles, styled-cover automatic detection, semantic OCR/translation
+accuracy, cross-page context and project GUI review remain outside the implemented guarantees.
+The user-provided single-page save success is live evidence for that guide; this folder feature has not been
+run against the user's ComfyUI/GB10 services here. No supplied source images or OCR text enter the repository.
+See [commands, exception policy and precise limits](docs/project-processing-v0.3.12.md).

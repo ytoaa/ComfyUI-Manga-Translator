@@ -46,6 +46,12 @@ def test_failed_cleanup_never_reaches_final_save(tmp_path):
     with pytest.raises(ValueError, match='retained nearly all source ink'):
         runner.execute()
     assert not runner.saved and not (tmp_path/'final.png').exists()
+    # Both review files were saved before rendering failed. Their direct UI
+    # output must survive even though downstream PreviewAny never executes.
+    saves=[key for key,node in runner.graph.items() if node['class_type']=='MangaSaveReview']
+    previews=[key for key,node in runner.graph.items() if node['class_type']=='PreviewAny']
+    assert all(runner.ui_outputs[key]['text'] and runner.ui_outputs[key]['manga_review_files'] for key in saves)
+    assert all(key not in runner.ui_outputs for key in previews)
 
 
 def test_short_repeating_ocr_stops_before_translation_cleanup_and_final_save(tmp_path):
@@ -136,3 +142,16 @@ def test_full_graph_uses_complementary_fragments_when_wide_inference_misses_text
     assert report['boundary_recovery']['recovery_calls']==0
     assert report['selected_regions']==6 and report['ocr_line_calls']==9
     assert report['all_fixture_ink_masked'] and report['outside_mask_unchanged'] and report['final_saved']
+
+
+@pytest.mark.parametrize('amount', [0, 1, -1])
+def test_native_grow_mask_simulation_handles_zero_and_negative_without_filling_page(tmp_path, amount):
+    import numpy as np
+    import torch
+    runner = S.GraphRunner(tmp_path)
+    source = np.zeros((12, 14), np.float32)
+    source[4:8, 5:9] = 1
+    result = runner.native('GrowMask', {'mask': torch.from_numpy(source)[None], 'expand': amount})[0][0].numpy()
+    assert not result[0].any() and not result[-1].any()
+    assert (np.array_equal(result, source) if amount == 0 else
+            result.sum() > source.sum() if amount > 0 else result.sum() < source.sum())

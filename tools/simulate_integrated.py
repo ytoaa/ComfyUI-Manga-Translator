@@ -189,6 +189,7 @@ class GraphRunner:
                 if node['class_type']=='MangaRegionCrops':node['inputs']['layout_json']=json.dumps(layout)
                 if node['class_type']=='MangaLetterPlan':node['inputs']['region_options_json']='{}'
         self.cache, self.calls, self.destination = {}, Counter(), Path(destination)
+        self.ui_outputs = {}
         self.destination.mkdir(parents=True, exist_ok=True)
         self.detector = DetectorOracle(self.records,self.original,seam_case,failed_recovery,require_recovery,empty_recovery)
         self.ocr = OCROracle(self.original, self.records)
@@ -232,7 +233,9 @@ class GraphRunner:
             if cls and kind not in ('MangaDetectorLoader', 'MangaOCRLoader'):
                 result = getattr(obj, cls.FUNCTION)(**args)
             else: result = self.native(kind, args)
-            if isinstance(result, dict): result = result.get('result', ())
+            if isinstance(result, dict):
+                if 'ui' in result: self.ui_outputs[ident] = result['ui']
+                result = result.get('result', ())
             while len(outputs) < len(result): outputs.append([])
             list_outputs = getattr(cls, 'OUTPUT_IS_LIST', ()) if cls else ()
             for slot, item in enumerate(result):
@@ -249,7 +252,9 @@ class GraphRunner:
         if kind == 'ManualSigmas': return (a['sigmas'],)
         if kind == 'GrowMask':
             binary = a['mask'][0].numpy() > .5
-            expanded = ndimage.binary_dilation(binary, iterations=a['expand'])
+            amount = a['expand']
+            expanded = (ndimage.binary_dilation(binary, iterations=amount) if amount > 0 else
+                        ndimage.binary_erosion(binary, iterations=-amount) if amount < 0 else binary.copy())
             return (torch.from_numpy(expanded.astype(np.float32))[None],)
         if kind == 'MaskToImage': return (a['mask'][..., None].repeat(1, 1, 1, 3),)
         if kind == 'ImageCrop': return (a['image'][:, a['y']:a['y']+a['height'], a['x']:a['x']+a['width'], :].clone(),)
@@ -280,7 +285,10 @@ class GraphRunner:
             path = self.destination/'final.png'
             pil(a['images']).save(path)
             self.saved.append(path)
-            return ()
+            prefix = Path(a['filename_prefix'])
+            return {'ui':{'images':[{'filename':prefix.name+'_00001_.png',
+                       'subfolder':'' if str(prefix.parent)=='.' else prefix.parent.as_posix(),
+                       'type':'output'}]}}
         raise ValueError('Unsupported native simulation node: '+kind)
     @contextmanager
     def services(self):

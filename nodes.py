@@ -454,7 +454,12 @@ class MangaSaveReview:
             try:
                 with path.open('x',encoding='utf-8') as handle:
                     json.dump(data,handle,ensure_ascii=False,indent=2,allow_nan=False)
-                return (encode(data),)
+                value = encode(data)
+                # Expose the already-saved review immediately. A later render
+                # failure may prevent downstream PreviewAny nodes executing.
+                return {'ui':{'text':[value], 'manga_review_files':[
+                    {'filename':path.name,'subfolder':'/'.join(parts[:-1]),'type':'output'}]},
+                        'result':(value,)}
             except FileExistsError:
                 continue
         raise RuntimeError('Review filename sequence is exhausted')
