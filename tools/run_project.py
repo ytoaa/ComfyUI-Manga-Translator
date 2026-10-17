@@ -15,6 +15,7 @@ import math
 import os
 from pathlib import Path, PurePosixPath
 import re
+import sys
 import time
 from urllib import error, parse, request
 import uuid
@@ -23,15 +24,28 @@ import warnings
 from PIL import Image, ImageChops, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
+if __package__:
+    from ..limits import (RESOURCE_CONTRACT_VERSION, LEGACY_PAGE_PIXELS,
+                          MAX_SOURCE_PIXELS, MAX_INPUT_BYTES)
+else:
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from limits import (RESOURCE_CONTRACT_VERSION, LEGACY_PAGE_PIXELS,
+                        MAX_SOURCE_PIXELS, MAX_INPUT_BYTES)
+
 DEFAULT_WORKFLOW = ROOT/'lettering/example_workflows/08-integrated-tiled-cleanup-lettering.api.json'
 EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tif', '.tiff', '.gif'}
-LEGACY_PAGE_PIXELS = 16*1024*1024
-MAX_SOURCE_PIXELS = 64*1024*1024  # Safety ceiling; model work is already tile/region bounded.
 MAX_PAGE_PIXELS = MAX_SOURCE_PIXELS  # Backward-compatible public/CLI name.
-MAX_INPUT_BYTES = 256*1024*1024
 ACTIVE = {'submitting', 'queued', 'running', 'collecting'}
 FINISHED = {'completed', 'unchanged_blank', 'needs_review'}
 PROJECT_CONTROL_INPUTS = ('input_mode', 'input_folder', 'project_name', 'action')
+LEGACY_SIZE_FAILURE_MARKERS = (
+    'at most 16 Mi pixels',
+    'exceed 16 Mi pixels',
+    'exceeds 4 Mi pixels',
+    'at most 4 Mi pixels',
+    'Total typography area exceeds 16 Mi pixels',
+)
 
 
 class ProjectError(RuntimeError):
@@ -97,10 +111,10 @@ def project_lock(folder):
         else:
             import fcntl
             try:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError as exc:
                 raise ProjectError('This project is already being run') from exc
-            unlock = lambda: fcntl.flock(handle, fcntl.LOCK_UN)
+            unlock = lambda: fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
         try:
             yield
         finally:
@@ -367,6 +381,7 @@ class Project:
         folders = list(self._page_dir(page).glob('attempt-*'))
         number = max((int(p.name.split('-')[1]) for p in folders if re.fullmatch(r'attempt-\d{6}', p.name)), default=0)+1
         return {**page, 'attempt':number, 'status':'preparing', 'workflow_sha256':self.config['workflow_sha256'],
+                'resource_contract_version':RESOURCE_CONTRACT_VERSION,
                 'created_at':datetime.now(timezone.utc).isoformat(timespec='seconds')}
 
     def _prepare_project(self):
@@ -661,7 +676,12 @@ class Project:
             policy_retry = (self._retry_policy_failures and state['status'] == 'failed'
                             and state.get('reason') == 'invalid_input'
                             and state.get('failure_message') == 'Input exceeds configured pixel budget')
-            if state['status'] == 'failed' and not self.retry_failed and not policy_retry: return
+            legacy_runtime_retry = (state['status'] == 'failed'
+                                    and state.get('resource_contract_version',0) < RESOURCE_CONTRACT_VERSION
+                                    and any(marker in str(state.get('failure_message',''))
+                                            for marker in LEGACY_SIZE_FAILURE_MARKERS))
+            if state['status'] == 'failed' and not self.retry_failed and not policy_retry and not legacy_runtime_retry:
+                return
         state = self._new(page)
         self._save(state)
         try:
