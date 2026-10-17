@@ -41,7 +41,11 @@ def test_same_08_has_image_folder_controls_and_native_report():
     assert g[ident]['inputs']['input_mode']=='이미지 한 장'
     assert any(n['class_type']=='PreviewAny' and n['inputs'].get('source')==[ident,2] for n in g.values())
     assert not (ROOT/'web/projects.js').exists()
-    assert 'WEB_DIRECTORY' not in (ROOT/'__init__.py').read_text()
+    frontend=(ROOT/'web/folder_upload.js').read_text(encoding='utf-8')
+    assert 'webkitdirectory' in frontend and '/upload/image' in frontend
+    assert 'form.append("type", "input")' in frontend and 'input_folder' in frontend
+    assert 'button.serialize = false' in frontend and 'options || {}), serialize: false' in frontend
+    assert "WEB_DIRECTORY = './web'" in (ROOT/'__init__.py').read_text(encoding='utf-8')
 
 
 def test_controller_saves_current_graph_and_resumes_without_repeating(tmp_path):
