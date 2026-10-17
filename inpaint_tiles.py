@@ -9,6 +9,7 @@ import math
 import numpy as np
 from scipy import ndimage
 
+from .limits import MAX_SOURCE_PIXELS
 from .lettering.nodes import image, mask, tensor
 
 
@@ -84,6 +85,21 @@ def _recover_uniform_regions(original, raw, pending, document):
     return base,recovered,remaining,permitted,reports
 
 
+def _empty_plan(original, raw, pending, cleanup_mask, tile_size, context):
+    """Cheap no-text/no-cleanup page plan; never run full-page component labeling."""
+    height,width=raw.shape
+    snapshot=original.copy()
+    report={'schema':1,'method':'bounded_mask_tiles','page_size':[width,height],
+            'cleanup_skipped':True,'skip_reason':'empty_masks','tile_core':tile_size,'context':context,
+            'tile_count':0,'source_components':0,'uniform_filled_components':0,
+            'source_mask_pixels':0,'cleanup_mask_pixels':0,'effective_cleanup_mask_pixels':0,
+            'uniform_region_recovery':[],'qwen_mask_pixels':0,'tile_boxes':[],
+            'coverage':'empty mask; no tile ownership required',
+            'limitation':'undetected text outside the source mask is not automatically certified or erased'}
+    return {'version':1,'original':snapshot,'base':snapshot,'source_mask':raw,
+            'cleanup_mask':pending,'tiles':[],'report':report}
+
+
 def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, max_tiles=64, uniform_fill=True,
               regions_json=None,recover_uniform_ink=False):
     if type(tile_size) is not int or not 64 <= tile_size <= 512:
@@ -94,14 +110,18 @@ def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, m
             or type(recover_uniform_ink) is not bool):
         raise ValueError('Invalid cleanup planning options')
     height, width = original.shape[:2]
-    if width*height > 16*1024*1024 or source_mask.shape != (height, width) or cleanup_mask.shape != (height, width):
-        raise ValueError('Cleanup page/mask dimensions differ or exceed 16 Mi pixels')
+    if width*height > MAX_SOURCE_PIXELS or source_mask.shape != (height, width) or cleanup_mask.shape != (height, width):
+        raise ValueError('Cleanup page/mask dimensions differ or exceed the 64 Mi-pixel source-page ceiling')
     if not np.isfinite(original).all() or not np.isfinite(source_mask).all() or not np.isfinite(cleanup_mask).all():
         raise ValueError('Cleanup input contains nonfinite pixels')
     pending = cleanup_mask > .5
     raw = source_mask > .5
     if np.any(raw & ~pending):
         raise ValueError('Cleanup mask must cover every source-mask pixel')
+    # no_text_detected pages are common in books.  Return before ndimage.label,
+    # full-page coverage allocation, or any Qwen dependency.
+    if not raw.any() and not pending.any():
+        return _empty_plan(original,raw,pending,cleanup_mask,tile_size,context)
     base = original.copy()
     permitted=pending.copy()
     recovery=[]
@@ -203,6 +223,10 @@ def assemble(plan, generated, strict_cleanup=True):
         raise ValueError('Expected an inpaint tile plan')
     if len(generated) != len(plan['tiles']):
         raise ValueError('Generated tile count differs from plan; no partial page was accepted')
+    if not plan['tiles'] and plan.get('report',{}).get('cleanup_skipped'):
+        report = {**plan['report'], 'tile_checks': [], 'outside_mask_unchanged': True,
+                  'quality_check': 'cleanup skipped because both source and cleanup masks are empty'}
+        return plan['original'].copy(), json.dumps(report, ensure_ascii=False, indent=2)
     output = plan['base'].copy()
     checks = []
     for index, (tile, candidate) in enumerate(zip(plan['tiles'], generated)):
@@ -225,7 +249,8 @@ def assemble(plan, generated, strict_cleanup=True):
             raise ValueError(f'Cleanup tile {index+1} retained nearly all source ink; lettering was stopped. '
                              'Inspect the tile or change the native sampler seed. This is a pixel check, not OCR certification.')
         output[y0:y1, x0:x1][owned] = candidate[owned]
-    if not np.array_equal(output[~plan['cleanup_mask']], plan['original'][~plan['cleanup_mask']]):
+    changed_outside = np.any(output != plan['original'], axis=2) & ~plan['cleanup_mask']
+    if np.any(changed_outside):
         raise ValueError('Cleanup changed pixels outside the permitted mask')
     report = {**plan['report'], 'tile_checks': checks,
               'outside_mask_unchanged': True,
