@@ -10,7 +10,7 @@ import uuid
 from .tools.run_project import (Project, ProjectError, Paused, InputError, ACTIVE, FINISHED,
     atomic_write, json_bytes, read_json, project_lock, normalise_image, digest, workflow_bindings)
 
-VERSION = '0.4.0'
+VERSION = '0.4.1'
 
 
 def _write_run(folder, run):
@@ -62,7 +62,7 @@ class CanvasExecution:
             return False
         return True
 
-    def _reconcile(self, project, state, retry):
+    def _reconcile(self, project, state, retry, current_prompt_id):
         history = project.client.history(state['prompt_id'])
         if history:
             status = history.get('status') or {}
@@ -75,6 +75,8 @@ class CanvasExecution:
         if project._queue_identity(state):
             raise Paused('이전 페이지 작업이 현재 큐에 있습니다. 기존 작업이 끝난 뒤 재개하세요.')
         evidence = project.client.restart_evidence(state) if retry and hasattr(project.client,'restart_evidence') else None
+        if not evidence and retry and hasattr(project.client,'orphan_evidence'):
+            evidence=project.client.orphan_evidence(state,current_prompt_id)
         if evidence:
             # A normal canvas node must never wait for another queued prompt:
             # the native executor is occupied by this very prompt.
@@ -84,11 +86,18 @@ class CanvasExecution:
                     project._collect(state,history); return
                 if project._queue_identity(state):
                     raise Paused('기존 작업이 큐에 나타났습니다. 중복 실행하지 않고 중단합니다.')
-            state.update(status='failed',reason='server_restarted_outcome_lost',restart_recovery=evidence,
-                failure_message='재시작 전 작업의 큐·이력과 프로세스 시각을 확인했습니다. 이전 시도를 보존하고 명시적 재시도를 허용합니다.')
+            state.update(status='failed',reason='server_restarted_outcome_lost' if evidence['kind']=='native_process_restart' else 'native_queue_outcome_lost',
+                restart_recovery=evidence,
+                failure_message='현재 네이티브 실행에서 이전 작업의 큐·이력 부재를 재확인했습니다. 이전 결과는 미확정으로 보존하고 명시적 재시도를 허용합니다.')
             project._save(state)
             return
-        raise Paused('이전 페이지가 큐·이력에 없습니다. 서버 재시작이 확인되면 실패 재시도로 복구하세요.')
+        error=Paused('이전 페이지가 큐·이력에 없습니다. 같은 입력 노드에서 실패 재시도를 선택하세요.' if not retry else
+                     '이전 페이지의 결과가 없고 현재 네이티브 실행 소유권도 확인하지 못했습니다. recovery_check를 확인하세요.')
+        error.recovery_check={'code':'explicit_retry_required' if not retry else 'native_ownership_or_restart_unverified',
+            'retry_requested':retry,'previous_prompt_id':state['prompt_id'],'current_prompt_id':current_prompt_id,
+            'relative_path':state['relative_path'],'previous_created_at':state.get('created_at'),
+            'previous_updated_at':state.get('updated_at'),'current_process':getattr(project.client,'execution_context',None)}
+        raise error
 
     def report(self, project, run, message=None):
         report = project._summary(run.get('message') if run['status']=='paused' else None)
@@ -97,7 +106,8 @@ class CanvasExecution:
             'message':message or run.get('message',''),'requested_action':run['requested_action'],
             'running':run['phase']=='processing','current_page':run.get('current_page'),
             'pages_visited':len(run['visited']),'pages_selected':len(run['page_ids']),
-            'project_folder':str(project.destination), **({'export':run['export']} if 'export' in run else {})}
+            'project_folder':str(project.destination),
+            **({'recovery_check':run['recovery_check']} if 'recovery_check' in run else {}), **({'export':run['export']} if 'export' in run else {})}
 
     def _finish(self, project, run):
         report = project._summary()
@@ -129,18 +139,23 @@ class CanvasExecution:
                 state = project.state(next(p for p in project.pages if p['id']==run['active_page']))
                 return self._page_result(project,run,state,source_id)
             try:
+                if continuation is None:
+                    # Record this actual invocation before reconciliation can
+                    # pause. An older run's action must never label this Run.
+                    run = {'schema':1,'run_id':uuid.uuid4().hex,'project_id':project.project_id,
+                           'source_node':str(source_id),'source_folder':str(inputs.resolve()),
+                           'requested_action':action,'invocation_prompt_id':prompt_id,
+                           'status':'running','phase':'selecting','visited':[],'page_ids':[],
+                           'active_prompt':None,'stop_requested':False}
+                    _write_run(folder,run)
                 for page in project.recovery_pages:
                     state = project.state(page)
                     if state and state['status'] in ACTIVE:
-                        self._reconcile(project,state,retry)
+                        self._reconcile(project,state,retry,prompt_id)
                         if run and run.get('active_prompt') == state['prompt_id'] and state['status'] not in ACTIVE:
                             run.update(active_prompt=None,last_resolved_prompt=state['prompt_id'])
                 if continuation is None:
-                    run = {'schema':1,'run_id':uuid.uuid4().hex,'project_id':project.project_id,
-                           'source_node':str(source_id),'source_folder':str(inputs.resolve()),
-                           'requested_action':action,'status':'running','phase':'selecting',
-                           'visited':[],'page_ids':[p['id'] for p in project.pages if self._eligible(project,p,retry)],
-                           'active_prompt':None,'stop_requested':False}
+                    run['page_ids']=[p['id'] for p in project.pages if self._eligible(project,p,retry)]
                     # The live graph remains authoritative; processing changes are
                     # rejected by the same fingerprint, while prefix links may migrate.
                     atomic_write(folder/'workflow.api.json',json_bytes(graph))
@@ -175,7 +190,9 @@ class CanvasExecution:
                 if not run:
                     run={'schema':1,'run_id':uuid.uuid4().hex,'project_id':project.project_id,'source_node':str(source_id),
                          'source_folder':str(inputs.resolve()),'requested_action':action,'visited':[],'page_ids':[]}
-                run.update(status='paused',phase='paused',message=str(exc),stop_requested=True); _write_run(folder,run)
+                run.update(status='paused',phase='paused',message=str(exc),stop_requested=True)
+                if hasattr(exc,'recovery_check'): run['recovery_check']=exc.recovery_check
+                _write_run(folder,run)
                 return {'report':self.report(project,run),'ticket':None}
 
     def _page_result(self, project, run, state, source_id):
@@ -195,7 +212,8 @@ class CanvasExecution:
                 'run_id':run['run_id'],'status':run['status'],'phase':run['phase'],
                 'halted':run.get('message') if run['status']=='paused' else None,
                 'message':run.get('message',''),'running':run['phase']=='processing',
-                'current_page':run.get('current_page'),'requested_action':run['requested_action']}
+                'current_page':run.get('current_page'),'requested_action':run['requested_action'],
+                **({'recovery_check':run['recovery_check']} if 'recovery_check' in run else {})}
 
     def refresh(self, folder, client):
         run=_read_run(folder)

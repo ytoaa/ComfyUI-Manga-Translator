@@ -84,6 +84,16 @@ async function finish(promptId, interrupted = false) {
         if (!result || result.pending) throw new Error("완료 이력을 확인하지 못했습니다. 상태 확인 후 재개하세요.");
         if (node) showReport(node, result.report);
         if (!result.continue || job.stopped) return;
+        // ComfyUI can emit execution_error/success while its original
+        // app.queuePrompt is still updating the job UI. A reentrant call queues
+        // work but returns false, before serializing our continuation marker.
+        // Wait for that ordinary submission to finish, then enqueue exactly once.
+        for (let count = 0; app.processingQueue; count++) {
+            if (job.stopped) return;
+            if (count >= 300) throw new Error("기본 Run 제출 처리가 끝나지 않았습니다. 상태 확인 후 재개하세요.");
+            await delay(100);
+        }
+        if (job.stopped) return;
         const current = sameCanvas(job);
         if (!current) { await pause(job); return; }
         // Only this queue call gets the continuation property. ComfyUI serializes

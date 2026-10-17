@@ -203,3 +203,85 @@ def test_native_interruption_stops_sequence_and_preserves_attempt(tmp_path):
     assert not report['continue'] and report['report']['status']=='paused'
     assert report['report']['counts']=={'failed':1,'pending':1}
     assert len(list(folder.glob('pages/*/attempt-*/state.json')))==1
+
+
+def native_retry(engine,client,inputs,folder,*,running=True,action='실패 재시도'):
+    ident=str(uuid.uuid4());g=graph();source=P.workflow_bindings(g)['load']
+    g[source]['inputs'].update(input_mode='폴더 프로젝트',input_folder='book',project_name='book',action=action)
+    client.source_id=source
+    row=[0,ident,g,{'client_id':'browser'},[]]
+    client.server.prompt_queue.running=[row] if running else []
+    client.server.prompt_queue.pending=[] if running else [row]
+    return ident,engine.begin(inputs,folder,g,client,ident,source,action)
+
+
+def test_repeated_pause_reports_this_invocation_action_not_previous_start(tmp_path):
+    engine,client,inputs,folder=setup_book(tmp_path)
+    old,result=begin(engine,client,inputs,folder)
+    first=begin(engine,client,inputs,folder)[1]
+    assert first['report']['requested_action']=='시작·재개'
+    second=begin(engine,client,inputs,folder,action='실패 재시도')[1]
+    assert second['report']['requested_action']=='실패 재시도'
+    assert second['report']['run_id'] != first['report']['run_id']
+    assert second['report']['recovery_check']['code']=='native_ownership_or_restart_unverified'
+    assert second['report']['recovery_check']['retry_requested']
+    assert second['report']['recovery_check']['previous_prompt_id']==old
+    assert engine.snapshot(folder)['recovery_check']==second['report']['recovery_check']
+    assert P.read_json(next(folder.glob('pages/*/attempt-*/state.json')))['status']=='running'
+
+
+def test_reported_orphan_attempt_three_retries_in_current_canvas_without_process_clock(tmp_path):
+    engine,client,inputs,folder=setup_book(tmp_path)
+    old,result=begin(engine,client,inputs,folder)
+    path=next(folder.glob('pages/*/attempt-*/state.json'))
+    state=P.read_json(path)
+    old_dir=path.parent;new_dir=old_dir.with_name('attempt-000003');old_dir.rename(new_dir)
+    state.update(attempt=3,output_prefix=state['output_prefix'].replace('a000001','a000003'),
+                 created_at='2026-10-17T13:47:39+00:00',updated_at='2026-10-17T13:47:50+00:00')
+    old_bytes=P.json_bytes(state);(new_dir/'state.json').write_bytes(old_bytes)
+    input_bytes=(new_dir/'input.png').read_bytes()
+    ident,current=native_retry(engine,client,inputs,folder)
+    assert current['ticket']['prompt_id']==ident and current['ticket']['relative_path']=='1.png'
+    assert current['report']['requested_action']=='실패 재시도'
+    retired=P.read_json(new_dir/'state.json')
+    assert retired['reason']=='native_queue_outcome_lost' and retired['prompt_id']==old
+    assert retired['restart_recovery']['previous_outcome']=='unknown'
+    assert (new_dir/'input.png').read_bytes()==input_bytes
+    newest=P.read_json(new_dir.with_name('attempt-000004')/'state.json')
+    assert newest['status']=='running' and newest['prompt_id']==ident
+    assert not client.server.prompt_queue.pending
+
+
+@pytest.mark.parametrize('kind',['running','pending','token_match'])
+def test_explicit_native_retry_never_retires_job_still_owned_by_queue(tmp_path,kind):
+    engine,client,inputs,folder=setup_book(tmp_path)
+    old,result=begin(engine,client,inputs,folder)
+    path=next(folder.glob('pages/*/attempt-*/state.json'));before=path.read_bytes()
+    state=P.read_json(path);original=client.orphan_evidence
+    def evidence(saved,ident):
+        row=[9,old if kind!='token_match' else str(uuid.uuid4()),{},
+             {'manga_project':state['submission_token']} if kind=='token_match' else {},[]]
+        getattr(client.server.prompt_queue,'pending' if kind=='pending' else 'running').append(row)
+        return original(saved,ident)
+    client.orphan_evidence=evidence
+    ident,current=native_retry(engine,client,inputs,folder)
+    assert not current['ticket'] and current['report']['status']=='paused'
+    assert path.read_bytes()==before
+    assert not path.parent.with_name('attempt-000002').exists()
+
+
+def test_pending_control_prompt_does_not_prove_native_executor_ownership(tmp_path):
+    engine,client,inputs,folder=setup_book(tmp_path)
+    begin(engine,client,inputs,folder)
+    ident,result=native_retry(engine,client,inputs,folder,running=False)
+    assert not result['ticket'] and result['report']['status']=='paused'
+    assert result['report']['recovery_check']['code']=='native_ownership_or_restart_unverified'
+    assert len(list(folder.glob('pages/*/attempt-*/state.json')))==1
+
+
+def test_native_ordinary_resume_still_requires_explicit_orphan_retry(tmp_path):
+    engine,client,inputs,folder=setup_book(tmp_path)
+    begin(engine,client,inputs,folder)
+    ident,result=native_retry(engine,client,inputs,folder,action='시작·재개')
+    assert not result['ticket'] and result['report']['recovery_check']['code']=='explicit_retry_required'
+    assert len(list(folder.glob('pages/*/attempt-*/state.json')))==1

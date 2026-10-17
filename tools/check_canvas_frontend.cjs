@@ -87,6 +87,16 @@ const flush = async () => { for(let i=0;i<8;i++) await new Promise(resolve=>setI
     await stop.node.widgets.find(w=>w.type==='button').callback();
     stop.event('execution_success',{prompt_id:'prompt-1'});await flush();assert.equal(stop.queued.length,0);
     assert.ok(stop.requested.every(r=>!r.url.includes('/interrupt'))); // Never cancel foreign core jobs.
+    const busy=await fixture();busy.app.processingQueue=true;
+    busy.event('execution_success',{prompt_id:'prompt-1'});await flush();
+    assert.equal(busy.queued.length,0);
+    busy.app.processingQueue=false;await new Promise(resolve=>setTimeout(resolve,140));
+    assert.equal(busy.queued.length,1);assert.equal(busy.node.properties.manga_canvas_run,undefined);
+    const busyStop=await fixture();busyStop.app.processingQueue=true;
+    busyStop.event('execution_success',{prompt_id:'prompt-1'});await flush();
+    await busyStop.node.widgets.find(w=>w.type==='button').callback();
+    busyStop.app.processingQueue=false;await new Promise(resolve=>setTimeout(resolve,140));
+    assert.equal(busyStop.queued.length,0);
     const early=await fixture({delayedTicket:true});
     await early.node.widgets.find(w=>w.type==='button').callback();
     early.event('executed',{node:'1',output:{manga_workflow:[early.ticket]}});await flush();

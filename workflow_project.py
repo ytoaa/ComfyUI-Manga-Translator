@@ -84,6 +84,34 @@ class NativeComfyClient:
                 'previous_prompt_id':state['prompt_id'],
                 'requested_action':'실패 재시도'}
 
+    def orphan_evidence(self, state, current_prompt_id):
+        """Explicit retry inside a live native canvas prompt, never an HTTP guess.
+
+        The core queue owns execution membership. With this canvas node actually
+        running, an old prompt absent from both running and pending rows cannot
+        be that executor's concurrent job. History may still have been evicted.
+        The caller rechecks history and queue before retiring the old record.
+        """
+        if current_prompt_id == state.get('prompt_id'): return None
+        running,pending = self.server.prompt_queue.get_current_queue()
+        rows = list(running)+list(pending)
+        for row in rows:
+            if not isinstance(row,(list,tuple)) or len(row)<4: return None
+            extra=row[3] if isinstance(row[3],dict) else {}
+            if row[1] == state.get('prompt_id') or extra.get('manga_project') == state.get('submission_token'):
+                return None
+        own=[row for row in running if row[1] == current_prompt_id]
+        if len(own) != 1: return None
+        graph=own[0][2]
+        node=graph.get(getattr(self,'source_id',None)) if isinstance(graph,dict) else None
+        if not isinstance(node,dict) or node.get('class_type') != 'MangaWorkflowInput': return None
+        settings=node.get('inputs',{})
+        if settings.get('input_mode') != '폴더 프로젝트' or settings.get('action') != '실패 재시도': return None
+        return {'kind':'native_queue_outcome_lost','current_prompt_id':current_prompt_id,
+                'previous_prompt_id':state['prompt_id'],'requested_action':'실패 재시도',
+                'previous_outcome':'unknown','queue_membership':'old_prompt_absent',
+                'checked_at':datetime.now(timezone.utc).isoformat(timespec='seconds')}
+
     def object_info(self):
         import nodes
         return {name:{} for name in nodes.NODE_CLASS_MAPPINGS}
