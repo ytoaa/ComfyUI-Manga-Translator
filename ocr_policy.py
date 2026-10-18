@@ -2,6 +2,7 @@
 import math
 import numpy as np
 from scipy import ndimage
+from .text_contract import ocr_problem
 
 
 def dot_punctuation(image):
@@ -92,6 +93,8 @@ def plan_line(image, max_aspect=12.):
 def text_problem(text, image, evidence=None):
     if not isinstance(text,str) or not text.strip():
         return 'empty'
+    if issue := ocr_problem(text):
+        return issue
     compact = ''.join(text.split())
     if compact and set(compact)=={'・'}:
         dots=dot_punctuation(image)

@@ -121,7 +121,7 @@ def test_unfit_translation_is_not_truncated(fixture):
         core.render_text('가'*500, fixture[3], min_font=80, max_font=80)
 
 
-@pytest.mark.parametrize('text', ['', '   ', 'a\x00b', '가'*2049, 'a\tb'])
+@pytest.mark.parametrize('text', ['', '   ', 'a\x00b', '가'*2049, 'a\tb', '미인식<UNK_SPAN>'])
 def test_invalid_or_control_text_rejected(text):
     with pytest.raises(ValueError):
         core.clean_text(text)

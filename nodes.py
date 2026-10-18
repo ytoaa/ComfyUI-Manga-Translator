@@ -7,9 +7,9 @@ import re
 from pathlib import Path
 from urllib import request, error, parse
 if __package__:
-    from . import translation_protocol
+    from . import translation_protocol, text_contract
 else:
-    import translation_protocol
+    import translation_protocol, text_contract
 
 
 def encode(value):
@@ -139,7 +139,7 @@ def api_json(base, path, api_key_env, timeout, payload=None):
         raise RuntimeError('Translation API is unreachable or timed out; check the configured server') from None
 
 
-def translations(source, response):
+def translations(source, response, normalize_breaks=True):
     rows = response.get('translations') if isinstance(response, dict) else None
     if not isinstance(rows, list):
         raise ValueError('Translation response needs a translations list')
@@ -153,7 +153,18 @@ def translations(source, response):
         mapped[row['id']] = target
     if set(mapped) != {row['id'] for row in source['regions']}:
         raise ValueError('Translation is missing regions or contains unexpected regions')
-    return {**source, 'regions': [{**row, 'target': mapped[row['id']]} for row in source['regions']]}
+    regions = []
+    for row in source['regions']:
+        target, count = text_contract.translation_text(row.get('source', ''), mapped[row['id']], normalize_breaks)
+        if not target.strip():
+            raise ValueError('Translation text is empty after line-break normalization')
+        result = {**row, 'target': target}
+        if count:
+            result['translation_diagnostics'] = {'html_breaks_to_newlines': count,
+                'raw_target': mapped[row['id']], 'scope': 'format_normalization_not_translation_accuracy'}
+            logging.getLogger(__name__).info('Translation plain text: region=%s normalized_breaks=%s', row['id'], count)
+        regions.append(result)
+    return {**source, 'regions': regions}
 
 
 def _detector_region(item, width, height):
@@ -402,7 +413,10 @@ class MangaTranslate:
         if any(not isinstance(row.get('source'),str) or not row['source'].strip() for row in source['regions']):
             raise ValueError('Connect collected OCR text before translation')
         if translated_override_json.strip():
-            return (encode(translations(source,decode(translated_override_json))),)
+            return (encode(translations(source,decode(translated_override_json),normalize_breaks=False)),)
+        for row in source['regions']:
+            if text_contract.ocr_problem(row['source']):
+                raise ValueError(f"ocr_unrecognized_span: {row['id']} contains <UNK_SPAN>; rerun OCR or supply a reviewed translation override")
         preserved=[{'id':row['id'],'target':value} for row in source['regions']
                    if (value:=verified_dot_text(row)) is not None]
         preserved_ids={row['id'] for row in preserved}
@@ -421,7 +435,8 @@ class MangaTranslate:
                   'Use the full page text for context. Keep every ID and do not merge, omit, summarize, or add regions. '
                   'Return one complete JSON object only, with no Markdown fences or commentary: '
                   '{"translations":[{"id":"r1","target":"translated text"}]}. '
-                  'Preserve names and meaning; use natural comic dialogue. Preserve paragraph breaks where useful.')
+                  'Preserve names and meaning; use natural comic dialogue. Preserve paragraph breaks where useful. '
+                  'Targets are plain text, never HTML or Markdown. Encode line breaks as JSON \\n escapes, never <br> tags.')
         messages = [{'role':'system','content':system},{'role':'user','content':encode({'regions':[{'id':r['id'],'source':r['source']} for r in requested]})}]
         format_options = translation_protocol.response_format(response_format, requested)
         attempts = []
@@ -465,6 +480,7 @@ class MangaTranslate:
                         'The previous answer did not satisfy the required JSON/region contract. '
                         'Translate every original region again and return ONLY one complete JSON object '
                         'with a translations array containing each original id exactly once and a nonempty target. '
+                        'Targets must be plain text with JSON \\n escapes for line breaks and no unresolved OCR markers. '
                         'Do not use Markdown fences, reasoning, commentary, partial JSON, or change the original IDs.'}]
                     continue
                 path = translation_protocol.save_failure(source, settings, attempts, 'invalid_translation')

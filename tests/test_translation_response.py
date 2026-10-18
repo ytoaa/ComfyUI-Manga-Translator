@@ -59,6 +59,61 @@ def run(monkeypatch, responses):
         'fixture-model', 'Korean', '', 4096, 300)[0]
 
 
+def test_model_html_breaks_become_real_newlines_with_visible_evidence(monkeypatch):
+    answer = {'translations': [{'id': 'a', 'target': '선생님<br>안녕<BR/>다음<br />끝'},
+                               {'id': 'b', 'target': '안녕하세요'}]}
+    calls, invoke = run(monkeypatch, [reply(N.encode(answer))])
+    row = json.loads(invoke())['regions'][0]
+    assert row['target'] == '선생님\n안녕\n다음\n끝'
+    assert row['translation_diagnostics']['html_breaks_to_newlines'] == 3
+    assert row['translation_diagnostics']['raw_target'] == answer['translations'][0]['target']
+    assert 'plain text' in calls[0]['messages'][0]['content']
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize('text', ['a < b > c', '<3 &amp; <b>literal</b>', '<br class="x">'])
+def test_plain_text_is_not_interpreted_as_general_html(text):
+    source = {'regions': [{'id': 'a', 'source': '原文'}]}
+    assert N.translations(source, {'translations': [{'id': 'a', 'target': text}]})['regions'][0]['target'] == text
+
+
+def test_literal_source_break_tag_and_manual_override_are_preserved(monkeypatch):
+    source = {'regions': [{'id': 'a', 'bbox': [0, 0, 100, 100], 'source': 'Use <br> literally.'}]}
+    answer = {'translations': [{'id': 'a', 'target': '<br> 태그'}]}
+    assert N.translations(source, answer)['regions'][0]['target'] == '<br> 태그'
+    source['regions'][0]['source'] = '原文'
+    monkeypatch.setattr(N, 'api_json', lambda *a, **k: pytest.fail('manual override must not call API'))
+    result = N.MangaTranslate().translate(N.encode(source), '', '', '', '', 4096, 300, N.encode(answer))
+    assert json.loads(result[0])['regions'][0]['target'] == '<br> 태그'
+
+
+def test_cached_unreadable_ocr_requires_rerecognition_or_reviewed_override(monkeypatch):
+    source = {'regions': [{'id': 'a', 'bbox': [0, 0, 100, 100], 'source': '文<UNK_SPAN>字'}]}
+    monkeypatch.setattr(N, 'api_json', lambda *a, **k: pytest.fail('unresolved OCR must not reach API'))
+    node = N.MangaTranslate()
+    with pytest.raises(ValueError, match='ocr_unrecognized_span: a'):
+        node.translate(N.encode(source), '', '', '', '', 4096, 300)
+    override = N.encode({'translations': [{'id': 'a', 'target': '검수한 원문 번역'}]})
+    assert json.loads(node.translate(N.encode(source), '', '', '', '', 4096, 300, override)[0])['regions'][0]['target'] == '검수한 원문 번역'
+
+
+def test_generated_unknown_marker_retries_once_and_keeps_failure_evidence(monkeypatch, tmp_path):
+    bad = {'translations': [{'id': 'a', 'target': '<UNK_SPAN>'}, {'id': 'b', 'target': '안녕'}]}
+    calls, invoke = run(monkeypatch, [reply(N.encode(bad)), reply(N.encode(bad))])
+    with pytest.raises(ValueError, match='ocr_unrecognized_span'):
+        invoke()
+    assert len(calls) == 2
+    report = json.loads(next((tmp_path/'diagnostics').glob('*.json')).read_text())
+    assert len(report['attempts']) == 2
+    assert '<UNK_SPAN>' in report['attempts'][0]['content']
+
+
+def test_break_only_target_cannot_pass_as_nonempty_translation():
+    source = {'regions': [{'id': 'a', 'source': '原文'}]}
+    with pytest.raises(ValueError, match='empty after line-break'):
+        N.translations(source, {'translations': [{'id': 'a', 'target': '<br><br/>'}]})
+
+
 def test_complete_json_without_closing_fence_is_accepted_without_regeneration(monkeypatch):
     calls, translate = run(monkeypatch, [reply('```json\n'+BODY)])
     result = json.loads(translate())

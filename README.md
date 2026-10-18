@@ -1,5 +1,7 @@
 # ComfyUI-Manga-Translator
 
+v0.6.1은 번역기가 추가한 `<br>` 계열 표시를 실제 줄바꿈으로 정규화하고, OCR의 `<UNK_SPAN>` 미인식 표시가 번역·식자로 넘어가는 것을 차단한다. 변환 전 번역문과 변환 개수는 `translation_diagnostics`로 기존 `미리보기 아무거나`에서 확인한다. 08 그래프·위젯은 바뀌지 않아 v0.6.0 프로젝트 이름을 유지할 수 있다. [적용·검증·남은 한계](docs/plain-text-v0.6.1.md).
+
 ComfyUI 캔버스에서 글자 검출 → OCR → 번역 → 원문 제거 → 한글 식자 → 저장까지 실행한다. **제공 워크플로우는 [통합 08 하나](lettering/example_workflows/08-integrated-tiled-cleanup-lettering.json)**다. 첫 입력 노드에서 이미지 한 장과 폴더 프로젝트를 선택한다. 별도 사이드바나 페이지마다 다른 워크플로우는 필요하지 않다.
 
 v0.6.0은 **검출 마스크로 지지되는 기울어진 가로 글줄의 OCR 회전 보정**과 같은 각도의 식자 측정을 추가한다. 새 08의 `MangaRegionCrops.auto_deskew=true`는 각도와 여러 행이 확인될 때만 OCR용 복사본을 보정한다. `MangaInpaintAssemble.blend_width=8`은 원문 획의 제거 강도를 유지하며 마스크 여유 부분의 경계를 완화한다. 새 08을 가져오고, 폴더 프로젝트는 처리 설정이 바뀌므로 새 `project_name`을 사용한다. [보정 조건·좌표·남은 한계](docs/oriented-ocr-v0.6.0.md).

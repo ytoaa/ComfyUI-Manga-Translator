@@ -64,6 +64,35 @@ def test_short_correct_name_and_manga_elongation_remain_valid():
     assert P.text_problem('どぅぅぅ！',source) is None
 
 
+@pytest.mark.parametrize('guard', [False, True])
+@pytest.mark.parametrize('recovered', [False, True])
+def test_unknown_span_has_bounded_retry_and_never_silently_loses_text(monkeypatch, guard, recovered):
+    source = Image.new('RGB', (120, 70), 'white')
+    monkeypatch.setattr(M, 'pil_image', lambda _: source)
+    saved = []
+    monkeypatch.setattr(M, '_save_ocr_failure', lambda src, crop, diagnostic: saved.append(diagnostic) or 'fixture.json')
+    class Model:
+        calls = 0
+        def ocr(self, image, options, max_patches):
+            self.calls += 1
+            return {'text': '読めた文字' if recovered and self.calls == 2 else '読めた<UNK_SPAN>文字'}
+    model = Model()
+    def invoke():
+        return M.MangaOCRAdaptive().read(object(), model, line_split=False, quality_guard=guard,
+                                       base_patches=256, small_text_patches=512)
+    if recovered:
+        text, report, _ = invoke()
+        assert text == '読めた文字' and not saved
+        attempts = json.loads(report)['chunks'][0]['attempts']
+        assert [a['issue'] for a in attempts] == ['ocr_unrecognized_span', None]
+    else:
+        with pytest.raises(ValueError, match='ocr_unrecognized_span'):
+            invoke()
+        assert saved[0]['rejected_text'] == '読めた<UNK_SPAN>文字'
+        assert saved[0]['code'] == 'ocr_unrecognized_span'
+    assert model.calls == 2
+
+
 def test_visible_long_line_with_reported_four_character_ocr_triggers_omission_alarm():
     assert P.text_problem('面文字読',long_line()) == 'possible_omission'
     assert P.text_problem('画像の文字を読み取り、自然な韓国語に翻訳します。',long_line()) is None

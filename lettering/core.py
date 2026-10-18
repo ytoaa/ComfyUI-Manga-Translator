@@ -13,6 +13,7 @@ import unicodedata
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
+from ..text_contract import ocr_problem
 
 from ..limits import (MAX_SOURCE_PIXELS, MAX_REGION_PIXELS, MAX_RASTER_PIXELS,
                       MAX_TYPOGRAPHY_PIXELS, MAX_LETTERING_REGIONS)
@@ -257,6 +258,8 @@ def resolve_font(selection, text):
 def clean_text(text):
     if not isinstance(text, str) or not text.strip() or len(text) > MAX_TEXT:
         raise ValueError('Translation must contain 1–2048 Unicode characters')
+    if issue := ocr_problem(text):
+        raise ValueError(issue + ': resolve the unreadable OCR span before lettering')
     text = unicodedata.normalize('NFC', text.replace('\r\n', '\n').replace('\r', '\n'))
     if any(unicodedata.category(c).startswith('C') and c != '\n' for c in text):
         raise ValueError('Translation contains unsupported control characters')

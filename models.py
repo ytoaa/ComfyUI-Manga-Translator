@@ -488,6 +488,7 @@ class MangaOCRAdaptive:
         from .adapters.options import OcrOptions
         from .ocr_policy import plan_line, text_problem, join_chunks, recovery_parts, dot_punctuation
         from .adapters.hayai import preprocess_size
+        from .text_contract import ocr_problem
         import torch
         if type(base_patches) is not int or base_patches not in (256,512,1024):
             raise ValueError('Invalid base OCR patch budget')
@@ -546,7 +547,7 @@ class MangaOCRAdaptive:
                 text=_ocr_once(model,image,options,patches,repetition_penalty,retry_on_repetition,
                                retry_on_token_limit,generation)
                 quality_evidence={}
-                issue=text_problem(text,image,quality_evidence) if quality_guard else None
+                issue=text_problem(text,image,quality_evidence) if quality_guard else ocr_problem(text)
                 attempts=[{'patch_budget':patches,'model_size':list(preprocess_size(image.size,patches)),
                            'characters':len(text),'issue':issue,'generation_attempts':generation,
                            **({'quality_evidence':quality_evidence} if quality_evidence else {})}]
@@ -557,7 +558,7 @@ class MangaOCRAdaptive:
                     text=_ocr_once(model,image,options,alternate,repetition_penalty,retry_on_repetition,
                                    retry_on_token_limit,generation)
                     quality_evidence={}
-                    issue=text_problem(text,image,quality_evidence)
+                    issue=text_problem(text,image,quality_evidence) if quality_guard else ocr_problem(text)
                     attempts.append({'patch_budget':alternate,'model_size':list(preprocess_size(image.size,alternate)),
                                      'characters':len(text),'issue':issue,'generation_attempts':generation,
                                      **({'quality_evidence':quality_evidence} if quality_evidence else {})})
