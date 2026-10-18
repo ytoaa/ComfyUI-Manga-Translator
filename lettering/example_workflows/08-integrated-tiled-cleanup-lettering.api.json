@@ -97,6 +97,7 @@
       "allow_empty_page": true,
       "refine_page_columns": true,
       "auto_deskew": true,
+      "geometry_policy": "preserve_review",
       "images": [
         "1",
         0

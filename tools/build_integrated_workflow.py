@@ -23,7 +23,7 @@ def build():
     mask_slot = 0
     grown = g.add('GrowMask', pos=(1260, 400), title='제거 여유 · 기본 GrowMask')
     g.connect(raw_mask, 0, grown, 'mask')
-    crops = g.add('MangaRegionCrops', {'allow_empty_page': True, 'refine_page_columns': True,'auto_deskew':True}, pos=(1260, 50), title='④ OCR 전 단·회전 보정 · 확인된 행 분리')
+    crops = g.add('MangaRegionCrops', {'allow_empty_page': True, 'refine_page_columns': True,'auto_deskew':True,'geometry_policy':'preserve_review'}, pos=(1260, 50), title='④ OCR 전 단·회전 보정 · 잘린 글자 원본 보존·검수')
     g.connect(original, 0, crops, 'images')
     g.connect(regions, 0, crops, 'layout_json')
     ocr_model = g.import_model_node(template, 13, (1260, -220))

@@ -300,6 +300,8 @@ def workflow_fingerprint(graph, bind=None, *, legacy=False):
             node['inputs'].pop('boundary_policy')
         if node['class_type']=='MangaTranslate' and node['inputs'].get('response_format')=='json_schema':
             node['inputs'].pop('response_format')
+        if node['class_type']=='MangaRegionCrops' and node['inputs'].get('geometry_policy')=='preserve_review':
+            node['inputs'].pop('geometry_policy')
     return digest(json.dumps(canonical,ensure_ascii=False,sort_keys=True,
                              allow_nan=False,separators=(',',':')).encode())
 
@@ -742,7 +744,8 @@ class Project:
         else:
             state['status'] = 'needs_review' if source.get('needs_review') or source.get('boundary_review') or target.get('needs_review') else 'completed'
         if boundary_protected:
-            state.update(status='needs_review',reason='unresolved_detection_boundary')
+            state.update(status='needs_review',reason=source.get('review_reason',
+                         source.get('boundary_review',{}).get('reason','unresolved_detection_boundary')))
         elif edits is not None and edits.get('needs_review'):
             state.update(status='needs_review',reason=target.get('review_reason','source_edit_plan_requires_review'))
         self._save(state)

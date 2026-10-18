@@ -388,7 +388,7 @@
       ],
       "size": [
         330,
-        240
+        270
       ],
       "flags": {},
       "order": 7,
@@ -452,7 +452,8 @@
         12,
         true,
         true,
-        true
+        true,
+        "preserve_review"
       ],
       "widgets_values_named": {
         "layout_json": "{\"regions\":[{\"id\":\"r1\",\"bbox\":[0,0,1000,1000]}]}",
@@ -460,9 +461,10 @@
         "edit_margin": 12,
         "allow_empty_page": true,
         "refine_page_columns": true,
-        "auto_deskew": true
+        "auto_deskew": true,
+        "geometry_policy": "preserve_review"
       },
-      "title": "④ OCR 전 단·회전 보정 · 확인된 행 분리"
+      "title": "④ OCR 전 단·회전 보정 · 잘린 글자 원본 보존·검수"
     },
     {
       "id": 9,

@@ -55,6 +55,97 @@ def test_ambiguous_or_unneeded_deskew_keeps_the_existing_path(kind):
     assert not plan and not evidence['accepted']
 
 
+@pytest.mark.parametrize('bright',[False,True])
+def test_whole_glyph_baselines_work_for_both_ink_polarities(bright):
+    source,_,support,_=fixture()
+    if bright:source=Image.fromarray(255-np.asarray(source))
+    plan,evidence=G.plan(source,support,'r1')
+    assert len(plan['rows'])==3
+    assert evidence['row_validation']['method']=='component_baselines'
+    assert not evidence['row_validation']['clipped_source_rows']
+
+
+def test_fragmented_detector_support_cannot_split_a_whole_glyph_in_half():
+    source=Image.new('RGB',(360,180),'white');support=Image.new('L',source.size,0)
+    font=ImageFont.truetype(str(ROOT/'lettering/fonts/NanumGothic-Bold.ttf'),30)
+    for y in (10,65,120):
+        ImageDraw.Draw(source).text((20,y),'HHHHHHHH',font=font,fill='black')
+        ImageDraw.Draw(support).text((20,y),'HHHHHHHH',font=font,fill=255)
+    support=np.asarray(support).copy()>0
+    for y in (29,84,139):support[y:y+4]=False
+    old_bands=ndimage.label(support.sum(axis=1)>3)[1]
+    assert old_bands==6
+    rows,evidence=G._verified_rows(source,support,np.ones(support.shape,bool))
+    assert len(rows)==3 and not evidence['needs_review']
+    ink=np.asarray(source)[:,:,0]<128
+    for row in rows[:-1]:assert not ink[row[3]-1:row[3]+1].any()
+
+
+@pytest.mark.parametrize('cut',[50,60,70])
+def test_glyphs_already_cut_by_source_crop_are_not_certified(cut):
+    source,_,support,_=fixture()
+    h=source.height-cut;source=source.crop((0,0,source.width,h));support=support[:h]
+    plan,evidence=G.plan(source,support,'r1')
+    assert not plan and evidence['needs_review']
+    assert evidence['reason']=='source_crop_cuts_glyphs'
+    assert evidence['row_validation']['clipped_source_rows']
+
+
+def test_unverified_crop_bypasses_ocr_and_preserves_pixels_before_cleanup(monkeypatch):
+    from geometry_tests import page_edit
+    source,_,support,_=fixture();h=source.height-60
+    source=source.crop((0,0,source.width,h));support=support[:h]
+    page=tensor(np.asarray(source,np.float32)/255)
+    manifest=json.dumps({'regions':[{'id':'r1','bbox':[0,0,1000,1000]}]})
+    crops,doc,_,plans=N.MangaRegionCrops().crop(page,manifest,0,0,auto_deskew=True,
+        text_pixel_mask=torch.from_numpy(support[None].astype(np.float32)))
+    data=json.loads(doc)
+    assert data['regions']==[] and data['needs_review']
+    assert data['no_text_reason']=='unverified_ocr_geometry'
+    assert torch.equal(crops[0],page) and plans==['{}']
+    assert M.MangaOCRAdaptive().check_lazy_status(crops[0],manifest_json=doc)==[]
+    text,report,_=M.MangaOCRAdaptive().read(crops[0],manifest_json=doc)
+    collected=N.MangaCollectOCR().collect([text],[doc],[report])[0]
+    monkeypatch.setattr(N,'api_json',lambda *a,**k:pytest.fail('Unverified crop reached translation'))
+    translated=N.MangaTranslate().translate(collected,'','','','',4096,300)[0]
+    mask=torch.from_numpy(support[None].astype(np.float32))
+    edit,raw,cleanup,_,_=page_edit.MangaPageEditPlan().plan(page,translated,mask,torch.ones_like(mask))
+    assert not raw.any() and not cleanup.any()
+    data=json.loads(edit)
+    assert data['boundary_review']['reason']=='unverified_ocr_geometry'
+    original=page[0].numpy()
+    cleanup_plan=T.make_plan(original,raw[0].numpy(),cleanup[0].numpy(),regions_json=edit)
+    assert not cleanup_plan['tiles']
+    output,_=T.assemble(cleanup_plan,[])
+    assert np.array_equal(output,original)
+    with pytest.raises(ValueError,match='unverified OCR geometry'):
+        N.MangaRegionCrops().crop(page,manifest,0,0,auto_deskew=True,text_pixel_mask=mask,geometry_policy='strict')
+
+
+def test_geometry_review_closes_neighbour_ownership_before_any_crop(monkeypatch):
+    # Region order must not let an earlier neighbour escape preservation.
+    page=torch.ones((1,80,240,3));mask=torch.ones((1,80,240))
+    data={'regions':[{'id':'safe','bbox':[0,0,300,1000]},
+                     {'id':'bad','bbox':[290,0,600,1000]},
+                     {'id':'separate','bbox':[800,0,1000,1000]}]}
+    monkeypatch.setattr(G,'plan',lambda image,support,ident: ({},{'needs_review':True,'reason':'source_crop_cuts_glyphs'}) if ident=='bad' else ({},{}))
+    crops,doc,_,_=N.MangaRegionCrops().crop(page,json.dumps(data),0,0,auto_deskew=True,text_pixel_mask=mask)
+    data=json.loads(doc)
+    assert [r['id'] for r in data['regions']]==['separate'] and len(crops)==1
+    assert data['ocr_geometry_review']['preserved_region_ids']==['safe','bad']
+
+
+def test_geometry_policy_default_keeps_existing_project_identity():
+    from geometry_tests.tools.run_project import workflow_fingerprint
+    graph=json.loads((ROOT/'lettering/example_workflows/08-integrated-tiled-cleanup-lettering.api.json').read_text())
+    old=deepcopy(graph)
+    crop=next(n for n in graph.values() if n['class_type']=='MangaRegionCrops')
+    crop['inputs']['geometry_policy']='preserve_review'
+    assert workflow_fingerprint(graph)==workflow_fingerprint(old)
+    crop['inputs']['geometry_policy']='strict'
+    assert workflow_fingerprint(graph)!=workflow_fingerprint(old)
+
+
 @pytest.mark.parametrize('change',['size','angle','row_gap','frame'])
 def test_changed_geometry_is_rejected_before_recognition(change):
     source,_,support,_=fixture()

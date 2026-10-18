@@ -254,14 +254,16 @@ class MangaRegionCrops:
                     'refine_page_columns': ('BOOLEAN', {'default': False,
                     'tooltip': '반복되는 다단 본문과 단을 가로지르는 중복 검출을 픽셀 여백으로 확인한 경우 OCR 전에 나눕니다. ocr_region_plans를 OCR에 연결하세요.'}),
                     'auto_deskew': ('BOOLEAN', {'default':False,'tooltip':'검출 마스크 안에서 회전과 여러 행이 확인될 때만 OCR 입력을 수평 보정합니다. 인식 정확도 보증은 아닙니다.'}),
-                    'text_pixel_mask': ('MASK', {'tooltip':'회전 분석용 원문 검출 마스크. 원본 픽셀은 바꾸지 않습니다.'})}}
+                    'text_pixel_mask': ('MASK', {'tooltip':'회전 분석용 원문 검출 마스크. 원본 픽셀은 바꾸지 않습니다.'}),
+                    'geometry_policy': (['preserve_review','strict'], {'default':'preserve_review',
+                        'tooltip':'회전 크롭에서 글자 잘림/행 불확실성을 확인하면 원문 보존·검수합니다. strict는 OCR 전에 중단합니다.'})}}
     RETURN_TYPES = ('IMAGE', 'STRING', 'MASK', 'STRING')
     RETURN_NAMES = ('ocr_crops', 'manifest_json', 'edit_region_mask', 'ocr_region_plans')
     OUTPUT_IS_LIST = (True, False, False, True)
     FUNCTION = 'crop'
     CATEGORY = 'Manga Translator/Regions'
 
-    def crop(self, images, layout_json, ocr_padding=4, edit_margin=12, allow_empty_page=False, refine_page_columns=False, auto_deskew=False, text_pixel_mask=None):
+    def crop(self, images, layout_json, ocr_padding=4, edit_margin=12, allow_empty_page=False, refine_page_columns=False, auto_deskew=False, text_pixel_mask=None, geometry_policy='preserve_review'):
         import torch
         if images.ndim != 4 or images.shape[0] != 1 or images.shape[-1] != 3:
             raise ValueError('Load one RGB page at a time')
@@ -270,6 +272,8 @@ class MangaRegionCrops:
         data = layout(layout_json)
         if any(type(v) is not bool for v in (allow_empty_page,refine_page_columns,auto_deskew)):
             raise ValueError('Invalid crop switches')
+        if geometry_policy not in ('preserve_review','strict'):
+            raise ValueError('Invalid OCR geometry policy')
         if not data['regions'] and not allow_empty_page:
             raise ValueError('No selected text regions; load the updated 08 workflow for unchanged-page output')
         height, width = images.shape[1:3]
@@ -301,6 +305,7 @@ class MangaRegionCrops:
             from .models import pil_image
             source_image=pil_image(images)
         crops, rows, plans = [], [], []
+        entries=[];geometry_protected=[];geometry_review=[]
         for row in data['regions']:
             box = pixel_box(row['bbox'],width,height,ocr_padding)
             edit = pixel_box(row['bbox'],width,height,edit_margin)
@@ -323,6 +328,39 @@ class MangaRegionCrops:
                 from . import text_geometry
                 plan,analysis=text_geometry.plan(source_image.crop(tuple(box)),
                     deskew_support[0,box[1]:box[3],box[0]:box[2]],row['id'])
+            if analysis.get('needs_review'):
+                if geometry_policy=='strict':
+                    raise ValueError(f"{row['id']}: unverified OCR geometry ({analysis['reason']}); crop={box}; inspect OCR crop/geometry preview")
+                geometry_protected.append([min(box[0],edit[0]),min(box[1],edit[1]),
+                                           max(box[2],edit[2]),max(box[3],edit[3])])
+                geometry_review.append({'id':row['id'],'crop_bbox_pixels':box,
+                                        'edit_bbox_pixels':edit,'analysis':analysis})
+            entries.append((row,box,edit,plan,analysis))
+        if geometry_review:
+            # Close ownership overlaps before any crop, OCR or cleanup. Earlier
+            # safe-looking regions can touch a later unverified crop.
+            changed=True;blocked={r['id'] for r in geometry_review}
+            while changed:
+                changed=False
+                for row,box,edit,plan,analysis in entries:
+                    if row['id'] not in blocked and any(boundary_review.intersects(box,b) or boundary_review.intersects(edit,b)
+                                                       for b in geometry_protected):
+                        blocked.add(row['id']);geometry_protected.append([min(box[0],edit[0]),min(box[1],edit[1]),max(box[2],edit[2]),max(box[3],edit[3])]);changed=True
+            previous=data.get('boundary_review',{})
+            if len(protected)+len(geometry_protected)>512:
+                raise ValueError('OCR geometry protection exceeds limit=512; review page layout')
+            data={**data,'needs_review':True,'review_reason':'unverified_ocr_geometry',
+                  'ocr_geometry_review':{'schema':1,'reason':'unverified_ocr_geometry','regions':geometry_review,
+                                         'preserved_region_ids':[e[0]['id'] for e in entries if e[0]['id'] in blocked]},
+                  'boundary_review':{**previous,'schema':1,'reason':previous.get('reason','unverified_ocr_geometry'),
+                                     'protected_boxes_pixels':protected+geometry_protected}}
+            entries=[e for e in entries if e[0]['id'] not in blocked]
+            data={**data,'regions':[e[0] for e in entries]}
+            logging.getLogger(__name__).warning('Manga OCR geometry: preserving %s regions before OCR; reason=unverified_ocr_geometry',len(blocked))
+            if not entries:
+                return ([images],encode({**data,'image_width':width,'image_height':height,
+                    'no_text_reason':'unverified_ocr_geometry','page_status':'no_text_detected','crop_passthrough':True}),mask,['{}'])
+        for row,box,edit,plan,analysis in entries:
             crops.append(images[:,box[1]:box[3],box[0]:box[2],:].clone())
             plans.append(encode(plan))
             mask[:,edit[1]:edit[3],edit[0]:edit[2]] = 1

@@ -1,4 +1,4 @@
-"""Shared pixel protection for explicitly unverified detector boundaries."""
+"""Shared pixel protection for unverified detection and OCR source geometry."""
 import math
 
 

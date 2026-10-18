@@ -22,6 +22,93 @@ def rotate_rgb(image,angle):
     return image.convert('RGB').rotate(angle,Image.Resampling.BICUBIC,expand=True,fillcolor=color)
 
 
+def _verified_rows(image,support,valid):
+    """Find repeated glyph baselines, not peaks made by paper texture.
+
+    Projections can split a glyph's top and bottom into different 'lines'.
+    Components vote with their whole height; cuts must lie between cohorts.
+    The rotated source footprint also exposes characters already cut by the
+    original rectangular crop. Context outside that footprint is not invented.
+    """
+    stride=max(1,math.ceil(max(image.size)/1024))
+    pixels=np.asarray(image,np.float32)[::stride,::stride]
+    gray=pixels@np.array([.299,.587,.114],np.float32)
+    detail=gray-ndimage.uniform_filter(gray,31,mode='reflect')
+    support=support[::stride,::stride]>.5
+    valid=valid[::stride,::stride]
+    edge=valid & ~ndimage.binary_erosion(valid,iterations=2)
+    choices=[]
+    for polarity in (-1,1):
+        ink=(detail*polarity>24) & valid
+        labels,count=ndimage.label(ink,structure=np.ones((3,3),bool))
+        if count>32768:continue
+        areas=np.bincount(labels.ravel(),minlength=count+1)
+        seeded=np.bincount(labels[support].ravel(),minlength=count+1)
+        edge_pixels=np.bincount(labels[edge].ravel(),minlength=count+1)
+        objects=ndimage.find_objects(labels)
+        components=[]
+        small=[]
+        for index,slices in enumerate(objects,1):
+            if slices is None:continue
+            y,x=slices;h,w=y.stop-y.start,x.stop-x.start
+            box=[x.start,y.start,x.stop,y.stop]
+            if areas[index]>=12 and 3<=h<=gray.shape[0]*.45 and 2<=w<=gray.shape[1]*.5:
+                small.append((box,int(edge_pixels[index])))
+            if (areas[index]>=20 and max(4,round(gray.shape[0]*.02))<=h<=gray.shape[0]*.45
+                    and 3<=w<=gray.shape[1]*.5 and w/h<3):
+                components.append([*box,int(areas[index]),int(seeded[index]),index])
+        if len(components)<6:continue
+        comp=np.asarray(components)
+        cohorts=[]
+        for baseline in np.unique(comp[:,3]):
+            group=comp[np.abs(comp[:,3]-baseline)<=3]
+            if len(group)<3:continue
+            height=float(np.median(group[:,3]-group[:,1]))
+            group=group[((group[:,3]-group[:,1])>=height*.65)&((group[:,3]-group[:,1])<=height*1.5)]
+            if (len(group)<3 or baseline!=round(float(np.median(group[:,3])))
+                    or np.ptp(np.r_[group[:,0],group[:,2]])<height*3):continue
+            cohorts.append({'top':int(group[:,1].min()),'bottom':int(group[:,3].max()),
+                            'ids':set(group[:,6].tolist()),'height':height})
+        cohorts.sort(key=lambda c:c['top'])
+        merged=[]
+        for row in cohorts:
+            if merged and row['top']<=merged[-1]['bottom']:
+                merged[-1]['bottom']=max(merged[-1]['bottom'],row['bottom'])
+                merged[-1]['ids']|=row['ids']
+            else:merged.append(row)
+        if not 2<=len(merged)<=32:continue
+        clipped=[]
+        for index,row in enumerate(merged):
+            hits=[]
+            for box,amount in small:
+                if (amount<2 or box[3]<=row['top'] or box[1]>=row['bottom']
+                        or box[3]-box[1]>row['height']*1.8
+                        or box[2]-box[0]>row['height']*3):continue
+                # A ring/heart can have nested components. Count independently
+                # cut objects, not a hollow shape and its interior twice.
+                overlaps=[i for i,b in enumerate(hits) if max(b[0],box[0])<min(b[2],box[2])
+                          and max(b[1],box[1])<min(b[3],box[3])]
+                for i in reversed(overlaps):
+                    old=hits.pop(i);box=[min(old[0],box[0]),min(old[1],box[1]),max(old[2],box[2]),max(old[3],box[3])]
+                hits.append(box)
+            if len(hits)>=2:
+                clipped.append({'row':index,'component_groups':len(hits),
+                                'boxes':[[v*stride for v in box] for box in hits]})
+        ids=set().union(*(row['ids'] for row in merged))
+        mass=int(sum(seeded[i] for i in ids))
+        unassigned=[i for i,row in enumerate(merged) if sum(seeded[j]>=3 for j in row['ids'])<3]
+        choices.append((mass,merged,clipped,polarity,unassigned))
+    if not choices:return [],{'method':'component_baselines','reason':'unverified_glyph_rows','needs_review':True}
+    _,bands,clipped,polarity,unassigned=max(choices,key=lambda c:c[0])
+    cuts=[0]+[round((a['bottom']+b['top'])*stride/2) for a,b in zip(bands,bands[1:])]+[image.height]
+    rows=[[0,a,image.width,b] for a,b in zip(cuts,cuts[1:])]
+    return rows,{'method':'component_baselines','coordinate_frame':'rectified_crop_pixels','analysis_stride':stride,'polarity':polarity,
+                 'bands_pixels':[[r['top']*stride,r['bottom']*stride] for r in bands],
+                 'clipped_source_rows':clipped,'unassigned_rows':unassigned,
+                 'needs_review':bool(clipped or unassigned),
+                 'reason':'source_crop_cuts_glyphs' if clipped else 'unassigned_glyph_rows' if unassigned else 'verified_glyph_rows'}
+
+
 def plan(image,support,ident):
     width,height=image.size
     evidence={'strategy':STRATEGY,'accepted':False,'scope':'geometric_evidence_not_recognition_confidence'}
@@ -61,35 +148,18 @@ def plan(image,support,ident):
                     supported_components=int(keep.sum()))
     if not 2.5<=abs(angle)<25 or gain<1.2:
         return {},{**evidence,'reason':'no_supported_skew'}
-    rotated=np.asarray(binary.rotate(angle,Image.Resampling.NEAREST,expand=True))>0
-    active=rotated.sum(axis=1)>=max(3,round(rotated.shape[1]*.015))
-    runs=[]
-    labels,n=ndimage.label(active)
-    for slices in ndimage.find_objects(labels):
-        y=slices[0]
-        if y.stop-y.start>=4:runs.append([y.start,y.stop])
-    # A gap of at most two analysis pixels can separate a dot/accent from its
-    # row. Keep real row gaps; the planner never decides from decoded strings.
-    joined=[]
-    for a,b in runs:
-        if joined and a-joined[-1][1]<=2:joined[-1][1]=b
-        else:joined.append([a,b])
-    runs=joined
-    if not 2<=len(runs)<=32:return {},{**evidence,'reason':'unverified_row_count'}
-    covered=np.zeros(rotated.shape[0],bool)
-    for a,b in runs:covered[max(0,a-2):min(len(covered),b+2)]=True
-    coverage=float(rotated[covered].sum()/max(1,rotated.sum()))
-    evidence['supported_ink_coverage']=round(coverage,4)
-    if coverage<.85:return {},{**evidence,'reason':'unassigned_masked_components'}
     if rotation_pixels(image.size,angle)>8*1024*1024:
         return {},{**evidence,'reason':'rectified_size_limit'}
     rectified=rotate_rgb(image,angle)
     if rectified.width*rectified.height>8*1024*1024:
         return {},{**evidence,'reason':'rectified_size_limit'}
-    # Full-width disjoint row slices retain horizontal source context. Row
-    # boundaries lie between supported bands in the rectified coordinate frame.
-    cuts=[0]+[round((a[1]+b[0])*stride/2) for a,b in zip(runs,runs[1:])]+[rectified.height]
-    rows=[[0,max(0,a),rectified.width,min(rectified.height,b)] for a,b in zip(cuts,cuts[1:])]
+    rotated_support=np.asarray(Image.fromarray((support>.5).astype('uint8')*255).rotate(
+        angle,Image.Resampling.NEAREST,expand=True))>0
+    valid=np.asarray(Image.new('L',image.size,255).rotate(angle,Image.Resampling.NEAREST,expand=True))>0
+    rows,validation=_verified_rows(rectified,rotated_support,valid)
+    evidence['row_validation']=validation
+    if validation['needs_review']:
+        return {},{**evidence,'reason':validation['reason'],'needs_review':True}
     if any(b<=a for _,a,_,b in rows):return {},{**evidence,'reason':'invalid_rectified_rows'}
     evidence.update(accepted=True,reason='supported_rotation_and_rows')
     result={'strategy':STRATEGY,'region_id':ident,'source_size':[width,height],
@@ -109,6 +179,10 @@ def planned_inputs(image,value):
         raise ValueError('Invalid deskew coordinate frame')
     if image.width*image.height>4*1024*1024:raise ValueError('Deskew source exceeds analysis limit')
     rotated=rotate_rgb(image,angle)
+    evidence=value.get('evidence',{})
+    if (isinstance(evidence,dict) and isinstance(evidence.get('row_validation'),dict)
+            and evidence['row_validation'].get('needs_review')):
+        raise ValueError('Unverified source crop must be reviewed before OCR')
     if value.get('rectified_size')!=list(rotated.size):raise ValueError('Invalid rectified source size')
     rows=value.get('rows')
     if not isinstance(rows,list) or not 2<=len(rows)<=32:raise ValueError('Invalid deskew rows')
