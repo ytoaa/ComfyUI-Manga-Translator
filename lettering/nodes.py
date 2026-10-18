@@ -249,7 +249,7 @@ class MangaLetterPrepare:
                 preserved.append({'id':row['id'],'bbox':bounds,'reason':decision['reason']})
                 continue
             bounds = list(core.bbox(bounds, original_array.shape))
-            opts = overrides.get(row['id'], {})
+            opts = {**row.get('presentation',{}),**overrides.get(row['id'], {})}
             if not isinstance(opts, dict) or set(opts)-{'font', 'layout', 'style'}:
                 raise ValueError('Region options may contain only font, layout and style')
             rows.append({'id': row['id'], 'bbox': bounds, 'source_text': row.get('source', ''), 'text': row['target'], **opts})
@@ -258,6 +258,21 @@ class MangaLetterPrepare:
                 angle=geometry.get('source_angle')
                 core.finite(angle,-25,25,'source_angle')
                 orientation[row['id']]={'source_angle':angle,'scope':'mask_supported_geometric_estimate'}
+            if row.get('blocks'):
+                from ..document import validate_blocks
+                from .frame import block_quad
+                parent=rows.pop()
+                for block in validate_blocks(row):
+                    if not block.get('target'):raise ValueError('Every paragraph needs translated text')
+                    quad=block_quad(row,block);points=np.asarray(quad)
+                    left,top=np.maximum(0,np.floor(points.min(axis=0))).astype(int)
+                    right,bottom=np.minimum([width,height],np.ceil(points.max(axis=0))).astype(int)
+                    child={**parent,'id':block['id'],'parent_id':row['id'],'role':block.get('role','body'),
+                           'source_text':block['source'],'text':block['target'],'frame_quad':quad,
+                           'bbox':[int(left),int(top),int(right-left),int(bottom-top)],**block.get('presentation',{})}
+                    rows.append(child)
+                    if row['id'] in orientation:orientation[block['id']]=orientation[row['id']]
+                orientation.pop(row['id'],None)
             x, y, w, h = bounds
             support[y:y+h, x:x+w] = 1
         if text_pixel_mask is not None:

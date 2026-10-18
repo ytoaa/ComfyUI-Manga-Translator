@@ -1,8 +1,8 @@
 {
   "id": "6489a8d0-adb0-54db-baf9-5a11c43d9dd8",
   "revision": 1,
-  "last_node_id": 64,
-  "last_link_id": 98,
+  "last_node_id": 75,
+  "last_link_id": 127,
   "nodes": [
     {
       "id": 1,
@@ -30,7 +30,10 @@
             20,
             49,
             52,
-            82
+            82,
+            104,
+            113,
+            120
           ]
         },
         {
@@ -42,7 +45,8 @@
           "name": "project_report",
           "type": "STRING",
           "links": [
-            77
+            77,
+            108
           ]
         },
         {
@@ -197,10 +201,7 @@
           "name": "MANGA_DETECTION",
           "type": "MANGA_DETECTION",
           "links": [
-            3,
-            4,
-            56,
-            81
+            103
           ]
         }
       ],
@@ -247,7 +248,7 @@
         {
           "name": "result",
           "type": "MANGA_DETECTION",
-          "link": 3
+          "link": 99
         },
         {
           "name": "include_sfx",
@@ -303,7 +304,7 @@
         {
           "name": "result",
           "type": "MANGA_DETECTION",
-          "link": 4
+          "link": 100
         },
         {
           "name": "include_sfx",
@@ -468,14 +469,14 @@
     },
     {
       "id": 9,
-      "type": "MangaOCRLoader",
+      "type": "MangaOCRModel",
       "pos": [
         1260,
-        -220
+        -300
       ],
       "size": [
-        330,
-        160
+        420,
+        270
       ],
       "flags": {},
       "order": 8,
@@ -483,25 +484,32 @@
       "inputs": [],
       "outputs": [
         {
-          "name": "MANGA_OCR_MODEL",
+          "name": "OCR_모델",
           "type": "MANGA_OCR_MODEL",
           "links": [
             9
           ]
+        },
+        {
+          "name": "모델_상태",
+          "type": "STRING",
+          "links": []
         }
       ],
-      "title": "MangaOCRLoader",
       "properties": {
-        "aux_id": "ytoaa/ComfyUI-Manga-Translator",
-        "ver": "7ee9ddbface00a5f2e1f26f3e3d114f1efe56cfa",
-        "Node name for S&R": "MangaOCRLoader"
+        "Node name for S&R": "MangaOCRModel"
       },
       "widgets_values": [
-        "hayai-ocr-v2"
+        "Hayai v2",
+        true,
+        "auto"
       ],
       "widgets_values_named": {
-        "model_name": "hayai-ocr-v2"
-      }
+        "engine": "Hayai v2",
+        "download_missing": true,
+        "device": "auto"
+      },
+      "title": "OCR 엔진 · 누락 모델 자동 다운로드"
     },
     {
       "id": 10,
@@ -512,7 +520,7 @@
       ],
       "size": [
         330,
-        450
+        480
       ],
       "flags": {},
       "order": 9,
@@ -579,7 +587,8 @@
         true,
         "auto",
         true,
-        true
+        true,
+        "reuse"
       ],
       "widgets_values_named": {
         "max_new_tokens": 256,
@@ -594,7 +603,8 @@
         "quality_guard": true,
         "text_direction": "auto",
         "retry_on_token_limit": true,
-        "retry_on_layout_failure": true
+        "retry_on_layout_failure": true,
+        "cache_policy": "reuse"
       },
       "title": "⑤ OCR · 반복 시 입력 재분할"
     },
@@ -634,7 +644,7 @@
           "name": "ocr_json",
           "type": "STRING",
           "links": [
-            13
+            105
           ]
         }
       ],
@@ -663,7 +673,7 @@
         {
           "name": "translated_json",
           "type": "STRING",
-          "link": 13
+          "link": 106
         },
         {
           "name": "filename_prefix",
@@ -680,7 +690,8 @@
           "type": "STRING",
           "links": [
             14,
-            70
+            70,
+            107
           ]
         }
       ],
@@ -704,7 +715,7 @@
       ],
       "size": [
         330,
-        300
+        330
       ],
       "flags": {},
       "order": 12,
@@ -714,6 +725,19 @@
           "name": "ocr_json",
           "type": "STRING",
           "link": 14
+        },
+        {
+          "name": "context_json",
+          "type": "STRING",
+          "link": 109
+        },
+        {
+          "name": "target_language",
+          "type": "STRING",
+          "link": 110,
+          "widget": {
+            "name": "target_language"
+          }
         }
       ],
       "outputs": [
@@ -721,7 +745,7 @@
           "name": "translated_json",
           "type": "STRING",
           "links": [
-            16
+            112
           ]
         }
       ],
@@ -736,6 +760,7 @@
         4096,
         300,
         "",
+        "",
         "json_schema"
       ],
       "widgets_values_named": {
@@ -746,6 +771,7 @@
         "max_tokens": 4096,
         "timeout": 300,
         "translated_override_json": "",
+        "model_revision": "",
         "response_format": "json_schema"
       },
       "title": "⑥ 번역 · 영역 ID 유지"
@@ -773,7 +799,7 @@
         {
           "name": "translated_json",
           "type": "STRING",
-          "link": 16
+          "link": 116
         },
         {
           "name": "source_mask",
@@ -970,7 +996,8 @@
           "name": "plan",
           "type": "MANGA_INPAINT_PLAN",
           "links": [
-            47
+            47,
+            121
           ]
         },
         {
@@ -1685,15 +1712,14 @@
           "name": "cleaned_page",
           "type": "IMAGE",
           "links": [
-            53,
-            63
+            119
           ]
         },
         {
           "name": "cleanup_report",
           "type": "STRING",
           "links": [
-            89
+            122
           ]
         }
       ],
@@ -1780,7 +1806,7 @@
       ],
       "size": [
         330,
-        360
+        390
       ],
       "flags": {},
       "order": 30,
@@ -1794,7 +1820,7 @@
         {
           "name": "cleaned",
           "type": "IMAGE",
-          "link": 53
+          "link": 117
         },
         {
           "name": "source_mask",
@@ -1814,7 +1840,7 @@
         {
           "name": "detection_result",
           "type": "MANGA_DETECTION",
-          "link": 56
+          "link": 101
         },
         {
           "name": "page_direction",
@@ -1856,6 +1882,7 @@
         0.55,
         2,
         "{}",
+        true,
         "reflow",
         "readable",
         true
@@ -1868,6 +1895,7 @@
         "min_scale": 0.55,
         "padding": 2,
         "region_options_json": "{}",
+        "oriented_fit": true,
         "line_breaks": "reflow",
         "fit_policy": "readable",
         "respect_bubbles": true
@@ -1984,7 +2012,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 63
+          "link": 118
         }
       ],
       "outputs": [],
@@ -2418,7 +2446,7 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "폴더 처리도 이 워크플로우 안에서 실행합니다. 입력 노드의 input_mode=폴더 프로젝트로 설정하세요.\ninput_folder는 ComfyUI/input 아래의 원본 폴더, project_name은 결과·재개 기록의 이름입니다.\n한 페이지가 현재 Run에서 검출부터 저장까지 실행됩니다. 다음 페이지는 캔버스가 기본 Run 큐로 이어갑니다.\n입력 노드 안에서 현재 페이지·실행 노드·진행률을 실시간 확인합니다. 기본 중지는 현재 페이지에 적용됩니다.\n연속 처리 중지는 다음 페이지 제출을 멈춥니다. 브라우저를 닫으면 다음 페이지는 자동 실행하지 않습니다.\n현재 캔버스의 처리 설정을 확인합니다. 모델·번역·식자 설정을 바꾸려면 새 project_name을 사용하세요.\n이미지를 한꺼번에 텐서 목록으로 합치지 않습니다. OCR/타일 집계는 페이지마다 독립 실행합니다."
+        "폴더 처리도 이 워크플로우 안에서 실행합니다. 입력 노드의 input_mode=폴더 프로젝트로 설정하세요.\ninput_folder는 ComfyUI/input 아래의 원본 폴더, project_name은 결과·재개 기록의 이름입니다.\n한 페이지가 현재 Run에서 검출부터 저장까지 실행됩니다. 다음 페이지는 캔버스가 기본 Run 큐로 이어갑니다.\n입력 노드 안에서 현재 페이지·실행 노드·진행률을 실시간 확인합니다. 기본 중지는 현재 페이지에 적용됩니다.\n연속 처리 중지는 다음 페이지 제출을 멈춥니다. 브라우저를 닫으면 다음 페이지는 자동 실행하지 않습니다.\n설정을 바꾸면 이전 시도를 보존하고 영향받은 단계부터 새 시도로 처리합니다. 실행 중인 이전 작업은 먼저 끝내세요.\n이미지를 한꺼번에 텐서 목록으로 합치지 않습니다. OCR/타일 집계는 페이지마다 독립 실행합니다."
       ]
     },
     {
@@ -2454,7 +2482,7 @@
         {
           "name": "detection_result",
           "type": "MANGA_DETECTION",
-          "link": 81
+          "link": 102
         }
       ],
       "outputs": [
@@ -2761,7 +2789,7 @@
         {
           "name": "report_json",
           "type": "STRING",
-          "link": 89
+          "link": 123
         },
         {
           "name": "preview_image",
@@ -3116,6 +3144,524 @@
       "widgets_values": [
         "하단 디버그 행은 검출→OCR→제거 계획→제거 결과→식자 계획→식자 결과 순서입니다.\n미리보기 아무거나는 JSON, 이미지 검수는 선택/제외 박스·원문 스타일 마스크·새 글자 알파를 표시합니다.\n밝은 얼룩은 식자 직전 배경과 새 글자 알파를 비교해 제거 단계/식자 단계 중 어디서 생겼는지 확인하세요.\nOCR issue=null은 정확한 인식 보증이 아닙니다. 제외 후보는 타일 중복을 포함한 추론 관측입니다.\n단계 실행이 실패하면 해당 단계와 후속 미리보기는 나오지 않을 수 있습니다. OCR/번역 실패 진단 파일과 콘솔 오류를 확인하세요.\n이 노드는 읽기 전용이며 모델 설정·편집 허용 범위·완료 판정을 바꾸지 않습니다."
       ]
+    },
+    {
+      "id": 65,
+      "type": "MangaDetectionCheckpoint",
+      "pos": [
+        420,
+        450
+      ],
+      "size": [
+        420,
+        270
+      ],
+      "flags": {},
+      "order": 64,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "original",
+          "type": "IMAGE",
+          "link": 104
+        },
+        {
+          "name": "value",
+          "type": "MANGA_DETECTION",
+          "link": 103
+        },
+        {
+          "name": "dependency_json",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "검출",
+          "type": "MANGA_DETECTION",
+          "links": [
+            99,
+            100,
+            101,
+            102
+          ]
+        },
+        {
+          "name": "재사용_보고서",
+          "type": "STRING",
+          "links": [
+            124
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaDetectionCheckpoint"
+      },
+      "widgets_values": [
+        "reuse"
+      ],
+      "widgets_values_named": {
+        "cache_policy": "reuse"
+      },
+      "title": "검출 재사용 · 원본+검출 설정"
+    },
+    {
+      "id": 66,
+      "type": "MangaReviewDocument",
+      "pos": [
+        2520,
+        -750
+      ],
+      "size": [
+        420,
+        520
+      ],
+      "flags": {},
+      "order": 65,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "document_json",
+          "type": "STRING",
+          "link": 105
+        }
+      ],
+      "outputs": [
+        {
+          "name": "검수_문서",
+          "type": "STRING",
+          "links": [
+            106
+          ]
+        },
+        {
+          "name": "검수_보고서",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaReviewDocument"
+      },
+      "widgets_values": [
+        "source",
+        "{}"
+      ],
+      "widgets_values_named": {
+        "stage": "source",
+        "edits_json": "{}"
+      },
+      "title": "원문 검수 · 고친 뒤 다시 실행"
+    },
+    {
+      "id": 67,
+      "type": "MangaTranslationContext",
+      "pos": [
+        2940,
+        -750
+      ],
+      "size": [
+        420,
+        380
+      ],
+      "flags": {},
+      "order": 66,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "ocr_json",
+          "type": "STRING",
+          "link": 107
+        },
+        {
+          "name": "project_report",
+          "type": "STRING",
+          "link": 108
+        }
+      ],
+      "outputs": [
+        {
+          "name": "번역_문맥",
+          "type": "STRING",
+          "links": [
+            109,
+            114
+          ]
+        },
+        {
+          "name": "문맥_보고서",
+          "type": "STRING",
+          "links": [
+            127
+          ]
+        },
+        {
+          "name": "번역_언어",
+          "type": "STRING",
+          "links": [
+            110
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaTranslationContext"
+      },
+      "widgets_values": [
+        "[]",
+        "Korean",
+        "",
+        12000
+      ],
+      "widgets_values_named": {
+        "glossary_json": "[]",
+        "target_language": "Korean",
+        "style_instructions": "",
+        "history_bytes": 12000
+      },
+      "title": "책 용어집 · 말투 · 확정된 앞 페이지"
+    },
+    {
+      "id": 68,
+      "type": "MangaTextCheckpoint",
+      "pos": [
+        3360,
+        -750
+      ],
+      "size": [
+        420,
+        270
+      ],
+      "flags": {},
+      "order": 67,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "original",
+          "type": "IMAGE",
+          "link": 113
+        },
+        {
+          "name": "dependency_json",
+          "type": "STRING",
+          "link": 114
+        },
+        {
+          "name": "value",
+          "type": "STRING",
+          "link": 112,
+          "widget": {
+            "name": "value"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "문서",
+          "type": "STRING",
+          "links": [
+            115
+          ]
+        },
+        {
+          "name": "재사용_보고서",
+          "type": "STRING",
+          "links": [
+            125
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaTextCheckpoint"
+      },
+      "widgets_values": [
+        "",
+        "reuse"
+      ],
+      "widgets_values_named": {
+        "value": "",
+        "cache_policy": "reuse"
+      },
+      "title": "번역 재사용 · 확정 원문과 문맥"
+    },
+    {
+      "id": 69,
+      "type": "MangaReviewDocument",
+      "pos": [
+        3780,
+        -750
+      ],
+      "size": [
+        420,
+        520
+      ],
+      "flags": {},
+      "order": 68,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "document_json",
+          "type": "STRING",
+          "link": 115
+        }
+      ],
+      "outputs": [
+        {
+          "name": "검수_문서",
+          "type": "STRING",
+          "links": [
+            116
+          ]
+        },
+        {
+          "name": "검수_보고서",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaReviewDocument"
+      },
+      "widgets_values": [
+        "target",
+        "{}"
+      ],
+      "widgets_values_named": {
+        "stage": "target",
+        "edits_json": "{}"
+      },
+      "title": "번역 검수 · 수정 / 이 페이지 확정"
+    },
+    {
+      "id": 70,
+      "type": "MangaCleanupCheckpoint",
+      "pos": [
+        4620,
+        1100
+      ],
+      "size": [
+        420,
+        270
+      ],
+      "flags": {},
+      "order": 69,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "original",
+          "type": "IMAGE",
+          "link": 120
+        },
+        {
+          "name": "value",
+          "type": "IMAGE",
+          "link": 119
+        },
+        {
+          "name": "dependency_json",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "cleanup_plan",
+          "type": "MANGA_INPAINT_PLAN",
+          "link": 121
+        },
+        {
+          "name": "report_json",
+          "type": "STRING",
+          "link": 122
+        }
+      ],
+      "outputs": [
+        {
+          "name": "지운_배경",
+          "type": "IMAGE",
+          "links": [
+            117,
+            118
+          ]
+        },
+        {
+          "name": "재사용_보고서",
+          "type": "STRING",
+          "links": [
+            123,
+            126
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaCleanupCheckpoint"
+      },
+      "widgets_values": [
+        "reuse"
+      ],
+      "widgets_values_named": {
+        "cache_policy": "reuse"
+      },
+      "title": "지운 배경 재사용 · 실효 마스크+Qwen 설정"
+    },
+    {
+      "id": 71,
+      "type": "PreviewAny",
+      "pos": [
+        0,
+        3150
+      ],
+      "size": [
+        780,
+        300
+      ],
+      "flags": {},
+      "order": 70,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 124
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "단계 재사용 / 문맥 · 미리보기 아무거나"
+    },
+    {
+      "id": 72,
+      "type": "PreviewAny",
+      "pos": [
+        850,
+        3150
+      ],
+      "size": [
+        780,
+        300
+      ],
+      "flags": {},
+      "order": 71,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 125
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "단계 재사용 / 문맥 · 미리보기 아무거나"
+    },
+    {
+      "id": 73,
+      "type": "PreviewAny",
+      "pos": [
+        1700,
+        3150
+      ],
+      "size": [
+        780,
+        300
+      ],
+      "flags": {},
+      "order": 72,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 126
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "단계 재사용 / 문맥 · 미리보기 아무거나"
+    },
+    {
+      "id": 74,
+      "type": "PreviewAny",
+      "pos": [
+        2550,
+        3150
+      ],
+      "size": [
+        780,
+        300
+      ],
+      "flags": {},
+      "order": 73,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 127
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "단계 재사용 / 문맥 · 미리보기 아무거나"
+    },
+    {
+      "id": 75,
+      "type": "Note",
+      "pos": [
+        0,
+        3550
+      ],
+      "size": [
+        500,
+        270
+      ],
+      "flags": {},
+      "order": 74,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "원문/번역 검수 노드에서 텍스트를 고친 뒤 Run합니다. 수정은 페이지 revision별로 워크플로우에 저장됩니다.\n번역 확정은 사람이 확인한 페이지에만 사용하세요. 용어집과 확정된 이전 페이지를 번역 문맥으로 보냅니다.\n재사용 노드의 reuse=검증된 저장 결과, refresh=다시 계산, off=저장 없이 계산. 폰트/방향 수정은 검출/OCR/번역을 유지합니다.\n파란 다각형은 회전한 식자 프레임입니다. 제목/본문은 검증된 글줄 높이 차이가 있을 때 분리됩니다.\nOCR 엔진 선택은 정확도를 보장하지 않습니다. Manga OCR은 일본어용이며 자동 설치는 모델 파일에 한정합니다."
+      ]
     }
   ],
   "links": [
@@ -3134,22 +3680,6 @@
       4,
       1,
       "MANGA_DETECTOR_MODEL"
-    ],
-    [
-      3,
-      4,
-      0,
-      5,
-      0,
-      "MANGA_DETECTION"
-    ],
-    [
-      4,
-      4,
-      0,
-      6,
-      0,
-      "MANGA_DETECTION"
     ],
     [
       5,
@@ -3216,14 +3746,6 @@
       "STRING"
     ],
     [
-      13,
-      11,
-      0,
-      12,
-      0,
-      "STRING"
-    ],
-    [
       14,
       12,
       0,
@@ -3238,14 +3760,6 @@
       14,
       0,
       "IMAGE"
-    ],
-    [
-      16,
-      13,
-      0,
-      14,
-      1,
-      "STRING"
     ],
     [
       17,
@@ -3536,14 +4050,6 @@
       "IMAGE"
     ],
     [
-      53,
-      29,
-      0,
-      31,
-      1,
-      "IMAGE"
-    ],
-    [
       54,
       30,
       1,
@@ -3558,14 +4064,6 @@
       31,
       3,
       "STRING"
-    ],
-    [
-      56,
-      4,
-      0,
-      31,
-      5,
-      "MANGA_DETECTION"
     ],
     [
       57,
@@ -3614,14 +4112,6 @@
       15,
       1,
       "STRING"
-    ],
-    [
-      63,
-      29,
-      0,
-      34,
-      0,
-      "IMAGE"
     ],
     [
       64,
@@ -3760,14 +4250,6 @@
       "STRING"
     ],
     [
-      81,
-      4,
-      0,
-      49,
-      3,
-      "MANGA_DETECTION"
-    ],
-    [
       82,
       1,
       0,
@@ -3820,14 +4302,6 @@
       54,
       0,
       55,
-      0,
-      "STRING"
-    ],
-    [
-      89,
-      29,
-      1,
-      56,
       0,
       "STRING"
     ],
@@ -3902,6 +4376,230 @@
       63,
       0,
       "IMAGE"
+    ],
+    [
+      99,
+      65,
+      0,
+      5,
+      0,
+      "MANGA_DETECTION"
+    ],
+    [
+      100,
+      65,
+      0,
+      6,
+      0,
+      "MANGA_DETECTION"
+    ],
+    [
+      101,
+      65,
+      0,
+      31,
+      5,
+      "MANGA_DETECTION"
+    ],
+    [
+      102,
+      65,
+      0,
+      49,
+      3,
+      "MANGA_DETECTION"
+    ],
+    [
+      103,
+      4,
+      0,
+      65,
+      1,
+      "MANGA_DETECTION"
+    ],
+    [
+      104,
+      1,
+      0,
+      65,
+      0,
+      "IMAGE"
+    ],
+    [
+      105,
+      11,
+      0,
+      66,
+      0,
+      "STRING"
+    ],
+    [
+      106,
+      66,
+      0,
+      12,
+      0,
+      "STRING"
+    ],
+    [
+      107,
+      12,
+      0,
+      67,
+      0,
+      "STRING"
+    ],
+    [
+      108,
+      1,
+      2,
+      67,
+      1,
+      "STRING"
+    ],
+    [
+      109,
+      67,
+      0,
+      13,
+      1,
+      "STRING"
+    ],
+    [
+      110,
+      67,
+      2,
+      13,
+      2,
+      "STRING"
+    ],
+    [
+      112,
+      13,
+      0,
+      68,
+      2,
+      "STRING"
+    ],
+    [
+      113,
+      1,
+      0,
+      68,
+      0,
+      "IMAGE"
+    ],
+    [
+      114,
+      67,
+      0,
+      68,
+      1,
+      "STRING"
+    ],
+    [
+      115,
+      68,
+      0,
+      69,
+      0,
+      "STRING"
+    ],
+    [
+      116,
+      69,
+      0,
+      14,
+      1,
+      "STRING"
+    ],
+    [
+      117,
+      70,
+      0,
+      31,
+      1,
+      "IMAGE"
+    ],
+    [
+      118,
+      70,
+      0,
+      34,
+      0,
+      "IMAGE"
+    ],
+    [
+      119,
+      29,
+      0,
+      70,
+      1,
+      "IMAGE"
+    ],
+    [
+      120,
+      1,
+      0,
+      70,
+      0,
+      "IMAGE"
+    ],
+    [
+      121,
+      16,
+      6,
+      70,
+      3,
+      "MANGA_INPAINT_PLAN"
+    ],
+    [
+      122,
+      29,
+      1,
+      70,
+      4,
+      "STRING"
+    ],
+    [
+      123,
+      70,
+      1,
+      56,
+      0,
+      "STRING"
+    ],
+    [
+      124,
+      65,
+      1,
+      71,
+      0,
+      "STRING"
+    ],
+    [
+      125,
+      68,
+      1,
+      72,
+      0,
+      "STRING"
+    ],
+    [
+      126,
+      70,
+      1,
+      73,
+      0,
+      "STRING"
+    ],
+    [
+      127,
+      67,
+      1,
+      74,
+      0,
+      "STRING"
     ]
   ],
   "groups": [],

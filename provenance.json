@@ -67,7 +67,7 @@
     "no Koharu application/scene/renderer/API bridge"
   ],
   "current_workflow": {
-    "processing_version": "0.6.4",
+    "processing_version": "0.7.0",
     "execution": "one visible native ComfyUI prompt per page",
     "image_model_role": "source lettering removal only",
     "target_lettering": "deterministic font rendering with independent alpha",

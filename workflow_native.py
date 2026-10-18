@@ -10,7 +10,7 @@ import uuid
 from .tools.run_project import (Project, ProjectError, Paused, InputError, ACTIVE, FINISHED,
     atomic_write, json_bytes, read_json, project_lock, normalise_image, digest, workflow_bindings)
 
-VERSION = '0.6.4'
+VERSION = '0.7.0'
 
 
 def _write_run(folder, run):
@@ -47,6 +47,7 @@ class CanvasExecution:
     def _eligible(self, project, page, retry, retry_review=False):
         state = project.state(page)
         if not state or state.get('input_sha256') != page['input_sha256']: return True
+        if project._settings_changed and state.get('workflow_sha256')!=project.workflow_sha256:return True
         if state['status'] in FINISHED:
             for name,sha in state.get('artifacts',{}).items():
                 path = project._attempt_dir(state)/name

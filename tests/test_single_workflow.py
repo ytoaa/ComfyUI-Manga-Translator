@@ -18,7 +18,7 @@ def test_only_one_workflow_is_shipped():
     graph = json.loads((ROOT/files[0]).read_text())
     kinds = [node['class_type'] for node in graph.values()]
     assert kinds.count('MangaWorkflowInput') == kinds.count('SaveImage') == 1
-    assert kinds.count('PreviewAny') == 10
+    assert kinds.count('PreviewAny') == 14
     previews = [node['inputs']['source'] for node in graph.values() if node['class_type'] == 'PreviewAny']
     source_id = next(i for i,n in graph.items() if n['class_type'] == 'MangaWorkflowInput')
     assert [source_id, 2] in previews
@@ -41,3 +41,13 @@ def test_generator_rebuilds_identically_with_only_model_declarations(tmp_path, m
     for suffix in ('.json', '.api.json'):
         relative = Path('lettering/example_workflows')/(NAME+suffix)
         assert (tmp_path/relative).read_bytes() == (ROOT/relative).read_bytes()
+
+
+def test_shipped_api_graph_is_acyclic_including_lazy_report_branches():
+    graph=json.loads((ROOT/'lettering/example_workflows'/(NAME+'.api.json')).read_text())
+    def visit(ident,path):
+        assert ident not in path, f'Cycle through {ident}'
+        for value in graph[ident]['inputs'].values():
+            if isinstance(value,list) and len(value)==2 and isinstance(value[0],str) and value[0] in graph:
+                visit(value[0],path|{ident})
+    for ident in graph:visit(ident,set())

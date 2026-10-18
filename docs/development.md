@@ -20,6 +20,7 @@ python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 python -m pip install pytest numpy Pillow scipy fonttools psutil 'pydantic>=2,<3'
 python -m pytest tests -q --confcutdir=tests --tb=short
 node tools/check_canvas_frontend.cjs
+node tools/check_node_ui.cjs
 ```
 
 별도 환경에서만 CPU torch를 설치합니다. 모델 대역으로 실행한 회귀를 실제 GPU/모델 품질 결과라고 부르지 않습니다.

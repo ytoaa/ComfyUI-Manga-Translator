@@ -11,6 +11,7 @@ const fields = node => Object.fromEntries((node.widgets || []).map(w => [w.name,
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function show(node, text) {
+    if (node?.mangaPanelStatus) node.mangaPanelStatus.textContent=text;
     if (!node?.mangaStatus) return;
     node.mangaStatus.value = text;
     node.setDirtyCanvas?.(true, true);

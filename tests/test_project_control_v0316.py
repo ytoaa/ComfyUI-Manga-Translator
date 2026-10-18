@@ -4,6 +4,7 @@ These tests exercise policy/lifecycle boundaries that are easy to miss when the
 Project runner and ComfyUI parent control prompt are tested separately.
 """
 from copy import deepcopy
+import json
 import importlib.util
 from pathlib import Path
 import shutil
@@ -122,12 +123,14 @@ def test_no_empty_export_edition_is_claimed_when_every_page_is_invalid(tmp_path)
         assert not list((runner.destination/'exports').glob('*'))
 
 
-def test_real_processing_setting_change_still_requires_new_project(tmp_path):
+def test_stage_aware_setting_change_preserves_project_and_records_revision(tmp_path):
     make_page(tmp_path/'input/1.png'); client=FakeComfy(); runner=project(tmp_path,client)
     runner.run(plan_only=True)
     changed=graph(); next(n for n in changed.values() if n['class_type']=='MangaLetterPlan')['inputs']['min_font']=9
-    with pytest.raises(P.ProjectError,match='model/workflow settings changed'):
-        P.Project(runner.inputs,runner.destination,changed,client).run()
+    updated=P.Project(runner.inputs,runner.destination,changed,client)
+    updated.run(plan_only=True)
+    assert updated.project_id==runner.project_id and updated._settings_changed
+    assert len(json.loads((runner.destination/'project.json').read_text())['settings_revisions'])==1
 
 
 def test_controller_waits_for_parent_gate_before_any_child_submission(tmp_path):

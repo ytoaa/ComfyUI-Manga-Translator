@@ -26,7 +26,7 @@ def build():
     crops = g.add('MangaRegionCrops', {'allow_empty_page': True, 'refine_page_columns': True,'auto_deskew':True,'geometry_policy':'preserve_review'}, pos=(1260, 50), title='④ OCR 전 단·회전 보정 · 원본 문맥 복구·검수')
     g.connect(original, 0, crops, 'images')
     g.connect(regions, 0, crops, 'layout_json')
-    ocr_model = g.import_model_node(template, 13, (1260, -220))
+    ocr_model = g.add('MangaOCRModel',pos=(1260,-300),title='OCR 엔진 · 누락 모델 자동 다운로드')
     ocr = g.add('MangaOCRAdaptive', {'tight_crop': False, 'base_patches': 256, 'small_text_patches': 512, 'split_long_lines': True, 'quality_guard': True, 'retry_on_token_limit': True, 'retry_on_layout_failure': True}, (1680, 50), '⑤ OCR · 반복 시 입력 재분할')
     g.connect(crops, 0, ocr, 'images')
     g.connect(ocr_model, 0, ocr, 'model')
@@ -75,7 +75,7 @@ def build():
     g.connect(original, 0, prepare, 'original')
     g.connect(target_save, 0, prepare, 'translated_json')
     g.connect(plan, 9, prepare, 'text_pixel_mask')
-    typography_values = {'line_breaks': 'reflow', 'fit_policy': 'readable', 'respect_bubbles': True}
+    typography_values = {'line_breaks': 'reflow', 'fit_policy': 'readable', 'respect_bubbles': True,'oriented_fit':True}
     typography = g.add('MangaLetterPlan', typography_values, pos=(5040, 50), title='⑪ 실제 말풍선 경계 검사 · 가독 크기 맞춤')
     g.connect(original, 0, typography, 'original')
     g.connect(assemble, 0, typography, 'cleaned')
@@ -122,7 +122,7 @@ def build():
     g.nodes[status - 1]['size'] = [420, 300]
     g.nodes[status - 1]['properties']['cnr_id'] = 'comfy-core'
     g.connect(original, 2, status, 'source')
-    g.note('폴더 처리도 이 워크플로우 안에서 실행합니다. 입력 노드의 input_mode=폴더 프로젝트로 설정하세요.\ninput_folder는 ComfyUI/input 아래의 원본 폴더, project_name은 결과·재개 기록의 이름입니다.\n한 페이지가 현재 Run에서 검출부터 저장까지 실행됩니다. 다음 페이지는 캔버스가 기본 Run 큐로 이어갑니다.\n입력 노드 안에서 현재 페이지·실행 노드·진행률을 실시간 확인합니다. 기본 중지는 현재 페이지에 적용됩니다.\n연속 처리 중지는 다음 페이지 제출을 멈춥니다. 브라우저를 닫으면 다음 페이지는 자동 실행하지 않습니다.\n현재 캔버스의 처리 설정을 확인합니다. 모델·번역·식자 설정을 바꾸려면 새 project_name을 사용하세요.\n이미지를 한꺼번에 텐서 목록으로 합치지 않습니다. OCR/타일 집계는 페이지마다 독립 실행합니다.', (420, -550))
+    g.note('폴더 처리도 이 워크플로우 안에서 실행합니다. 입력 노드의 input_mode=폴더 프로젝트로 설정하세요.\ninput_folder는 ComfyUI/input 아래의 원본 폴더, project_name은 결과·재개 기록의 이름입니다.\n한 페이지가 현재 Run에서 검출부터 저장까지 실행됩니다. 다음 페이지는 캔버스가 기본 Run 큐로 이어갑니다.\n입력 노드 안에서 현재 페이지·실행 노드·진행률을 실시간 확인합니다. 기본 중지는 현재 페이지에 적용됩니다.\n연속 처리 중지는 다음 페이지 제출을 멈춥니다. 브라우저를 닫으면 다음 페이지는 자동 실행하지 않습니다.\n설정을 바꾸면 이전 시도를 보존하고 영향받은 단계부터 새 시도로 처리합니다. 실행 중인 이전 작업은 먼저 끝내세요.\n이미지를 한꺼번에 텐서 목록으로 합치지 않습니다. OCR/타일 집계는 페이지마다 독립 실행합니다.', (420, -550))
     g.connect(crops, 3, ocr, 'region_plan_json')
     g.connect(raw_mask,0,crops,'text_pixel_mask')
     # Add read-only observer branches after all legacy IDs. They do not feed
@@ -148,6 +148,40 @@ def build():
             view=g.add('PreviewImage',pos=(x,2650),title=title+' · 이미지 검수')
             g.connect(inspector,1,view,'images')
     g.note('하단 디버그 행은 검출→OCR→제거 계획→제거 결과→식자 계획→식자 결과 순서입니다.\n미리보기 아무거나는 JSON, 이미지 검수는 선택/제외 박스·원문 스타일 마스크·새 글자 알파를 표시합니다.\n밝은 얼룩은 식자 직전 배경과 새 글자 알파를 비교해 제거 단계/식자 단계 중 어디서 생겼는지 확인하세요.\nOCR issue=null은 정확한 인식 보증이 아닙니다. 제외 후보는 타일 중복을 포함한 추론 관측입니다.\n단계 실행이 실패하면 해당 단계와 후속 미리보기는 나오지 않을 수 있습니다. OCR/번역 실패 진단 파일과 콘솔 오류를 확인하세요.\n이 노드는 읽기 전용이며 모델 설정·편집 허용 범위·완료 판정을 바꾸지 않습니다.',(5100,2050))
+    # Checkpoints sit before every observer branch as well as semantic consumers.
+    def intercept(source,slot,checkpoint):
+        for link in list(g.links):
+            if link[1:3]==[source,slot]:
+                destination=link[3];field=g.nodes[destination-1]['inputs'][link[4]]['name']
+                g.connect(checkpoint,0,destination,field)
+        g.connect(source,slot,checkpoint,'value')
+        g.connect(original,0,checkpoint,'original')
+    detection_cache=g.add('MangaDetectionCheckpoint',pos=(420,450),title='검출 재사용 · 원본+검출 설정')
+    intercept(detector,0,detection_cache)
+    source_review=g.add('MangaReviewDocument',{'stage':'source'},pos=(2520,-750),title='원문 검수 · 고친 뒤 다시 실행')
+    g.connect(collect,0,source_review,'document_json')
+    g.connect(source_review,0,source_save,'translated_json')
+    context=g.add('MangaTranslationContext',pos=(2940,-750),title='책 용어집 · 말투 · 확정된 앞 페이지')
+    g.connect(source_save,0,context,'ocr_json');g.connect(original,2,context,'project_report')
+    g.connect(context,0,translate,'context_json');g.connect(context,2,translate,'target_language')
+    translation_cache=g.add('MangaTextCheckpoint',pos=(3360,-750),title='번역 재사용 · 확정 원문과 문맥')
+    intercept(translate,0,translation_cache)
+    g.connect(context,0,translation_cache,'dependency_json')
+    target_review=g.add('MangaReviewDocument',{'stage':'target'},pos=(3780,-750),title='번역 검수 · 수정 / 이 페이지 확정')
+    g.connect(translation_cache,0,target_review,'document_json');g.connect(target_review,0,edits,'translated_json')
+    cleanup_cache=g.add('MangaCleanupCheckpoint',pos=(4620,1100),title='지운 배경 재사용 · 실효 마스크+Qwen 설정')
+    intercept(assemble,0,cleanup_cache);g.connect(plan,6,cleanup_cache,'cleanup_plan')
+    g.connect(assemble,1,cleanup_cache,'report_json')
+    # Reading the cached report must not pull the image model back into execution.
+    for link in list(g.links):
+        if link[1:3]==[assemble,1] and link[3]!=cleanup_cache:
+            field=g.nodes[link[3]-1]['inputs'][link[4]]['name'];g.connect(cleanup_cache,1,link[3],field)
+    for i,node in enumerate((detection_cache,translation_cache,cleanup_cache,context)):
+        details=g.add('PreviewAny',pos=(i*850,3150),title='단계 재사용 / 문맥 · 미리보기 아무거나')
+        g.connect(node,1,details,'source');g.nodes[details-1]['size']=[780,300]
+    for node in (detection_cache,source_review,context,translation_cache,target_review,cleanup_cache,ocr_model):
+        g.nodes[node-1]['size']=[420,520 if node in (source_review,target_review) else 380 if node==context else 270]
+    g.note('원문/번역 검수 노드에서 텍스트를 고친 뒤 Run합니다. 수정은 페이지 revision별로 워크플로우에 저장됩니다.\n번역 확정은 사람이 확인한 페이지에만 사용하세요. 용어집과 확정된 이전 페이지를 번역 문맥으로 보냅니다.\n재사용 노드의 reuse=검증된 저장 결과, refresh=다시 계산, off=저장 없이 계산. 폰트/방향 수정은 검출/OCR/번역을 유지합니다.\n파란 다각형은 회전한 식자 프레임입니다. 제목/본문은 검증된 글줄 높이 차이가 있을 때 분리됩니다.\nOCR 엔진 선택은 정확도를 보장하지 않습니다. Manga OCR은 일본어용이며 자동 설치는 모델 파일에 한정합니다.',(0,3550))
     g.save(name)
     for suffix in ('.json', '.api.json'):
         path = ROOT / 'lettering/example_workflows' / (name + suffix)

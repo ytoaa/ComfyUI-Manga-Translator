@@ -1,6 +1,6 @@
 # 현재 구조와 유지보수 경계
 
-기준: v0.6.4 통합 08. [설정](configuration.md) · [개발](development.md) · [한계](known-issues.md)
+기준: v0.7.0 통합 08. [설정](configuration.md) · [개발](development.md) · [한계](known-issues.md)
 
 ## 코드의 책임
 
@@ -8,6 +8,10 @@
 | --- | --- |
 | adapters/ | 고정 모델 메타데이터·번들 검증·RF-DETR/Hayai 호출 |
 | detection_policy.py, region_policy.py, mask_nodes.py | 상세 검출·경계 복구·영역 정리·실제 segmentation 마스크 |
+| document.py | legacy 영역 필드를 유지하는 schema 2 snapshot, 문단 블록, revision에 묶인 인간 수정 |
+| stage_cache.py, recognition_cache.py | 전체 픽셀/모델/설정별 단계 저장·검증과 native lazy 평가 |
+| translation_context.py, ocr_engines.py | 확정 문맥·용어집, 고정 OCR 선택·원자 다운로드 |
+| lettering/frame.py | 로컬 회전 사각형 조판과 페이지 변환 |
 | nodes.py, models.py | ComfyUI 노드 경계, 크롭·OCR·수집·번역 |
 | layout_refinement.py, text_geometry.py, source_recovery.py | 다단 정리·회전/행 계획·잘린 원문의 문맥 복구 |
 | text_contract.py, ocr_policy.py, translation_protocol.py | 텍스트 계약·품질 휴리스틱·번역 응답 형식과 진단 |
@@ -18,13 +22,17 @@
 | tools/run_project.py | 프로젝트 기록·입력/결과 검증의 공유 구현. 위치는 tools지만 운영 노드도 import하므로 실행 ZIP에 필요 |
 | tests/, 나머지 tools/ | 회귀·시뮬레이션·그래프 생성·패키징·명시적 CPU 진단 |
 
-노드 ID·import 경로·워크플로우 연결은 이번 문서 정리에서 이동하지 않습니다. 기존 그래프 호환을 위한 저수준/수동 노드는 유지하지만 추가 배포 워크플로우를 제공하지 않습니다.
+기존 노드 ID·import 경로는 유지하고 새 checkpoint·검수·문맥 노드를 뒤에 추가합니다. 기존 그래프 호환을 위한 저수준/수동 노드는 유지하지만 추가 배포 워크플로우를 제공하지 않습니다.
 
 ## 페이지 데이터와 좌표
 
 검출·OCR·번역은 영역 ID를 유지하는 JSON으로 연결합니다. `bbox`는 페이지 기준 0–1000 정규화 xyxy, `crop_bbox_pixels`/`edit_bbox_pixels`/`line_bboxes_pixels`는 원본 페이지의 픽셀 xyxy입니다. OCR의 회전 행은 `rectified_crop_pixels` 좌표계로 명시합니다. 식자 내부 문서는 픽셀 xywh를 사용합니다. 좌표계를 이름 없이 혼용하지 않습니다.
 
 원본 크롭이 잘린 경우 source_recovery는 제한된 문맥에서 원래 기준선에 이어지는 글자를 찾습니다. OCR용 각 행과 제거용 픽셀은 같은 기하에서 만들어집니다. 복구 성공은 인식 정답 판정이 아닙니다. 실패하면 기본 보존·검수 정책으로 돌아갑니다.
+
+문서의 `analysis`에는 명시된 좌표, `content`에는 원문/번역/블록, `presentation`에는 폰트/배치/스타일, `authored`에는 수정 출처를 둡니다. flat 영역 필드는 기존 노드 호환용 표현이며 snapshot은 공통 경계에서 다시 생성합니다. target 검수에서 원문/블록 기하를 변경할 수 없습니다. 원문 변경은 번역과 편집 계획을 무효화합니다.
+
+단계 캐시는 전체 픽셀과 모델/설정의 canonical digest, 실제 원문 revision/문맥을 키에 사용합니다. 지운 배경은 실효 제거 계획과 Qwen 설정에 의존하며 번역 문자열 자체에 의존하지 않습니다. 손상 파일은 payload SHA256 검사에서 거부합니다. 체크포인트는 ComfyUI의 lazy 입력 평가로 재계산을 생략하고 별도 실행 작업자를 만들지 않습니다.
 
 ## 제거·식자의 공통 편집 결정
 

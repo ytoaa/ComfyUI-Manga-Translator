@@ -259,6 +259,7 @@ def test_workflow_change_missing_nodes_and_parallel_project_lock_fail_before_sub
     make_page(tmp_path/'input/1.png'); client = FakeComfy(); runner = project(tmp_path,client)
     runner.run(plan_only=True)
     changed = graph(); next(n for n in changed.values() if n['class_type']=='MangaLetterPlan')['inputs']['min_font'] = 9
+    changed={k:n for k,n in changed.items() if n['class_type']!='MangaCleanupCheckpoint'}
     with pytest.raises(P.ProjectError,match='settings changed'):
         P.Project(runner.inputs,runner.destination,changed,client).run()
     with P.project_lock(runner.destination):

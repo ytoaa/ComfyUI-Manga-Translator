@@ -528,7 +528,7 @@ def parse_regions(document, shape):
         ids.add(item['id'])
         bbox(item.get('bbox'), shape)
         clean_text(item.get('text'))
-        if set(item)-{'id', 'bbox', 'text', 'source_text', 'font', 'layout', 'style'}:
+        if set(item)-{'id', 'bbox', 'text', 'source_text', 'font', 'layout', 'style','frame_quad','parent_id','role'}:
             raise ValueError('Unknown region field')
         if not isinstance(item.get('layout', {}), dict) or not isinstance(item.get('style', {}), dict):
             raise ValueError('layout and style must be objects')

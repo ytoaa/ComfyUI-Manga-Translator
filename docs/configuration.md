@@ -6,7 +6,7 @@
 
 ## 모델과 의존성
 
-- RF-DETR 검출 번들과 Hayai OCR 번들이 필요합니다. 운영 노드는 CUDA를 사용합니다. CPU 진단은 별도 개발 도구입니다.
+- RF-DETR 검출 번들과 선택한 OCR 번들이 필요합니다. 검출은 기존 CUDA 경로를 유지하며 새 OCR 선택 노드는 auto/cuda/cpu를 지원합니다.
 - 번역은 ComfyUI 서버에서 접근 가능한 OpenAI-compatible LLM 서버를 연결합니다.
 - 원문 제거는 설치된 Qwen 모델과 `TextEncodeQwenImage21`, `QwenImage21Cache`, `ManualSigmas`, 로더·샘플러·VAE 노드를 사용합니다. 다른 제거 모델은 해당 서브그래프에 맞게 교체해야 하며 파일 이름만 바꾸면 호환되지 않습니다.
 - [requirements.txt](../requirements.txt)는 런타임 의존성입니다. Koharu 앱·Rust 렌더러·중계 서비스는 필요하지 않습니다.
@@ -25,7 +25,22 @@ ComfyUI/models/manga_translator/ocr/<bundle>/
 | 검출 | model.safetensors, load_model.py, inference_config.json |
 | Hayai | model.safetensors, config.json, configuration_hayai.py, modeling_hayai.py, tokenizer.json, vision-config.json |
 
-로더는 핀된 파일 해시 또는 호환 `model-files.json`을 검사합니다. 파일 하나만 옮기거나 코드·설정 이름만 바꿔 넣지 않습니다. 기존 `models/koharu/detection`, `models/koharu/ocr`와 등록된 `koharu_detection`, `koharu_ocr`는 읽기 전용 호환 조회를 지원합니다. 가중치는 저장소/ZIP에 포함하지 않으며 런타임 자동 다운로드도 없습니다.
+로더는 핀된 파일 해시 또는 호환 `model-files.json`을 검사합니다. 파일 하나만 옮기거나 코드·설정 이름만 바꿔 넣지 않습니다. 기존 `models/koharu/detection`, `models/koharu/ocr`와 등록된 `koharu_detection`, `koharu_ocr`는 읽기 전용 호환 조회를 지원합니다. 가중치는 저장소/ZIP에 포함하지 않습니다. 새 OCR 선택 노드에서는 누락된 고정 번들만 자동으로 내려받습니다. 기존 수동 로더는 유지합니다.
+
+## OCR 엔진과 다운로드
+
+`OCR 엔진 · 모델 자동 준비`의 `engine`에서 선택합니다.
+
+| 옵션 | 용도와 제한 |
+| --- | --- |
+| Hayai v2 · 기본 | 기존 고정 Hayai 경로. 기하·반복·미인식 검사는 계속 적용 |
+| Manga OCR · Japanese | 일본어 만화 인식 대안. 224×224 모델 입력, 한국어/중국어용 엔진으로 취급하지 않음 |
+| download_missing=true | 누락 번들을 임시 폴더에 받고 모든 파일 SHA256 확인 후 원자적으로 설치 |
+| device=auto | CUDA가 있으면 CUDA, 없으면 CPU. CPU는 느릴 수 있음 |
+
+모델 경로는 `models/manga_translator/ocr/hayai-ocr-v2` 또는 `manga-ocr-base`입니다. Hayai의 기존 고정 번들은 먼저 조회합니다. 불완전하거나 수정된 폴더는 덮어쓰지 않으며 보존/이름 변경 후 다시 실행합니다. 네트워크/DNS/체크섬 실패는 해당 모델 노드에서 확인할 수 있습니다. 다운로드 진행 파일·용량은 노드 안에 표시됩니다. 글자 없는 페이지는 OCR 로더까지 생략합니다.
+
+Manga OCR은 `kha-white/manga-ocr-base`의 고정 revision `aa6573bd10b0d446cbf622e29c3e084914df9741`을 사용합니다. bin 체크포인트의 안전한 weights_only 로딩을 위해 torch 2.6 이상이 필요합니다. Python 패키지나 torch/CUDA를 노드에서 자동 설치/교체하지 않습니다. 두 엔진의 출력 일치나 휴리스틱 통과가 정답을 보증하지 않습니다.
 
 ## 번역문 방향
 
@@ -68,7 +83,7 @@ ComfyUI/models/manga_translator/ocr/<bundle>/
 | --- | --- |
 | base_url | http://127.0.0.1:8000/v1 — 같은 호스트의 서버일 때만 유효 |
 | model | 정확한 서버 ID. 비워두면 /models에 모델이 하나일 때만 자동 선택 |
-| target_language | Korean |
+| target_language | `책 용어집` 노드에서 Korean 설정, 번역 노드로 연결 |
 | api_key_env | MANGA_LLM_API_KEY — 키는 ComfyUI 프로세스의 환경변수로 전달 |
 | max_tokens / timeout | 4096 / 300초 |
 | response_format | json_schema |
@@ -83,7 +98,9 @@ ComfyUI/models/manga_translator/ocr/<bundle>/
 {"translations":[{"id":"r1","target":"확정한 번역문"}]}
 ```
 
-일반 Run은 사람의 승인을 기다리지 않고 마지막까지 진행합니다. 먼저 검수하려면 해당 단계만 출력하도록 그래프를 구성한 뒤, 확인한 번역을 override로 전달합니다.
+일반 Run은 마지막까지 진행합니다. 결과를 보고 `원문 검수`/`번역 검수` 노드의 입력란에서 고친 뒤 다시 Run합니다. 수정은 `edits_json.pages`에 입력 revision별로 저장되어 다른 페이지로 새지 않습니다. 제목/본문이 분리된 경우 각 블록을 따로 고칠 수 있습니다. 원문 수정은 오래된 번역과 편집 계획을 무효화합니다.
+
+`이 페이지 번역 확정`은 사람이 확인한 번역에만 사용합니다. 확정 후 다시 Run해 저장한 결과만 다음 페이지 문맥의 후보가 됩니다. 용어집은 `[ {"source":"원문 이름","target":"확정 이름","note":"호칭"} ]` 형식입니다. 현재 원문에 등장한 항목과 검증된 이전 페이지 중 사람이 확정한 번역만 예산 내에서 전송합니다. 자동 메모리/요약은 만들지 않습니다.
 
 ## 제거·식자와 영역별 설정
 
@@ -99,4 +116,14 @@ ComfyUI/models/manga_translator/ocr/<bundle>/
 
 `rotation`, `shear`, `bend`는 수동으로 조절할 수 있습니다. 기하가 확인된 가로 글줄은 OCR과 같은 원문 회전각이 식자에 전달됩니다. 자동 곡선 복원이나 원본 폰트 식별은 지원하지 않습니다. `페이지 편집 계획`의 `region_actions_json={"r1":"preserve"}`는 해당 영역을 제거·새 식자 대상에서 제외합니다.
 
-검수 화면의 주황 프레임은 페이지 기준 수평 작업 범위입니다. 회전 글줄의 기울어진 외곽선이 아닙니다. 제목·본문 계층 복원과 회전 조판·검수 표시 개선은 [후속 작업](known-issues.md)입니다.
+새 08의 `oriented_fit=true`는 회전된 로컬 사각형에서 식자한 뒤 페이지로 옮깁니다. 파란 다각형은 식자 프레임, 주황 박스는 원본 페이지 작업 범위입니다. 실제 새 글자 알파는 식자 결과 이미지에서 확인합니다. 말풍선·보존 픽셀·이웃 충돌 검사는 변환 후에도 적용됩니다. 제목/본문은 검증된 행 높이 차이가 있을 때만 자동 분리합니다. 폰트 자동 식별이나 일반 문서 역할 분류기는 아닙니다.
+
+## 단계 결과 재사용
+
+검출·번역·지운 배경 checkpoint와 OCR 노드의 크롭별 캐시는 원본 전체 픽셀과 해당 단계의 모델/설정/문맥으로 식별합니다. `reuse`는 검증된 저장 결과를 쓰고, `refresh`는 해당 단계를 다시 계산해 저장하며, `off`는 저장하지 않습니다. 저장 위치는 `output/manga_translator/stage_cache`입니다. 손상/미완성 캐시는 재사용하지 않습니다. 개별 항목 256 MiB를 넘으면 저장을 생략합니다.
+
+폰트/번역문 방향 변경은 앞 단계 결과를 유지합니다. 원문 수정은 번역부터 다시 계산합니다. 번역 수정은 실제 제거 계획이 같으면 지운 배경을 유지하고 식자를 다시 계산합니다. 캐시는 의미 정확도 판정이 아닙니다. OCR 엔진/처리 코드를 바꾸면 이전 OCR 결과를 같은 것으로 취급하지 않습니다.
+
+외부 번역 서버가 같은 `model` ID로 가중치를 바꾸면 클라이언트가 자동으로 알아낼 수 없습니다. 번역 노드의 `model_revision`을 바꾸거나 번역 checkpoint를 `refresh`로 실행하세요. 로컬 검출/Qwen 파일은 내용 SHA256으로 캐시 신원을 구분하며 파일 stat이 같으면 프로세스 안에서 계산한 해시를 재사용합니다.
+
+OCR 재인식은 `MangaOCRAdaptive.cache_policy=refresh`로 실행합니다. 별도의 집계 문서 캐시를 겹치지 않아 새 OCR 결과가 오래된 페이지 JSON에 가려지지 않습니다. OCR 엔진/입력/분할/생성 설정과 원본 크롭 픽셀을 함께 식별합니다.

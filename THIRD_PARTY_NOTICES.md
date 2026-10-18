@@ -45,3 +45,7 @@ SIL Open Font License 1.1 전문과 Reserved Font Name 'Source' 고지는
 `tools/build_fallback_font.py`, 원본/파생 SHA256과 도구 버전은 `sources.json`에 기록한다.
 통합 식자에서 선택 폰트에 없는 글자가 있을 때 전체 번역문을 지원하는 폰트로만
 해당 영역을 대체하며, 문자열을 지우거나 다른 문자로 바꾸지 않는다.
+
+## Optional Manga OCR model
+
+The optional Japanese OCR engine loads [kha-white/manga-ocr-base](https://huggingface.co/kha-white/manga-ocr-base), revision `aa6573bd10b0d446cbf622e29c3e084914df9741`, distributed under Apache-2.0. Weights are not included in this repository or ZIP. The downloader verifies the fixed file SHA256 values in ocr_engines.py. The adapter uses Transformers locally; it does not vendor the manga-ocr application.

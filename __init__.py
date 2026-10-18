@@ -49,3 +49,16 @@ NODE_DISPLAY_NAME_MAPPINGS['MangaLetteringDirection'] = '번역문 방향 · 가
 from .debug_nodes import MangaDebugInspect
 NODE_CLASS_MAPPINGS['MangaDebugInspect'] = MangaDebugInspect
 NODE_DISPLAY_NAME_MAPPINGS['MangaDebugInspect'] = '단계 디버그 · 판단 근거와 중간 이미지'
+
+from .document import MangaReviewDocument
+from .stage_cache import MangaTextCheckpoint,MangaDetectionCheckpoint,MangaCleanupCheckpoint
+from .translation_context import MangaTranslationContext
+from .ocr_engines import MangaOCRModel
+from .recognition_cache import MangaOCRAdaptiveCached
+for cls in (MangaReviewDocument,MangaTextCheckpoint,MangaDetectionCheckpoint,MangaCleanupCheckpoint,MangaTranslationContext,MangaOCRModel):
+    NODE_CLASS_MAPPINGS[cls.__name__]=cls
+NODE_CLASS_MAPPINGS['MangaOCRAdaptive']=MangaOCRAdaptiveCached
+NODE_DISPLAY_NAME_MAPPINGS.update({'MangaReviewDocument':'문서 검수 · 원문 / 번역 수정·확정',
+    'MangaTextCheckpoint':'문서 단계 재사용','MangaDetectionCheckpoint':'검출 단계 재사용',
+    'MangaCleanupCheckpoint':'지운 배경 재사용','MangaTranslationContext':'책 용어집 · 확정 번역 문맥',
+    'MangaOCRModel':'OCR 엔진 · 모델 자동 준비'})

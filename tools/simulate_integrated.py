@@ -192,7 +192,7 @@ class GraphRunner:
         node = self.graph[ident]; kind = node['class_type']
         cls = plugin.NODE_CLASS_MAPPINGS.get(kind)
         obj = cls() if cls else None
-        schema = cls.INPUT_TYPES() if cls and kind not in ('MangaDetectorLoader', 'MangaOCRLoader') else {}
+        schema = cls.INPUT_TYPES() if cls and kind not in ('MangaDetectorLoader', 'MangaOCRLoader','MangaOCRModel') else {}
         fields = {**schema.get('required', {}), **schema.get('optional', {})}
         values, lazy = {}, {}
         def resolve(value):
@@ -202,6 +202,9 @@ class GraphRunner:
                 lazy[key] = value
                 values[key] = (None,)  # Match ComfyUI execution.get_input_data.
             else: values[key] = resolve(value)
+        for name,kind_hidden in schema.get('hidden',{}).items():
+            if kind_hidden=='PROMPT':values[name]=[self.graph]
+            elif kind_hidden=='UNIQUE_ID':values[name]=[ident]
         input_is_list = bool(getattr(cls, 'INPUT_IS_LIST', False))
         if lazy:
             if input_is_list:
@@ -219,7 +222,7 @@ class GraphRunner:
         for i in range(count):
             args = values if input_is_list else {k: v[min(i, len(v)-1)] for k, v in values.items()}
             self.calls[kind] += 1
-            if cls and kind not in ('MangaDetectorLoader', 'MangaOCRLoader', 'MangaWorkflowInput'):
+            if cls and kind not in ('MangaDetectorLoader', 'MangaOCRLoader','MangaOCRModel', 'MangaWorkflowInput'):
                 result = getattr(obj, cls.FUNCTION)(**args)
             else: result = self.native(kind, args)
             if isinstance(result, dict):
@@ -239,7 +242,7 @@ class GraphRunner:
             if override: return override(a)
             return tensor(self.original), torch.zeros((1, 640, 1600)), '{"status":"single_image"}', 'manga_translator/integrated_tiles', 'manga_translator/ocr', 'manga_translator/translation'
         if kind == 'MangaDetectorLoader': return (self.detector,)
-        if kind == 'MangaOCRLoader': return (self.ocr,)
+        if kind in ('MangaOCRLoader','MangaOCRModel'): return (self.ocr,'oracle model; no real inference')
         if kind in ('UNETLoader', 'CLIPLoader', 'VAELoader', 'KSamplerSelect'): return (object(),)
         if kind == 'QwenImage21Cache': return (a['model'],)
         if kind == 'ManualSigmas': return (a['sigmas'],)
@@ -317,7 +320,8 @@ class GraphRunner:
         finish_id = next(k for k, n in self.graph.items() if n['class_type'] == 'MangaInpaintAssemble')
         regions_id = next(k for k, n in self.graph.items() if n['class_type'] == 'MangaDetectionRegions')
         plan = self.cache[plan_id][6][0]
-        cleaned = self.cache[finish_id][0][0]
+        checkpoint_id=next(k for k,n in self.graph.items() if n['class_type']=='MangaCleanupCheckpoint')
+        cleaned = self.cache[checkpoint_id][0][0]
         selected = json.loads(self.cache[regions_id][0][0])
         from integrated_simulation import boundary_review
         protected=boundary_review.boxes(selected,*self.original.size)
@@ -357,7 +361,7 @@ class GraphRunner:
                   'region_selection':'detector',
                   'needs_review':bool(protected),'protected_boxes_pixels':protected,
                   'ocr_line_calls': self.ocr.calls, 'qwen_tile_calls': self.qwen_calls,
-                  'calls': dict(self.calls), 'cleanup': json.loads(self.cache[finish_id][1][0]),
+                  'calls': dict(self.calls), 'cleanup': json.loads(self.cache[finish_id][1][0]) if finish_id in self.cache else {**plan['report'],'reused':True},
                   'outside_mask_unchanged': True, 'all_fixture_ink_masked': not bool(protected),
                   'all_unprotected_ink_masked':True,'final_saved': True,
                   'full_page_qwen_was_called': False}

@@ -488,6 +488,7 @@ class MangaOCRAdaptive:
         from .adapters.options import OcrOptions
         from .ocr_policy import plan_line, text_problem, join_chunks, recovery_parts, dot_punctuation
         from .adapters.hayai import preprocess_size
+        preprocess_size=getattr(model,"input_size",preprocess_size)
         from .text_contract import ocr_problem
         import torch
         if type(base_patches) is not int or base_patches not in (256,512,1024):
@@ -632,7 +633,8 @@ class MangaOCRAdaptive:
                 'line_split':line_split,'tight_crop':tight_crop,'split_long_lines':split_long_lines,
                 'text_direction':text_direction,'retry_on_token_limit':retry_on_token_limit,
                 'quality_guard':quality_guard,'retry_on_layout_failure':retry_on_layout_failure,
-                'recognition_work_items':work_count,'chunks':records,
+                'recognition_work_items':work_count,'chunks':records,'line_texts':texts,
+                **({'engine':model.engine} if hasattr(model,'engine') else {}),
                 **({'region_plan':region_plan} if region_plan else {}),
                 'quality_scope':'heuristic_checks_only_not_recognition_accuracy'}
         dots=dot_punctuation(source) if quality_guard else None

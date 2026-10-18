@@ -243,7 +243,17 @@ def workflow_bindings(graph):
         return link[0]
     source=review_input(translate,'ocr_json')
     target=review_input(single('MangaLetterPrepare'),'translated_json')
-    if source==target or graph[source]['inputs'].get('translated_json')!=[collect,0]:
+    def unwrap(link):
+        visited=set()
+        while isinstance(link,list) and len(link)==2 and link[1]==0 and link[0] in graph:
+            ident=link[0]
+            if ident in visited:raise ProjectError('Cycle in review artifact inputs')
+            visited.add(ident);kind=graph[ident]['class_type']
+            field={'MangaTextCheckpoint':'value','MangaReviewDocument':'document_json'}.get(kind)
+            if not field:break
+            link=graph[ident]['inputs'].get(field)
+        return link
+    if source==target or unwrap(graph[source]['inputs'].get('translated_json'))!=[collect,0]:
         raise ProjectError('OCR and translation need distinct review artifacts')
     def preview(saved):
         matches = [key for key, node in graph.items() if node['class_type'] == 'PreviewAny'
@@ -381,6 +391,7 @@ class Project:
                        'workflow_sha256':self.workflow_sha256, 'recursive':recursive,
                        'source_pixel_limit':max_pixels, 'normalisation':'exif_rgb_white_alpha_v1'}
         self._retry_policy_failures = False
+        self._settings_changed = False
 
     def _compatible_previous_config(self, previous):
         """Permit path/control-only migration and monotonic source-budget increases."""
@@ -459,7 +470,14 @@ class Project:
                 raise ProjectError('Invalid removed-input ledger')
             compatible, raised_limit = self._compatible_previous_config(previous.get('config'))
             if not compatible:
-                raise ProjectError('Project model/workflow settings changed; use a new project directory to preserve prior results and active job identities')
+                prior=previous.get('config',{})
+                staged={'MangaTextCheckpoint','MangaDetectionCheckpoint','MangaCleanupCheckpoint'} <= {n['class_type'] for n in self.graph.values()}
+                same_environment=all(prior.get(k)==self.config.get(k) for k in ('server','normalisation','recursive'))
+                self.project_id=previous['project_id']
+                states=[self.state(page) for page in previous['pages']]
+                if not staged or not same_environment or any(s and s['status'] in ACTIVE|{'preparing'} for s in states):
+                    raise ProjectError('Project model/workflow settings changed; use a new project directory to preserve prior results and active job identities')
+                self._settings_changed=True
             self._retry_policy_failures = raised_limit
         if inventory is not None and (previous is None or inventory != previous['pages']):
             raise ProjectError('Continuation inventory differs from the saved manifest')
@@ -477,7 +495,8 @@ class Project:
         self.recovery_pages = list(known.values())
         document = {'schema':1, 'project_id':self.project_id, 'config':self.config,
                     'source_folder':str(self.inputs), 'pages':pages, 'removed_inputs':removed,
-                    'quality_scope':'model_results_require_review'}
+                    'quality_scope':'model_results_require_review',
+                    'settings_revisions':((previous or {}).get('settings_revisions',[])+([previous['config']] if self._settings_changed else []))[-64:]}
         atomic_write(path, json_bytes(document))
         if not (self.destination/'workflow.api.json').exists():
             atomic_write(self.destination/'workflow.api.json', json_bytes(self.graph))

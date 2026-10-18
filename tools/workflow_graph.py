@@ -76,12 +76,24 @@ class Graph:
         return node_id
 
     def connect(self, source, slot, target, field):
+        def depends(ident,visited):
+            if ident==str(target):return True
+            if ident in visited:return False
+            visited.add(ident)
+            return any(depends(v[0],visited) for v in self.prompt[ident]['inputs'].values()
+                       if isinstance(v,list) and len(v)==2 and isinstance(v[0],str) and v[0] in self.prompt)
+        if depends(str(source),set()):raise ValueError('Workflow connection would create a cycle')
         dest, origin = self.nodes[target-1], self.nodes[source-1]
         match = next((i for i, item in enumerate(dest['inputs']) if item['name'] == field), None)
         if match is None:
             match = len(dest['inputs'])
             dest['inputs'].append({'name': field, 'type': origin['outputs'][slot]['type'], 'link': None, 'widget': {'name': field}})
-        link_id = len(self.links)+1
+        old=dest['inputs'][match].get('link')
+        if old is not None:
+            link=next(l for l in self.links if l[0]==old)
+            self.nodes[link[1]-1]['outputs'][link[2]]['links'].remove(old)
+            self.links.remove(link)
+        link_id = max((link[0] for link in self.links),default=0)+1
         dest['inputs'][match]['link'] = link_id
         origin['outputs'][slot]['links'].append(link_id)
         self.links.append([link_id, source, slot, target, match, origin['outputs'][slot]['type']])
@@ -106,7 +118,7 @@ class Graph:
 
     def save(self, name):
         ui = {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'manga-lettering/'+name)), 'revision': 0,
-              'last_node_id': len(self.nodes), 'last_link_id': len(self.links), 'nodes': self.nodes,
+              'last_node_id': len(self.nodes), 'last_link_id': max((link[0] for link in self.links),default=0), 'nodes': self.nodes,
               'links': self.links, 'groups': [], 'config': {}, 'extra': {'ds': {'scale': .55, 'offset': [20, 20]}}, 'version': .4}
         ui = normalize_workflow(ui, self.prompt, module.NODE_CLASS_MAPPINGS)
         folder = PACK/'example_workflows'

@@ -26,7 +26,7 @@ def test_no_selected_text_runs_shipped_graph_without_models_or_http(tmp_path,mon
         runner.detector.detect=detect
     original_native=runner.native
     def native(kind,args):
-        if kind in ('MangaOCRLoader','UNETLoader','CLIPLoader','VAELoader'):
+        if kind in ('MangaOCRLoader','MangaOCRModel','UNETLoader','CLIPLoader','VAELoader'):
             pytest.fail('Unused model loader evaluated: '+kind)
         return original_native(kind,args)
     monkeypatch.setattr(runner,'native',native)

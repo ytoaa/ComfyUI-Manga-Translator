@@ -56,7 +56,7 @@
       "reading_order": "top_to_bottom",
       "merge_adjacent_lines": true,
       "result": [
-        "4",
+        "65",
         0
       ]
     }
@@ -69,7 +69,7 @@
         0
       ],
       "result": [
-        "4",
+        "65",
         0
       ]
     }
@@ -109,9 +109,11 @@
     }
   },
   "9": {
-    "class_type": "MangaOCRLoader",
+    "class_type": "MangaOCRModel",
     "inputs": {
-      "model_name": "hayai-ocr-v2"
+      "engine": "Hayai v2",
+      "download_missing": true,
+      "device": "auto"
     }
   },
   "10": {
@@ -130,6 +132,7 @@
       "text_direction": "auto",
       "retry_on_token_limit": true,
       "retry_on_layout_failure": true,
+      "cache_policy": "reuse",
       "images": [
         "8",
         0
@@ -173,7 +176,7 @@
         4
       ],
       "translated_json": [
-        "11",
+        "66",
         0
       ]
     }
@@ -183,14 +186,22 @@
     "inputs": {
       "base_url": "http://127.0.0.1:8000/v1",
       "model": "",
-      "target_language": "Korean",
+      "target_language": [
+        "67",
+        2
+      ],
       "api_key_env": "MANGA_LLM_API_KEY",
       "max_tokens": 4096,
       "timeout": 300,
       "translated_override_json": "",
+      "model_revision": "",
       "response_format": "json_schema",
       "ocr_json": [
         "12",
+        0
+      ],
+      "context_json": [
+        "67",
         0
       ]
     }
@@ -204,7 +215,7 @@
         0
       ],
       "translated_json": [
-        "13",
+        "69",
         0
       ],
       "source_mask": [
@@ -473,6 +484,7 @@
       "min_scale": 0.55,
       "padding": 2,
       "region_options_json": "{}",
+      "oriented_fit": true,
       "line_breaks": "reflow",
       "fit_policy": "readable",
       "respect_bubbles": true,
@@ -481,7 +493,7 @@
         0
       ],
       "cleaned": [
-        "29",
+        "70",
         0
       ],
       "source_mask": [
@@ -493,7 +505,7 @@
         0
       ],
       "detection_result": [
-        "4",
+        "65",
         0
       ],
       "page_direction": [
@@ -528,7 +540,7 @@
     "class_type": "PreviewImage",
     "inputs": {
       "images": [
-        "29",
+        "70",
         0
       ]
     }
@@ -638,7 +650,7 @@
         0
       ],
       "detection_result": [
-        "4",
+        "65",
         0
       ],
       "preview_image": [
@@ -708,7 +720,7 @@
     "inputs": {
       "stage": "cleanup",
       "report_json": [
-        "29",
+        "70",
         1
       ]
     }
@@ -782,6 +794,135 @@
     "inputs": {
       "images": [
         "61",
+        1
+      ]
+    }
+  },
+  "65": {
+    "class_type": "MangaDetectionCheckpoint",
+    "inputs": {
+      "cache_policy": "reuse",
+      "value": [
+        "4",
+        0
+      ],
+      "original": [
+        "1",
+        0
+      ]
+    }
+  },
+  "66": {
+    "class_type": "MangaReviewDocument",
+    "inputs": {
+      "stage": "source",
+      "edits_json": "{}",
+      "document_json": [
+        "11",
+        0
+      ]
+    }
+  },
+  "67": {
+    "class_type": "MangaTranslationContext",
+    "inputs": {
+      "glossary_json": "[]",
+      "target_language": "Korean",
+      "style_instructions": "",
+      "history_bytes": 12000,
+      "ocr_json": [
+        "12",
+        0
+      ],
+      "project_report": [
+        "1",
+        2
+      ]
+    }
+  },
+  "68": {
+    "class_type": "MangaTextCheckpoint",
+    "inputs": {
+      "value": [
+        "13",
+        0
+      ],
+      "cache_policy": "reuse",
+      "original": [
+        "1",
+        0
+      ],
+      "dependency_json": [
+        "67",
+        0
+      ]
+    }
+  },
+  "69": {
+    "class_type": "MangaReviewDocument",
+    "inputs": {
+      "stage": "target",
+      "edits_json": "{}",
+      "document_json": [
+        "68",
+        0
+      ]
+    }
+  },
+  "70": {
+    "class_type": "MangaCleanupCheckpoint",
+    "inputs": {
+      "cache_policy": "reuse",
+      "value": [
+        "29",
+        0
+      ],
+      "original": [
+        "1",
+        0
+      ],
+      "cleanup_plan": [
+        "16",
+        6
+      ],
+      "report_json": [
+        "29",
+        1
+      ]
+    }
+  },
+  "71": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "65",
+        1
+      ]
+    }
+  },
+  "72": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "68",
+        1
+      ]
+    }
+  },
+  "73": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "70",
+        1
+      ]
+    }
+  },
+  "74": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "67",
         1
       ]
     }

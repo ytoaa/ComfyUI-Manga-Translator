@@ -157,7 +157,7 @@ def _curve(layer,alpha,bend):
 def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-Bold.ttf',
                mode='source',direction='auto',min_font=10,min_scale=.55,padding=2,
                region_options_json='{}',bubble_mask=None,detection_result=None,line_breaks='preserve',
-               fit_policy='source_ratio',respect_bubbles=False,page_direction=None):
+               fit_policy='source_ratio',respect_bubbles=False,page_direction=None,oriented_fit=False):
     original,cleaned=core.rgb(original),core.rgb(cleaned)
     if original.shape!=cleaned.shape: raise ValueError('Original and cleaned dimensions differ')
     support=core.mask_array(source_mask,original.shape[:2])
@@ -213,6 +213,10 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         font=opts.get('font',item.get('font',default_font))
         font,font_fallback=core.resolve_font(font,item['text'])
         ref,clean,mask,_=core.crop_region(original,cleaned,support,item['bbox'])
+        if item.get('frame_quad'):
+            owned=Image.new('L',(ref.shape[1],ref.shape[0]));x,y,_,_=item['bbox']
+            ImageDraw.Draw(owned).polygon([(a-x,b-y) for a,b in item['frame_quad']],fill=255)
+            mask=mask*(np.asarray(owned)>0)
         style,analysis=core.analyze_style(ref,clean,mask)
         measured,ink=profile(ref,clean,mask,font,style['foreground'])
         source_angle=0
@@ -304,6 +308,17 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
                   'fit_policy':policy,'options':render_options,'bend':curve,
                   'bubble_guard':guard,'bubble_containment':guard_report,
                   'profile':measured,'analysis':json.loads(analysis),'warning':warning}
+        if oriented_fit and (item.get('frame_quad') or render_options.get('rotation')):
+            from . import frame
+            quad=item.get('frame_quad') or frame.rectangle(ink,source,render_options.get('rotation',0),pad+2)
+            if item.get('frame_quad') and 'rotation' in opts:
+                q=np.asarray(quad);center=q.mean(axis=0)
+                current=math.degrees(math.atan2(-(q[1,1]-q[0,1]),q[1,0]-q[0,0]))
+                angle=math.radians(opts['rotation']-current)
+                q=(q-center)@np.array([[math.cos(angle),-math.sin(angle)],[math.sin(angle),math.cos(angle)]])+center
+                quad=q.tolist()
+            frame.geometry(quad);prepared['frame_quad']=quad
+            draw.line([tuple(p) for p in quad]+[tuple(quad[0])],fill=(70,140,255),width=3)
         # Bound repeated search work and plan memory, including optional expanded rectangles.
         total_area+=max(max(b[2]*b[3] for b,_,_ in phases),guard['mask'].size if guard else 0)
         if total_area>core.MAX_TYPOGRAPHY_PIXELS: raise ValueError('Total typography area exceeds 32 Mi pixels')
@@ -373,10 +388,25 @@ def render_plan(plan):
                 scale=size/region['cap']
                 style=scaled_style(region['style'],scale,(w,h))
                 try:
-                    layer,alpha,render=core.render_text(region['text'],style,font_name=region['font'],
-                        min_font=size,max_font=size,max_lines=lines,**options)
+                    if region.get('frame_quad') and phase.startswith(('source','reflow')):
+                        from . import frame
+                        actual_bounds,layer,alpha,render=frame.render(region['text'],style,region['font'],region['frame_quad'],result.shape,
+                            min_font=size,max_font=size,max_lines=lines,**options)
+                        x,y,w,h=core.bbox(actual_bounds,result.shape)
+                        allowed=bubble_constraints.canvas_mask(guard,actual_bounds) if guard else None
+                        if protected:
+                            permitted=np.ones((h,w),bool)
+                            for a,b,c,d in protected:
+                                left,top,right,bottom=max(x,a),max(y,b),min(x+w,c),min(y+h,d)
+                                if left<right and top<bottom:permitted[top-y:bottom-y,left-x:right-x]=False
+                            allowed=permitted if allowed is None else allowed & permitted
+                    else:
+                        actual_bounds=bounds
+                        layer,alpha,render=core.render_text(region['text'],style,font_name=region['font'],
+                            min_font=size,max_font=size,max_lines=lines,**options)
+                        render=json.loads(render)
                 except ValueError as exc:
-                    if any(s in str(exc) for s in ('does not fit','leave no space')):
+                    if any(s in str(exc) for s in ('does not fit','leave no space','glyph leaves page boundary')):
                         reason=str(exc);continue
                     raise
                 layer,alpha=_curve(layer,alpha,region['bend'])
@@ -388,7 +418,7 @@ def render_plan(plan):
                     reason='lettering would leave the verified bubble mask or enter preserved boundary pixels';continue
                 if np.any(active & occupied[y:y+h,x:x+w]):
                     reason='neighbouring translation collision';continue
-                chosen=(bounds,layer,alpha,json.loads(render),style,scale,phase)
+                chosen=(actual_bounds,layer,alpha,render,style,scale,phase)
                 break
             if chosen is not None: break
         if chosen is None:
