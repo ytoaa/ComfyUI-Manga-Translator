@@ -9,6 +9,7 @@
 | [문제 해결](troubleshooting.md) | 상태 의미, 오류별 진단, 중간 결과 연결 |
 | [알려진 한계](known-issues.md) | 현재 품질 한계와 다음 작업 |
 | [구조](architecture.md) | 코드 책임, 좌표·편집·폴더 실행 계약 |
+| [다른 프로젝트와 비교](comparison.md) | 2026-10-18 공식 소스 기준 차이·적용할 설계·평가 과제 |
 | [개발](development.md) | CPU 회귀, 워크플로우 재생성, 저장소 검사·패키징 |
 | [검증](validation/README.md) | 실제 추론과 모의 검사 구분, CPU 관측 자료 |
 | [변경 이력](../CHANGELOG.md) | 주요 기능 변경과 문서 정리 |
