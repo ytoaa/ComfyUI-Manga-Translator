@@ -366,14 +366,241 @@ def actual_ocr(a,models,inputs):
                     a.case(name+'-blank-quality-guard','actual_ocr_quality','Do not accept hallucinated text from a uniform empty crop',blank_guard,'actual_quality_guard')
 
 
+def transition_cases(a):
+    """New seam tests, deliberately separate from the original 63 scenarios."""
+    from boundary_acceptance import models as M,nodes as N
+    from boundary_acceptance.lettering.nodes import MangaLetterPrepare
+    def long_document(count=2,length=1100):
+        r=row();r['crop_bbox_pixels']=[20,20,220,180]
+        r['blocks']=[{'id':f'b{i}','source':f'Line {i}','target':'가'*length,
+                     'bbox_local':[0,i*4,180,i*4+4],'coordinate_frame':'source_crop_pixels'} for i in range(count)]
+        r['source']='\n'.join(b['source'] for b in r['blocks'])
+        r['target']='\n\n'.join(b['target'] for b in r['blocks'])
+        return D.attach({'regions':[r]})
+    for length in (1023,1024,1100):
+        def approve(length=length):
+            data=long_document(length=length);r=data['regions'][0]
+            D.validate_target(r)
+            try:D.apply_edits(data,{'r1':{'target':r['target']}},'target')
+            except ValueError as exc:raise Failed('Page approval uses a flat budget after paragraph targets passed',{'block_characters':length,'parent_characters':len(r['target']),'exception':str(exc)})
+            return {'parent_characters':len(r['target'])}
+        a.case(f'approve-paragraph-parent-{length}','review_transition','Approval of valid paragraph targets remains valid at the UI/document seam',approve)
+    def empty_blocks():
+        out=D.apply_edits({'regions':[row()]},{'r1':{'blocks':[]}},'source')
+        require(bool(out['regions'][0]['source'].strip()),'Empty source blocks create an invalid recognized source without an explicit deletion action',{'source':out['regions'][0]['source']})
+    a.case('source-review-empty-block-list','review_transition','Reject empty paragraph replacement or represent explicit region deletion',empty_blocks)
+    def same_block_id():
+        one=row();two=deepcopy(one);two['id']='r2';two['bbox']=[600,100,950,800];two['crop_bbox_pixels']=[230,20,430,180]
+        data={'regions':[one,two]};D.translation_units(data)
+        try:prepared=MangaLetterPrepare().prepare(torch.ones(1,240,500,3),json.dumps(data))[0]
+        except ValueError as exc:raise Failed('Locally valid paragraph IDs collide at the lettering boundary',{'exception':str(exc),'parent_ids':['r1','r2'],'block_ids':['b1','b2']})
+        ids=[r['id'] for r in json.loads(prepared)['regions']]
+        require(len(ids)==len(set(ids)),'Per-parent paragraph IDs become duplicate global lettering IDs',{'expanded_ids':ids})
+    a.case('paragraph-local-vs-global-ids','geometry_transition','Scope repeated paragraph IDs by their parent before expanding lettering regions',same_block_id)
+    def payload():
+        data=long_document(count=32,length=2048);D.validate_target(data['regions'][0])
+        raw=json.dumps(data,ensure_ascii=False)
+        try:N.layout(raw)
+        except ValueError as exc:raise Failed('Accepted paragraph budgets exceed the next document transport limit',{'characters':len(raw),'paragraphs':32,'characters_each':2048,'exception':str(exc)})
+        return {'characters':len(raw)}
+    a.case('paragraph-budget-vs-json-budget','budget_transition','Accepted block budgets fit downstream document transport',payload)
+    for value,label in ((float('nan'),'nan'),(float('inf'),'infinity'),(-.1,'below-zero'),(1.1,'above-one')):
+        def invalid_pixels(value=value):
+            image=torch.full((1,8,9,3),value)
+            with np.errstate(invalid='ignore'):
+                try:result=M.MangaOCRAdaptive().read(image)
+                except ValueError as exc:return {'rejected':str(exc)}
+            raise Failed('Invalid RGB values are quantized into a verified empty-crop result',{'status':json.loads(result[1]).get('status')})
+        a.case('invalid-rgb-'+label,'input_transition','Reject invalid float RGB before blank-crop certification',invalid_pixels)
+    def generation_pair():
+        folder=a.work/'cache-generation';image=torch.ones(1,8,9,3);key_graph={'1':{'class_type':'MangaCleanupCheckpoint','inputs':{}}}
+        node=K.MangaCleanupCheckpoint()
+        with patch.object(K,'root',lambda:folder):
+            key=node._key(image,key_graph,'1','',None)
+            K.write(key,'image',image*0,'{"generation":"A"}')
+            original=K.read_report
+            def swapped(k):
+                K.write(k,'image',image,'{"generation":"B"}')
+                return original(k)
+            with patch.object(K,'read_report',side_effect=swapped):node.check_lazy_status(image,prompt=key_graph,unique_id='1')
+            out=node.checkpoint(image,prompt=key_graph,unique_id='1');mean=float(out['result'][0].mean());report=json.loads(out['result'][1])
+            require((mean==0 and report.get('generation')=='A') or (mean==1 and report.get('generation')=='B'),
+                    'Cached pixels and diagnostics are pinned from different writer generations',{'pixel_mean':mean,'report_generation':report.get('generation')})
+    a.case('cache-refresh-between-value-and-report','cache_transition','Read pixels and QA diagnostics from one cache generation',generation_pair)
+    def changed_dependency():
+        folder=a.work/'dependency-during-probe';weight=a.work/'probe-model.bin';weight.write_bytes(b'old')
+        g={'1':{'class_type':'UNETLoader','inputs':{'unet_name':'same.bin'}},'2':{'class_type':'MangaCleanupCheckpoint','inputs':{'value':['1',0]}}}
+        node=K.MangaCleanupCheckpoint();image=torch.ones(1,8,9,3)
+        with patch.object(K,'root',lambda:folder),patch.dict(sys.modules,{'folder_paths':types.SimpleNamespace(get_full_path=lambda *args:str(weight))}):
+            node.checkpoint(image,image,prompt=g,unique_id='2');require(node.check_lazy_status(image,prompt=g,unique_id='2')==[],'Seed cache missed')
+            weight.write_bytes(b'new')
+            try:node.checkpoint(image,prompt=g,unique_id='2')
+            except ValueError as exc:raise Failed('Dependency replacement invalidates the key after lazy upstream pruning',{'exception':str(exc)})
+    a.case('model-replaced-after-lazy-hit','cache_transition','Freeze dependency generation or recover when weights change during a lazy hit',changed_dependency)
+    def resident_model():
+        folder=a.work/'resident-model';folder.mkdir();weight=folder/'model.safetensors';weight.write_bytes(b'old')
+        from boundary_acceptance.adapters import model as adapter
+        class Backend:
+            def __init__(self,folder):self.loaded_bytes=(folder/'model.safetensors').read_bytes()
+        with patch.object(M,'catalog',return_value={'local':folder}),patch.object(M,'_MODELS',{}),patch.object(adapter,'Backend',Backend):
+            before=K.file_identity(weight);first=M.load('detection','local');weight.write_bytes(b'new');after=K.file_identity(weight);second=M.load('detection','local')
+            require(first is not second and second.loaded_bytes==b'new','Disk model identity changes while resident backend still uses previous weights',
+                    {'disk_identity_changed':before!=after,'resident_bytes':second.loaded_bytes.decode(),'scope':'backend double, not real RF-DETR inference'})
+    a.case('resident-model-vs-disk-generation','model_transition','Changing a local bundle cannot label old resident inference with the new disk identity',resident_model)
+
+    def new_book(name,count=2):
+        client=CanvasClient(a.work/name);inputs=client.input_root/'book';inputs.mkdir()
+        for i in range(count):make_page(inputs/f'{i+1}.png')
+        folder=client.output_root/'manga_translator/workflow_projects/book';g=graph();engine=C.CanvasExecution();source=P.workflow_bindings(g)['load'];pid=str(uuid.uuid4())
+        result=engine.begin(inputs,folder,g,client,pid,source,'시작·재개')
+        return engine,client,inputs,folder,g,source,pid,result
+    def change_during_continuation():
+        engine,client,inputs,folder,g,source,pid,first=new_book('continuation-settings')
+        finish_native(client,pid,first,g);engine.resolve(folder,first['ticket']['run_id'],pid,client)
+        prior=P.read_json(folder/'project.json')['config'];changed=deepcopy(g)
+        next(n for n in changed.values() if n['class_type']=='MangaLetterPlan')['inputs']['default_font']='NanumGothic-Regular.ttf'
+        cont={'run_id':first['ticket']['run_id'],'source_node':source};pid2=str(uuid.uuid4())
+        result=engine.begin(inputs,folder,changed,client,pid2,source,'시작·재개',cont)
+        resolution=None
+        if result.get('ticket'):
+            finish_native(client,pid2,result,changed)
+            try:engine.resolve(folder,cont['run_id'],pid2,client)
+            except P.ProjectError as exc:resolution=str(exc)
+        require(not result.get('ticket') and P.read_json(folder/'project.json')['config']==prior,
+                'Changed settings enter an existing continuation and desynchronize its saved graph/config',
+                {'started_next_page':bool(result.get('ticket')),'config_changed':P.read_json(folder/'project.json')['config']!=prior,'resolve_error':resolution})
+    a.case('settings-change-between-native-pages','execution_transition','Reject changed settings before mutating an existing continuation',change_during_continuation)
+    def duplicate_continuation():
+        engine,client,inputs,folder,g,source,pid,first=new_book('duplicate-continuation')
+        state=P.read_json(next(folder.glob('pages/*/attempt-*/state.json')))
+        client.server.prompt_queue.running=[[0,pid,g,{'manga_project':state['submission_token']},[]]]
+        cont={'run_id':first['ticket']['run_id'],'source_node':source}
+        result=engine.begin(inputs,folder,g,client,str(uuid.uuid4()),source,'시작·재개',cont);saved=P.read_json(folder/'canvas_run.json')
+        require(saved['status']=='running' and not saved['stop_requested'],'Duplicate continuation pauses the original active owner',
+                {'original_run_id':cont['run_id'],'saved_run_id':saved['run_id'],'status':saved['status'],'stop_requested':saved['stop_requested'],'new_ticket':result.get('ticket')})
+    a.case('duplicate-continuation-during-active-page','execution_transition','Reject duplicate continuation without stopping the original page owner',duplicate_continuation)
+    def modified_input():
+        engine,client,inputs,folder,g,source,pid,first=new_book('input-modified')
+        finish_native(client,pid,first,g);engine.resolve(folder,first['ticket']['run_id'],pid,client)
+        make_page(inputs/'2.png',size=(200,100))
+        out=engine.begin(inputs,folder,g,client,str(uuid.uuid4()),source,'시작·재개',{'run_id':first['ticket']['run_id'],'source_node':source})
+        state=P.read_json(next(folder.glob('pages/*/attempt-*/state.json')))
+        require(out.get('image_reference') is None and out['report']['counts'].get('failed')==1,'Modified source was processed against old inventory',out['report'])
+        return {'blocked_inference':True,'counts':out['report']['counts']}
+    a.case('input-bytes-change-between-pages','input_transition','Reject an input changed after inventory before model execution',modified_input)
+    def fresh_inventory():
+        engine,client,inputs,folder,g,source,pid,first=new_book('added-input',1)
+        make_page(inputs/'2.png');finish_native(client,pid,first,g);engine.resolve(folder,first['ticket']['run_id'],pid,client)
+        second=engine.begin(inputs,folder,g,client,str(uuid.uuid4()),source,'시작·재개')
+        require(second.get('ticket',{}).get('relative_path')=='2.png','Next manual run missed newly added input',second['report'])
+        return {'new_page':second['ticket']['relative_path']}
+    a.case('input-added-before-next-inventory','input_transition','Discover added files on the next explicit inventory',fresh_inventory)
+    def attempt_limit():
+        root=a.work/'attempt-limit';make_page(root/'input/1.png');book=P.Project(root/'input',root/'project',graph(),FakeComfy());book._prepare_project();page=book.pages[0]
+        (book._page_dir(page)/'attempt-999999').mkdir(parents=True)
+        first=book._new(page);book._attempt_dir(first).mkdir();second=book._new(page)
+        require(first['attempt']!=second['attempt'],'Six-digit scan reuses attempt 1000000 and can overwrite its records',{'first':first['attempt'],'second':second['attempt']})
+    a.case('attempt-counter-six-digit-overflow','budget_transition','Never reuse an attempt directory at the counter width boundary',attempt_limit)
+    def rgba():
+        path=a.work/'alpha-only-ink.png';im=Image.new('RGBA',(30,20),(0,0,0,0));im.save(path)
+        encoded,size,uniform=P.normalise_image(path,P.digest(path.read_bytes()),10000);out=Image.open(BytesIO(encoded))
+        require(uniform and out.getextrema()==((255,255),)*3,'Invisible alpha ink was treated as visible black text')
+        return {'normalised_white':True,'size':size}
+    a.case('transparent-ink-input','input_transition','Normalize fully transparent black to white before blank checks',rgba)
+    from tests.test_hybrid_lettering import fixture,run
+    for direction in ('horizontal','vertical_rtl','vertical_ltr'):
+        for angle in (-17,0,17):
+            def thin_guard(direction=direction,angle=angle):
+                values=fixture('번역 TEST 12',width=400,height=240,font_size=30);original,clean,mask,raw=values
+                data=json.loads(raw);data['boundary_review']={'schema':1,'protected_boxes_pixels':[[260.001,5,260.999,235]]}
+                try:_,result,alpha,report,_,_=run((original,clean,mask,json.dumps(data)),direction=direction,
+                    region_options_json=json.dumps({'r1':{'rotation':angle}}),oriented_fit=True,min_font=8,min_scale=.3)
+                except ValueError as exc:
+                    require('no safe lettering fit' in str(exc),'Unexpected geometry error',{'exception':str(exc)})
+                    return {'safe_rejection':True,'angle':angle,'direction':direction}
+                require(np.array_equal(result[5:235,260:261],original[5:235,260:261]) and not alpha[5:235,260:261].any(),
+                        'One-pixel protected strip changed under rotated/directional lettering',{'angle':angle,'direction':direction})
+                return {'one_pixel_protection_exact':True,'angle':angle,'direction':direction}
+            a.case(f'fractional-one-pixel-guard-{direction}-{angle}','geometry_transition','Never cross a fractional one-pixel protected strip, including rotated vertical text',thin_guard,'real_font')
+    def two_process_download():
+        output=a.work/'parallel-download';output.mkdir()
+        code=r'''
+import hashlib,importlib,json,sys,time,types
+from io import BytesIO
+from pathlib import Path
+root,output,worker=Path(sys.argv[1]),Path(sys.argv[2]),sys.argv[3]
+pkg=types.ModuleType('download_audit');pkg.__path__=[str(root)];sys.modules[pkg.__name__]=pkg
+E=importlib.import_module('download_audit.ocr_engines')
+sys.modules['folder_paths']=types.SimpleNamespace(models_dir=str(output/'models'))
+payload=b'pinned concurrent model';sha=hashlib.sha256(payload).hexdigest()
+E.spec=lambda _:('audit/model','fixed',{'weights.bin':sha},{'weights.bin':'https://unused.invalid/model'},'shared')
+def response(*args,**kwargs):
+    (output/('ready-'+worker)).write_text('ready')
+    deadline=time.monotonic()+10
+    while len(list(output.glob('ready-*')))<2:
+        if time.monotonic()>deadline:raise RuntimeError('worker barrier timed out')
+        time.sleep(.005)
+    return BytesIO(payload)
+E.urlopen=response
+try:
+    result={'folder':str(E.ensure('Manga OCR · Japanese'))}
+except Exception as exc:result={'exception':type(exc).__name__,'message':str(exc)}
+(output/(worker+'.json')).write_text(json.dumps(result))
+'''
+        children=[subprocess.Popen([sys.executable,'-c',code,str(ROOT),str(output),str(i)],stdout=subprocess.PIPE,stderr=subprocess.PIPE) for i in range(2)]
+        for p in children:
+            _,err=p.communicate(timeout=20)
+            require(p.returncode==0,'Download worker harness failed',{'stderr':err.decode()[-300:]})
+        results=[json.loads((output/(str(i)+'.json')).read_text()) for i in range(2)]
+        folder=output/'models/manga_translator/ocr/shared'
+        require(hashlib.sha256((folder/'weights.bin').read_bytes()).hexdigest()==hashlib.sha256(b'pinned concurrent model').hexdigest(),'Parallel acquisition corrupted installed bundle')
+        require(all('folder' in r for r in results),'One process errors after another process successfully installs the same pinned model',
+                {'workers':results,'installed_hash_valid':True,'temporary_folders':len(list(folder.parent.glob('.download-*'))),'scope':'two real OS processes; synthetic file download'})
+        return {'both_completed':True}
+    a.case('two-process-first-use-download','download_transition','Concurrent processes converge on one verified installed bundle without a spurious loser failure',two_process_download)
+
+
+def actual_transition_ocr(a,models):
+    """Known non-text synthetic crops; output observations are not accuracy passes."""
+    from boundary_acceptance.recognition_cache import MangaOCRAdaptiveCached
+    from PIL import ImageDraw
+    output=a.work/'nontext-model-inputs';output.mkdir()
+    rng=np.random.default_rng(2871)
+    noise=Image.fromarray(rng.integers(252,256,size=(80,280,3),dtype=np.uint8))
+    gradient=np.broadcast_to(np.linspace(210,255,280,dtype=np.uint8)[None,:,None],(80,280,3)).copy()
+    sparse=Image.new('RGB',(280,80),'white');sparse.putpixel((3,3),(0,0,0))
+    ruled=Image.new('RGB',(280,80),'white');ImageDraw.Draw(ruled).line((0,40,279,40),fill='black',width=1)
+    samples={'near-white-noise':noise,'paper-gradient':Image.fromarray(gradient),'isolated-pixel':sparse,'horizontal-rule':ruled}
+    folders=types.SimpleNamespace(models_dir=str(models),get_output_directory=lambda:str(output))
+    with patch.dict(sys.modules,{'folder_paths':folders}):
+        for engine in E.ENGINES:
+            _,_,files,_,name=E.spec(engine);folder=models/'manga_translator/ocr'/name
+            require(all((folder/n).is_file() and E.sha(folder/n)==sha for n,sha in files.items()),'Missing pinned model '+engine)
+            model=E.LazyOCR(engine,folder,'cpu')
+            for label,image in samples.items():
+                def infer(image=image,label=label,model=model):
+                    path=output/(label+'.png');image.save(path);page=torch.from_numpy(np.asarray(image,np.float32).copy()/255)[None]
+                    try:
+                        result=MangaOCRAdaptiveCached().read(page,model,line_split=False,quality_guard=True,cache_policy='off',retry_on_layout_failure=False)
+                        text=result['result'][0]
+                        return {'text':text,'known_no_letters':True,'false_text_accepted':bool(text.strip()),
+                                'diagnostics':json.loads(result['result'][1]),'input_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
+                                'scope':'real CPU model on deliberately non-text pixels; not a general accuracy benchmark'}
+                    except ValueError as exc:return {'rejected':str(exc)[:1000],'known_no_letters':True,'false_text_accepted':False}
+                a.case(name+'-'+label,'actual_nontext_ocr','Observe near-blank/non-text behavior without calling it recognition accuracy',infer,'actual_model')
+
+
 def main():
     parser=ArgumentParser(description=__doc__);parser.add_argument('--destination',type=Path,default=ROOT/'validation/boundary-audit')
     parser.add_argument('--actual-ocr',action='store_true');parser.add_argument('--models',type=Path);parser.add_argument('--row-inputs',type=Path)
+    parser.add_argument('--transitions',action='store_true',help='Run only additional v0.7.1 seam/transition scenarios')
     args=parser.parse_args();torch.set_num_threads(4);a=Audit(args.destination.resolve())
-    basic_cases(a);cache_cases(a);project_cases(a);geometry_cases(a);download_cases(a);frontend_cases(a)
+    if args.transitions:transition_cases(a)
+    else:basic_cases(a);cache_cases(a);project_cases(a);geometry_cases(a);download_cases(a);frontend_cases(a)
     if args.actual_ocr:
-        if not args.models or not args.row_inputs:parser.error('--actual-ocr needs --models and --row-inputs')
-        actual_ocr(a,args.models,args.row_inputs)
+        if not args.models or (not args.transitions and not args.row_inputs):parser.error('--actual-ocr needs --models and baseline --row-inputs')
+        if args.transitions:actual_transition_ocr(a,args.models)
+        else:actual_ocr(a,args.models,args.row_inputs)
     a.save();counts={s:sum(r['status']==s for r in a.results) for s in ('PASS','FAIL','ERROR','OBSERVED')};print(json.dumps(counts),flush=True)
     return 1 if counts['FAIL'] or counts['ERROR'] else 0
 
