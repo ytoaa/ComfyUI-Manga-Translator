@@ -114,6 +114,36 @@ def test_break_only_target_cannot_pass_as_nonempty_translation():
         N.translations(source, {'translations': [{'id': 'a', 'target': '<br><br/>'}]})
 
 
+def test_introduced_brace_n_retries_once_instead_of_being_printed(monkeypatch):
+    source = {'regions': [{'id': 'a', 'bbox': [0, 0, 100, 100], 'source': '名前\nクラス'}]}
+    responses = [reply(N.encode({'translations': [{'id': 'a', 'target': '이름{n}클래스'}]})),
+                 reply(N.encode({'translations': [{'id': 'a', 'target': '이름\n클래스'}]}))]
+    calls = []
+    def api(*args):
+        calls.append(args[-1])
+        return responses[len(calls)-1]
+    monkeypatch.setattr(N, 'api_json', api)
+    result = N.MangaTranslate().translate(N.encode(source), 'http://unused', 'fixture', 'Korean', '', 4096, 300)
+    assert json.loads(result[0])['regions'][0]['target'] == '이름\n클래스'
+    assert len(calls) == 2
+
+
+def test_literal_template_tokens_and_other_angle_text_are_preserved():
+    answer = {'translations': [{'id': 'a', 'target': '코드 {n}\n<unknown>'}]}
+    source = {'regions': [{'id': 'a', 'source': 'code {n}\n<unknown>'}]}
+    assert N.translations(source, answer)['regions'][0]['target'] == answer['translations'][0]['target']
+    source['regions'][0]['source'] = '原文\n名前'
+    assert N.translations(source, answer, normalize_breaks=False)['regions'][0]['target'] == answer['translations'][0]['target']
+
+
+@pytest.mark.parametrize('marker', ['<UNK><UNK>', '<unk>', '[UNK]'])
+def test_unknown_marker_variants_are_rejected_before_translation(monkeypatch, marker):
+    source = {'regions': [{'id': 'a', 'bbox': [0, 0, 100, 100], 'source': marker}]}
+    monkeypatch.setattr(N, 'api_json', lambda *a, **k: pytest.fail('unknown source must not reach API'))
+    with pytest.raises(ValueError, match='ocr_unrecognized_span'):
+        N.MangaTranslate().translate(N.encode(source), '', 'fixture', 'Korean', '', 4096, 300)
+
+
 def test_complete_json_without_closing_fence_is_accepted_without_regeneration(monkeypatch):
     calls, translate = run(monkeypatch, [reply('```json\n'+BODY)])
     result = json.loads(translate())

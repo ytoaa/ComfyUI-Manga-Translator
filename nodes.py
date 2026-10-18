@@ -416,7 +416,7 @@ class MangaTranslate:
             return (encode(translations(source,decode(translated_override_json),normalize_breaks=False)),)
         for row in source['regions']:
             if text_contract.ocr_problem(row['source']):
-                raise ValueError(f"ocr_unrecognized_span: {row['id']} contains <UNK_SPAN>; rerun OCR or supply a reviewed translation override")
+                raise ValueError(f"ocr_unrecognized_span: {row['id']} contains an unresolved OCR marker; rerun OCR or supply a reviewed translation override")
         preserved=[{'id':row['id'],'target':value} for row in source['regions']
                    if (value:=verified_dot_text(row)) is not None]
         preserved_ids={row['id'] for row in preserved}

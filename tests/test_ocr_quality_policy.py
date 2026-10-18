@@ -58,6 +58,33 @@ def test_reported_short_ocr_loops_are_suspect(text):
     assert P.text_problem(text,long_line()) == 'short_repetition'
 
 
+@pytest.mark.parametrize('text', ['<UNK><UNK>大白白あ', '<unk>', '[UNK]', '<UNK_SPAN>'])
+def test_explicit_unreadable_markers_are_not_recognized_text(text):
+    assert P.text_problem(text, long_line()) == 'ocr_unrecognized_span'
+
+
+def test_layout_recovery_cannot_accept_a_different_unknown_marker(monkeypatch):
+    source = Image.new('RGB', (120, 70), 'white')
+    monkeypatch.setattr(M, 'pil_image', lambda _: source)
+    monkeypatch.setattr(M, '_ocr_line_images', lambda _: [source])
+    monkeypatch.setattr(P, 'recovery_parts', lambda *a: (
+        [(source.crop((0, 0, 60, 70)), [0, 0, 60, 70]),
+         (source.crop((60, 0, 120, 70)), [60, 0, 120, 70])],
+        {'strategy': 'shorter_horizontal_chunks', 'separator': ''}))
+    saved = []
+    monkeypatch.setattr(M, '_save_ocr_failure', lambda src, crop, diagnostic: saved.append(diagnostic) or 'fixture.json')
+    class Model:
+        calls = 0
+        def ocr(self, image, options, max_patches):
+            self.calls += 1
+            return {'text': '<UNK_SPAN>' if self.calls <= 2 else '<UNK><UNK>'}
+    model = Model()
+    with pytest.raises(ValueError, match='ocr_unrecognized_span'):
+        M.MangaOCRAdaptive().read(object(), model, quality_guard=True, retry_on_layout_failure=True)
+    assert model.calls == 4
+    assert saved[0]['rejected_text'] == '<UNK><UNK>'
+
+
 def test_short_correct_name_and_manga_elongation_remain_valid():
     source = Image.new('RGB',(100,60),'white')
     assert P.text_problem('先生',source) is None

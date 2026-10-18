@@ -1,6 +1,6 @@
 """Resident Hayai OCR. Koharu's pinned weights, RGB NaFlex input and greedy defaults."""
 
-import json, logging, math, time, types
+import json, logging, math, sys, time, types
 import numpy as np
 from PIL import Image
 from .hayai_files import REPO, REV, validate
@@ -98,6 +98,7 @@ def load_model(folder, device="cuda"):
     # Only hash-verified, immutable release code is executed. No trust_remote_code
     # discovery and no runtime downloads. Wire the release's package Config import.
     config_module = types.ModuleType("pinned_hayai_configuration")
+    sys.modules[config_module.__name__] = config_module
     exec(compile((folder / "configuration_hayai.py").read_text(), "configuration_hayai.py", "exec"), config_module.__dict__)
     config = config_module.HayaiConfig(**json.loads((folder / "config.json").read_text()))
     config.vision_config = json.loads((folder / "vision-config.json").read_text())["vision_config"]
@@ -115,6 +116,8 @@ def load_model(folder, device="cuda"):
             raise ValueError("Pinned Hayai runtime adapter no longer matches")
         source = source.replace(original, replacement)
     module = types.ModuleType("pinned_hayai_model")
+    # Transformers inspects the defining module when selecting implementations.
+    sys.modules[module.__name__] = module
     module.HayaiConfig = config_module.HayaiConfig
     exec(compile(source, "modeling_hayai.py", "exec"), module.__dict__)
     model = module.HayaiModel(config)
