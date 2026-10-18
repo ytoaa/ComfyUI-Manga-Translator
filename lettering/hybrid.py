@@ -300,6 +300,9 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
                         'fallback_min_font':fallback_floor,'fit_policy':policy,
                         'bubble_containment':guard_report,
                         'direction':actual_direction,'line_breaks':breaks,'soft_wraps_reflowed':reflow,
+                        'style_analysis':json.loads(analysis),
+                        'transform':{key:render_options.get(key,0) for key in ('rotation','shear')},
+                        'bend':curve,
                         'warning':warning})
     for a,b,c,d in preserved:
         draw.rectangle((a,b,c-1,d-1),outline=(80,160,255),width=2)

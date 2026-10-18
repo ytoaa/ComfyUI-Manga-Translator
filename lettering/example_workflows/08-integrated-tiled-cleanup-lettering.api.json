@@ -621,5 +621,162 @@
         2
       ]
     }
+  },
+  "49": {
+    "class_type": "MangaDebugInspect",
+    "inputs": {
+      "stage": "detection",
+      "report_json": [
+        "5",
+        0
+      ],
+      "detection_result": [
+        "4",
+        0
+      ],
+      "preview_image": [
+        "1",
+        0
+      ]
+    }
+  },
+  "50": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "49",
+        0
+      ]
+    }
+  },
+  "51": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "49",
+        1
+      ]
+    }
+  },
+  "52": {
+    "class_type": "MangaDebugInspect",
+    "inputs": {
+      "stage": "ocr",
+      "report_json": [
+        "10",
+        1
+      ]
+    }
+  },
+  "53": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "52",
+        0
+      ]
+    }
+  },
+  "54": {
+    "class_type": "MangaDebugInspect",
+    "inputs": {
+      "stage": "cleanup_plan",
+      "report_json": [
+        "16",
+        7
+      ]
+    }
+  },
+  "55": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "54",
+        0
+      ]
+    }
+  },
+  "56": {
+    "class_type": "MangaDebugInspect",
+    "inputs": {
+      "stage": "cleanup",
+      "report_json": [
+        "29",
+        1
+      ]
+    }
+  },
+  "57": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "56",
+        0
+      ]
+    }
+  },
+  "58": {
+    "class_type": "MangaDebugInspect",
+    "inputs": {
+      "stage": "letter_plan",
+      "report_json": [
+        "31",
+        2
+      ],
+      "preview_mask": [
+        "30",
+        1
+      ]
+    }
+  },
+  "59": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "58",
+        0
+      ]
+    }
+  },
+  "60": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "58",
+        1
+      ]
+    }
+  },
+  "61": {
+    "class_type": "MangaDebugInspect",
+    "inputs": {
+      "stage": "letter_render",
+      "report_json": [
+        "32",
+        2
+      ],
+      "preview_mask": [
+        "32",
+        1
+      ]
+    }
+  },
+  "62": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "61",
+        0
+      ]
+    }
+  },
+  "63": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "61",
+        1
+      ]
+    }
   }
 }

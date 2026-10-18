@@ -258,7 +258,9 @@ def _recover_boundaries(image, model, thresholds, detections, boundary_policy='s
             return False
         seen.add(window)
         calls.append(list(window))
-        result=model.detect(image.crop(window),thresholds)
+        crop=image.crop(window)
+        result=(model.detect_window(crop,thresholds,window) if hasattr(model,'detect_window')
+                else model.detect(crop,thresholds))
         items=_window_detections(result,window,width,height,'recovery')
         raw_count+=len(items)
         if raw_count>_MAX_REGIONS:
@@ -412,7 +414,8 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
     # effect must neither stop dialogue OCR nor contribute cleanup pixels.
     ignored_sfx = 0
     counts={}
-    def selected(result,stage='detail'):
+    excluded=[]
+    def selected(result,stage='detail',origin=(0,0)):
         nonlocal ignored_sfx
         if (not isinstance(result,dict) or not isinstance(result.get('detections'),list)
                 or any(not isinstance(item,dict) for item in result['detections'])):
@@ -426,15 +429,28 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
         detections = result.get('detections', [])
         kept = [item for item in detections if item.get('label') != 'onomatopoeia']
         ignored_sfx += len(detections)-len(kept)
+        for item in detections:
+            box=item.get('bbox')
+            if (item.get('label')!='onomatopoeia' or len(excluded)>=256
+                    or not isinstance(box,list) or len(box)!=4
+                    or any(type(v) not in (int,float) or not math.isfinite(v) for v in box)):
+                continue
+            excluded.append({'label':'onomatopoeia','bbox_pixels':[box[0]+origin[0],box[1]+origin[1],
+                            box[2]+origin[0],box[3]+origin[1]],'stage':stage,
+                            **({'score':item['score']} if type(item.get('score')) in (int,float)
+                               and math.isfinite(item['score']) else {})})
         return {**result, 'detections': kept}
 
     def finish(result):
         audit={'include_sfx':include_sfx,'raw_counts_by_stage':counts,
                'excluded_onomatopoeia_detections':ignored_sfx,
+               'excluded_candidates':excluded,'excluded_candidate_limit':256,
+               'excluded_candidates_omitted':ignored_sfx-len(excluded),
+               'excluded_coordinate_format':'xyxy_pixels_on_source_page',
                'selected_text_detections':sum(item.get('label') in
                     ({'text','onomatopoeia'} if include_sfx else {'text'}) for item in result['detections']),
                'counts_scope':'raw inference counts; duplicate detections across windows are included'}
-        LOG.info('Manga detection selection: %s',audit)
+        LOG.info('Manga detection selection: %s',{k:v for k,v in audit.items() if k!='excluded_candidates'})
         return {**result,'detection_audit':audit}
 
     full = selected(model.detect(image, thresholds),'full')
@@ -484,7 +500,7 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
         raise ValueError(f'Detail detection requires {len(windows)} windows; split the page (limit=64)')
     recovered = []
     for x0, x1, y0, y1 in windows:
-        result = selected(model.detect(image.crop((x0, y0, x1, y1)), thresholds))
+        result = selected(model.detect(image.crop((x0, y0, x1, y1)), thresholds),'detail',(x0,y0))
         recovered.extend(_window_detections(result, (x0, y0, x1, y1), width, height, 'detail'))
         if len(full.get('detections', [])) + len(recovered) > 512:
             raise ValueError('Detail detector produced too many regions; lower detail mode or raise confidence thresholds')
@@ -496,6 +512,8 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
     class RecoveryModel:
         def detect(self, crop, options):
             return selected(model.detect(crop, options),'recovery')
+        def detect_window(self,crop,options,window):
+            return selected(model.detect(crop,options),'recovery',(window[0],window[1]))
     complete, recovery = _recover_boundaries(image, RecoveryModel(), thresholds, list(full.get('detections', [])) + recovered, boundary_policy)
     recovery['include_sfx'] = include_sfx
     recovery['ignored_sfx_detections'] = ignored_sfx

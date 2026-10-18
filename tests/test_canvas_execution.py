@@ -124,6 +124,7 @@ def test_pause_prevents_next_page_without_cancelling_current_job(tmp_path):
 def test_v050_upgrade_retries_only_failed_page_in_same_project(tmp_path):
     engine,client,inputs,folder=setup_book(tmp_path)
     old=graph()
+    for key in P.debug_observers(old):old.pop(key)
     next(n for n in old.values() if n['class_type']=='MangaTranslate')['inputs'].pop('response_format',None)
     source=P.workflow_bindings(old)['load']; first=str(uuid.uuid4())
     result=engine.begin(inputs,folder,old,client,first,source,'시작·재개')

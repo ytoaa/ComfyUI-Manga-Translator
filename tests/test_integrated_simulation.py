@@ -26,13 +26,16 @@ def test_complete_api_graph_preserves_regions_and_unmasked_pixels(tmp_path, fill
     source=__import__('json').loads(next((tmp_path/'manga_translator').glob('ocr*.json')).read_text())
     assert sum(row['ocr_diagnostics']['chunk_count'] for row in source['regions']) == 9
     assert sum(row['ocr_diagnostics']['line_count'] for row in source['regions']) == 8
-    assert report['calls']['PreviewAny']==4
+    # Six OCR crop reports map through one preview node; other debug stages
+    # are page-level. Ten visible PreviewAny nodes produce fifteen calls here.
+    assert report['calls']['PreviewAny']==15
     graph=__import__('json').loads((ROOT/'lettering/example_workflows/08-integrated-tiled-cleanup-lettering.api.json').read_text())
     for node in graph.values():
         if node['class_type']=='PreviewAny':
             saved_source=node['inputs']['source'][0]
             assert (graph[saved_source]['class_type']=='MangaSaveReview' or
                     (graph[saved_source]['class_type']=='MangaWorkflowInput' and node['inputs']['source'][1]==2) or
+                    graph[saved_source]['class_type']=='MangaDebugInspect' or
                     (graph[saved_source]['class_type']=='MangaPageEditPlan' and node['inputs']['source'][1]==4))
     selectors=[(ident,node) for ident,node in graph.items() if node['class_type']=='PrimitiveBoolean']
     assert len(selectors)==1

@@ -18,7 +18,7 @@ def test_only_one_workflow_is_shipped():
     graph = json.loads((ROOT/files[0]).read_text())
     kinds = [node['class_type'] for node in graph.values()]
     assert kinds.count('MangaWorkflowInput') == kinds.count('SaveImage') == 1
-    assert kinds.count('PreviewAny') == 4
+    assert kinds.count('PreviewAny') == 10
     previews = [node['inputs']['source'] for node in graph.values() if node['class_type'] == 'PreviewAny']
     source_id = next(i for i,n in graph.items() if n['class_type'] == 'MangaWorkflowInput')
     assert [source_id, 2] in previews

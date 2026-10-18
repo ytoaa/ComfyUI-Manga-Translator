@@ -255,11 +255,37 @@ def workflow_bindings(graph):
             'source_preview': preview(source), 'target_preview': preview(target)}
 
 
+def debug_observers(graph):
+    """Only discard inspection branches which cannot feed processing inputs.
+
+    Existing preview nodes remain in the legacy identity. New debug roots and
+    their native preview leaves are additive observers, independent of settings.
+    """
+    consumers={key:set() for key in graph}
+    for key,node in graph.items():
+        for value in node['inputs'].values():
+            if isinstance(value,list) and len(value)==2 and isinstance(value[0],str) and value[0] in graph:
+                consumers[value[0]].add(key)
+    ignored=set()
+    for root,node in graph.items():
+        if node['class_type']!='MangaDebugInspect':continue
+        pending=[root];branch=set();safe=True
+        while pending:
+            key=pending.pop()
+            if key in branch:continue
+            if graph[key]['class_type'] not in ('MangaDebugInspect','PreviewAny','PreviewImage'):
+                safe=False;break
+            branch.add(key);pending.extend(consumers[key])
+        if safe:ignored.update(branch)
+    return ignored
+
+
 def workflow_fingerprint(graph, bind=None, *, legacy=False):
     """Hash semantic page-processing settings, not folder-control/location widgets."""
     bind = bind or workflow_bindings(graph)
+    observers=debug_observers(graph)
     canonical = {key:{'class_type':node['class_type'],'inputs':deepcopy(node['inputs'])}
-                 for key,node in graph.items()}
+                 for key,node in graph.items() if key not in observers}
     load = canonical[bind['load']]
     load['inputs']['image'] = ''
     if not legacy and load['class_type'] == 'MangaWorkflowInput':

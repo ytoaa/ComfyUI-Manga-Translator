@@ -45,3 +45,7 @@ NODE_DISPLAY_NAME_MAPPINGS['MangaPageEditPlan'] = '페이지 편집 계획 · �
 from .lettering.direction import MangaLetteringDirection
 NODE_CLASS_MAPPINGS['MangaLetteringDirection'] = MangaLetteringDirection
 NODE_DISPLAY_NAME_MAPPINGS['MangaLetteringDirection'] = '번역문 방향 · 가로 / 세로 통일'
+
+from .debug_nodes import MangaDebugInspect
+NODE_CLASS_MAPPINGS['MangaDebugInspect'] = MangaDebugInspect
+NODE_DISPLAY_NAME_MAPPINGS['MangaDebugInspect'] = '단계 디버그 · 판단 근거와 중간 이미지'

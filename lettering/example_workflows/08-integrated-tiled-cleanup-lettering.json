@@ -1,8 +1,8 @@
 {
   "id": "6489a8d0-adb0-54db-baf9-5a11c43d9dd8",
   "revision": 1,
-  "last_node_id": 48,
-  "last_link_id": 78,
+  "last_node_id": 64,
+  "last_link_id": 97,
   "nodes": [
     {
       "id": 1,
@@ -29,7 +29,8 @@
             15,
             20,
             49,
-            52
+            52,
+            81
           ]
         },
         {
@@ -198,7 +199,8 @@
           "links": [
             3,
             4,
-            56
+            56,
+            80
           ]
         }
       ],
@@ -261,7 +263,8 @@
           "name": "layout_json",
           "type": "STRING",
           "links": [
-            7
+            7,
+            79
           ]
         }
       ],
@@ -538,7 +541,8 @@
           "name": "ocr_report_json",
           "type": "STRING",
           "links": [
-            12
+            12,
+            84
           ]
         },
         {
@@ -962,7 +966,9 @@
         {
           "name": "plan_report",
           "type": "STRING",
-          "links": []
+          "links": [
+            86
+          ]
         },
         {
           "name": "effective_cleanup_mask",
@@ -1676,7 +1682,9 @@
         {
           "name": "cleanup_report",
           "type": "STRING",
-          "links": []
+          "links": [
+            88
+          ]
         }
       ],
       "properties": {
@@ -1733,7 +1741,8 @@
           "name": "원문_스타일_참조_마스크",
           "type": "MASK",
           "links": [
-            54
+            54,
+            91
           ]
         }
       ],
@@ -1819,7 +1828,9 @@
         {
           "name": "계획_보고서",
           "type": "STRING",
-          "links": []
+          "links": [
+            90
+          ]
         }
       ],
       "properties": {
@@ -1883,12 +1894,16 @@
         {
           "name": "새_글자_알파",
           "type": "MASK",
-          "links": []
+          "links": [
+            95
+          ]
         },
         {
           "name": "식자_보고서",
           "type": "STRING",
-          "links": []
+          "links": [
+            94
+          ]
         }
       ],
       "properties": {
@@ -2392,6 +2407,702 @@
       "properties": {},
       "widgets_values": [
         "폴더 처리도 이 워크플로우 안에서 실행합니다. 입력 노드의 input_mode=폴더 프로젝트로 설정하세요.\ninput_folder는 ComfyUI/input 아래의 원본 폴더, project_name은 결과·재개 기록의 이름입니다.\n한 페이지가 현재 Run에서 검출부터 저장까지 실행됩니다. 다음 페이지는 캔버스가 기본 Run 큐로 이어갑니다.\n입력 노드 안에서 현재 페이지·실행 노드·진행률을 실시간 확인합니다. 기본 중지는 현재 페이지에 적용됩니다.\n연속 처리 중지는 다음 페이지 제출을 멈춥니다. 브라우저를 닫으면 다음 페이지는 자동 실행하지 않습니다.\n현재 캔버스의 처리 설정을 확인합니다. 모델·번역·식자 설정을 바꾸려면 새 project_name을 사용하세요.\n이미지를 한꺼번에 텐서 목록으로 합치지 않습니다. OCR/타일 집계는 페이지마다 독립 실행합니다."
+      ]
+    },
+    {
+      "id": 49,
+      "type": "MangaDebugInspect",
+      "pos": [
+        0,
+        2050
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 48,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "report_json",
+          "type": "STRING",
+          "link": 79
+        },
+        {
+          "name": "preview_image",
+          "type": "IMAGE",
+          "link": 81
+        },
+        {
+          "name": "preview_mask",
+          "type": "MASK",
+          "link": null
+        },
+        {
+          "name": "detection_result",
+          "type": "MANGA_DETECTION",
+          "link": 80
+        }
+      ],
+      "outputs": [
+        {
+          "name": "단계_디버그_JSON",
+          "type": "STRING",
+          "links": [
+            82
+          ]
+        },
+        {
+          "name": "단계_검수_이미지",
+          "type": "IMAGE",
+          "links": [
+            83
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaDebugInspect"
+      },
+      "widgets_values": [
+        "detection"
+      ],
+      "widgets_values_named": {
+        "stage": "detection"
+      },
+      "title": "디버그 · 검출 · 초록 선택 / 주황 제외"
+    },
+    {
+      "id": 50,
+      "type": "PreviewAny",
+      "pos": [
+        0,
+        2250
+      ],
+      "size": [
+        780,
+        350
+      ],
+      "flags": {},
+      "order": 49,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 82
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny",
+        "cnr_id": "comfy-core"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "검출 · 초록 선택 / 주황 제외 · 미리보기 아무거나"
+    },
+    {
+      "id": 51,
+      "type": "PreviewImage",
+      "pos": [
+        0,
+        2650
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 50,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 83
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "검출 · 초록 선택 / 주황 제외 · 이미지 검수"
+    },
+    {
+      "id": 52,
+      "type": "MangaDebugInspect",
+      "pos": [
+        850,
+        2050
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 51,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "report_json",
+          "type": "STRING",
+          "link": 84
+        },
+        {
+          "name": "preview_image",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "preview_mask",
+          "type": "MASK",
+          "link": null
+        },
+        {
+          "name": "detection_result",
+          "type": "MANGA_DETECTION",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "단계_디버그_JSON",
+          "type": "STRING",
+          "links": [
+            85
+          ]
+        },
+        {
+          "name": "단계_검수_이미지",
+          "type": "IMAGE",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaDebugInspect"
+      },
+      "widgets_values": [
+        "ocr"
+      ],
+      "widgets_values_named": {
+        "stage": "ocr"
+      },
+      "title": "디버그 · OCR · 입력 크기 / 분할 / 품질 검사"
+    },
+    {
+      "id": 53,
+      "type": "PreviewAny",
+      "pos": [
+        850,
+        2250
+      ],
+      "size": [
+        780,
+        350
+      ],
+      "flags": {},
+      "order": 52,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 85
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny",
+        "cnr_id": "comfy-core"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "OCR · 입력 크기 / 분할 / 품질 검사 · 미리보기 아무거나"
+    },
+    {
+      "id": 54,
+      "type": "MangaDebugInspect",
+      "pos": [
+        1700,
+        2050
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 53,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "report_json",
+          "type": "STRING",
+          "link": 86
+        },
+        {
+          "name": "preview_image",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "preview_mask",
+          "type": "MASK",
+          "link": null
+        },
+        {
+          "name": "detection_result",
+          "type": "MANGA_DETECTION",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "단계_디버그_JSON",
+          "type": "STRING",
+          "links": [
+            87
+          ]
+        },
+        {
+          "name": "단계_검수_이미지",
+          "type": "IMAGE",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaDebugInspect"
+      },
+      "widgets_values": [
+        "cleanup_plan"
+      ],
+      "widgets_values_named": {
+        "stage": "cleanup_plan"
+      },
+      "title": "디버그 · 제거 계획 · 단색 보완 / 타일 / 마스크"
+    },
+    {
+      "id": 55,
+      "type": "PreviewAny",
+      "pos": [
+        1700,
+        2250
+      ],
+      "size": [
+        780,
+        350
+      ],
+      "flags": {},
+      "order": 54,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 87
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny",
+        "cnr_id": "comfy-core"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "제거 계획 · 단색 보완 / 타일 / 마스크 · 미리보기 아무거나"
+    },
+    {
+      "id": 56,
+      "type": "MangaDebugInspect",
+      "pos": [
+        2550,
+        2050
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 55,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "report_json",
+          "type": "STRING",
+          "link": 88
+        },
+        {
+          "name": "preview_image",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "preview_mask",
+          "type": "MASK",
+          "link": null
+        },
+        {
+          "name": "detection_result",
+          "type": "MANGA_DETECTION",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "단계_디버그_JSON",
+          "type": "STRING",
+          "links": [
+            89
+          ]
+        },
+        {
+          "name": "단계_검수_이미지",
+          "type": "IMAGE",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaDebugInspect"
+      },
+      "widgets_values": [
+        "cleanup"
+      ],
+      "widgets_values_named": {
+        "stage": "cleanup"
+      },
+      "title": "디버그 · 제거 결과 · 잔존 원문 검사"
+    },
+    {
+      "id": 57,
+      "type": "PreviewAny",
+      "pos": [
+        2550,
+        2250
+      ],
+      "size": [
+        780,
+        350
+      ],
+      "flags": {},
+      "order": 56,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 89
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny",
+        "cnr_id": "comfy-core"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "제거 결과 · 잔존 원문 검사 · 미리보기 아무거나"
+    },
+    {
+      "id": 58,
+      "type": "MangaDebugInspect",
+      "pos": [
+        3400,
+        2050
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 57,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "report_json",
+          "type": "STRING",
+          "link": 90
+        },
+        {
+          "name": "preview_image",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "preview_mask",
+          "type": "MASK",
+          "link": 91
+        },
+        {
+          "name": "detection_result",
+          "type": "MANGA_DETECTION",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "단계_디버그_JSON",
+          "type": "STRING",
+          "links": [
+            92
+          ]
+        },
+        {
+          "name": "단계_검수_이미지",
+          "type": "IMAGE",
+          "links": [
+            93
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaDebugInspect"
+      },
+      "widgets_values": [
+        "letter_plan"
+      ],
+      "widgets_values_named": {
+        "stage": "letter_plan"
+      },
+      "title": "디버그 · 식자 계획 · 원문 크기 / 색 / 외곽선"
+    },
+    {
+      "id": 59,
+      "type": "PreviewAny",
+      "pos": [
+        3400,
+        2250
+      ],
+      "size": [
+        780,
+        350
+      ],
+      "flags": {},
+      "order": 58,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 92
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny",
+        "cnr_id": "comfy-core"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "식자 계획 · 원문 크기 / 색 / 외곽선 · 미리보기 아무거나"
+    },
+    {
+      "id": 60,
+      "type": "PreviewImage",
+      "pos": [
+        3400,
+        2650
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 59,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 93
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "식자 계획 · 원문 크기 / 색 / 외곽선 · 이미지 검수"
+    },
+    {
+      "id": 61,
+      "type": "MangaDebugInspect",
+      "pos": [
+        4250,
+        2050
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 60,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "report_json",
+          "type": "STRING",
+          "link": 94
+        },
+        {
+          "name": "preview_image",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "preview_mask",
+          "type": "MASK",
+          "link": 95
+        },
+        {
+          "name": "detection_result",
+          "type": "MANGA_DETECTION",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "단계_디버그_JSON",
+          "type": "STRING",
+          "links": [
+            96
+          ]
+        },
+        {
+          "name": "단계_검수_이미지",
+          "type": "IMAGE",
+          "links": [
+            97
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MangaDebugInspect"
+      },
+      "widgets_values": [
+        "letter_render"
+      ],
+      "widgets_values_named": {
+        "stage": "letter_render"
+      },
+      "title": "디버그 · 식자 결과 · 최종 크기 / 줄바꿈 / 알파"
+    },
+    {
+      "id": 62,
+      "type": "PreviewAny",
+      "pos": [
+        4250,
+        2250
+      ],
+      "size": [
+        780,
+        350
+      ],
+      "flags": {},
+      "order": 61,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 96
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny",
+        "cnr_id": "comfy-core"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "식자 결과 · 최종 크기 / 줄바꿈 / 알파 · 미리보기 아무거나"
+    },
+    {
+      "id": 63,
+      "type": "PreviewImage",
+      "pos": [
+        4250,
+        2650
+      ],
+      "size": [
+        330,
+        100
+      ],
+      "flags": {},
+      "order": 62,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 97
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "widgets_values_named": {},
+      "title": "식자 결과 · 최종 크기 / 줄바꿈 / 알파 · 이미지 검수"
+    },
+    {
+      "id": 64,
+      "type": "Note",
+      "pos": [
+        5100,
+        2050
+      ],
+      "size": [
+        500,
+        270
+      ],
+      "flags": {},
+      "order": 63,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "하단 디버그 행은 검출→OCR→제거 계획→제거 결과→식자 계획→식자 결과 순서입니다.\n미리보기 아무거나는 JSON, 이미지 검수는 선택/제외 박스·원문 스타일 마스크·새 글자 알파를 표시합니다.\n밝은 얼룩은 식자 직전 배경과 새 글자 알파를 비교해 제거 단계/식자 단계 중 어디서 생겼는지 확인하세요.\nOCR issue=null은 정확한 인식 보증이 아닙니다. 제외 후보는 타일 중복을 포함한 추론 관측입니다.\n단계 실행이 실패하면 해당 단계와 후속 미리보기는 나오지 않을 수 있습니다. OCR/번역 실패 진단 파일과 콘솔 오류를 확인하세요.\n이 노드는 읽기 전용이며 모델 설정·편집 허용 범위·완료 판정을 바꾸지 않습니다."
       ]
     }
   ],
@@ -3019,6 +3730,158 @@
       10,
       3,
       "STRING"
+    ],
+    [
+      79,
+      5,
+      0,
+      49,
+      0,
+      "STRING"
+    ],
+    [
+      80,
+      4,
+      0,
+      49,
+      3,
+      "MANGA_DETECTION"
+    ],
+    [
+      81,
+      1,
+      0,
+      49,
+      1,
+      "IMAGE"
+    ],
+    [
+      82,
+      49,
+      0,
+      50,
+      0,
+      "STRING"
+    ],
+    [
+      83,
+      49,
+      1,
+      51,
+      0,
+      "IMAGE"
+    ],
+    [
+      84,
+      10,
+      1,
+      52,
+      0,
+      "STRING"
+    ],
+    [
+      85,
+      52,
+      0,
+      53,
+      0,
+      "STRING"
+    ],
+    [
+      86,
+      16,
+      7,
+      54,
+      0,
+      "STRING"
+    ],
+    [
+      87,
+      54,
+      0,
+      55,
+      0,
+      "STRING"
+    ],
+    [
+      88,
+      29,
+      1,
+      56,
+      0,
+      "STRING"
+    ],
+    [
+      89,
+      56,
+      0,
+      57,
+      0,
+      "STRING"
+    ],
+    [
+      90,
+      31,
+      2,
+      58,
+      0,
+      "STRING"
+    ],
+    [
+      91,
+      30,
+      1,
+      58,
+      2,
+      "MASK"
+    ],
+    [
+      92,
+      58,
+      0,
+      59,
+      0,
+      "STRING"
+    ],
+    [
+      93,
+      58,
+      1,
+      60,
+      0,
+      "IMAGE"
+    ],
+    [
+      94,
+      32,
+      2,
+      61,
+      0,
+      "STRING"
+    ],
+    [
+      95,
+      32,
+      1,
+      61,
+      2,
+      "MASK"
+    ],
+    [
+      96,
+      61,
+      0,
+      62,
+      0,
+      "STRING"
+    ],
+    [
+      97,
+      61,
+      1,
+      63,
+      0,
+      "IMAGE"
     ]
   ],
   "groups": [],

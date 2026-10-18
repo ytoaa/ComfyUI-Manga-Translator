@@ -124,6 +124,29 @@ def build():
     g.connect(original, 2, status, 'source')
     g.note('폴더 처리도 이 워크플로우 안에서 실행합니다. 입력 노드의 input_mode=폴더 프로젝트로 설정하세요.\ninput_folder는 ComfyUI/input 아래의 원본 폴더, project_name은 결과·재개 기록의 이름입니다.\n한 페이지가 현재 Run에서 검출부터 저장까지 실행됩니다. 다음 페이지는 캔버스가 기본 Run 큐로 이어갑니다.\n입력 노드 안에서 현재 페이지·실행 노드·진행률을 실시간 확인합니다. 기본 중지는 현재 페이지에 적용됩니다.\n연속 처리 중지는 다음 페이지 제출을 멈춥니다. 브라우저를 닫으면 다음 페이지는 자동 실행하지 않습니다.\n현재 캔버스의 처리 설정을 확인합니다. 모델·번역·식자 설정을 바꾸려면 새 project_name을 사용하세요.\n이미지를 한꺼번에 텐서 목록으로 합치지 않습니다. OCR/타일 집계는 페이지마다 독립 실행합니다.', (420, -550))
     g.connect(crops, 3, ocr, 'region_plan_json')
+    # Add read-only observer branches after all legacy IDs. They do not feed
+    # inference/cleanup/lettering, and do not change existing project identity.
+    inspections=[('detection',regions,0,original,0,None,'검출 · 초록 선택 / 주황 제외'),
+                 ('ocr',ocr,1,None,0,None,'OCR · 입력 크기 / 분할 / 품질 검사'),
+                 ('cleanup_plan',plan,7,None,0,None,'제거 계획 · 단색 보완 / 타일 / 마스크'),
+                 ('cleanup',assemble,1,None,0,None,'제거 결과 · 잔존 원문 검사'),
+                 ('letter_plan',typography,2,None,0,(prepare,1),'식자 계획 · 원문 크기 / 색 / 외곽선'),
+                 ('letter_render',lettering,2,None,0,(lettering,1),'식자 결과 · 최종 크기 / 줄바꿈 / 알파')]
+    for i,(stage,report_node,report_slot,image_node,image_slot,mask_source,title) in enumerate(inspections):
+        x=i*850
+        inspector=g.add('MangaDebugInspect',{'stage':stage},pos=(x,2050),title='디버그 · '+title)
+        g.connect(report_node,report_slot,inspector,'report_json')
+        if stage=='detection':g.connect(detector,0,inspector,'detection_result')
+        if image_node:g.connect(image_node,image_slot,inspector,'preview_image')
+        if mask_source:g.connect(mask_source[0],mask_source[1],inspector,'preview_mask')
+        details=g.add('PreviewAny',pos=(x,2250),title=title+' · 미리보기 아무거나')
+        g.nodes[details-1]['size']=[780,350]
+        g.nodes[details-1]['properties']['cnr_id']='comfy-core'
+        g.connect(inspector,0,details,'source')
+        if stage in ('detection','letter_plan','letter_render'):
+            view=g.add('PreviewImage',pos=(x,2650),title=title+' · 이미지 검수')
+            g.connect(inspector,1,view,'images')
+    g.note('하단 디버그 행은 검출→OCR→제거 계획→제거 결과→식자 계획→식자 결과 순서입니다.\n미리보기 아무거나는 JSON, 이미지 검수는 선택/제외 박스·원문 스타일 마스크·새 글자 알파를 표시합니다.\n밝은 얼룩은 식자 직전 배경과 새 글자 알파를 비교해 제거 단계/식자 단계 중 어디서 생겼는지 확인하세요.\nOCR issue=null은 정확한 인식 보증이 아닙니다. 제외 후보는 타일 중복을 포함한 추론 관측입니다.\n단계 실행이 실패하면 해당 단계와 후속 미리보기는 나오지 않을 수 있습니다. OCR/번역 실패 진단 파일과 콘솔 오류를 확인하세요.\n이 노드는 읽기 전용이며 모델 설정·편집 허용 범위·완료 판정을 바꾸지 않습니다.',(5100,2050))
     g.save(name)
     for suffix in ('.json', '.api.json'):
         path = ROOT / 'lettering/example_workflows' / (name + suffix)
