@@ -98,13 +98,14 @@ def build(data, width, height, actions=None, source_mask=None, padding=12):
                 decisions[index] = RegionEdit(row.id, row.bbox_pixels, 'preserve', 'protected_region_overlap')
                 protected.append(list(row.bbox_pixels))
                 changed = True
-    review = bool(unassigned) or any(row.reason == 'protected_region_overlap' for row in decisions)
+    edit_review = bool(unassigned) or any(row.reason == 'protected_region_overlap' for row in decisions)
+    review = bool(data.get('needs_review')) or edit_review
     plan = {'schema': 1, 'coordinate_format': 'xyxy_pixels', 'page_size': [width, height], 'region_padding':padding,
             'input_sha256': _digest(data), 'regions': [row.json() for row in decisions],
             'unassigned_boxes_pixels': unassigned, 'protected_boxes_pixels': protected,
             'needs_review': review}
     result = {**data, 'page_edit_plan': plan,
-              **({'needs_review': True, 'review_reason': 'source_edit_plan_requires_review'} if review else {})}
+              **({'needs_review': True, 'review_reason': 'source_edit_plan_requires_review'} if edit_review else {})}
     validate(result,width,height)
     return result
 
@@ -202,7 +203,10 @@ class MangaPageEditPlan:
         pixels = image(original)
         height, width = pixels.shape[:2]
         source, cleanup = mask(source_mask), mask(cleanup_mask)
-        data = build(layout(translated_json), width, height, decode(region_actions_json), source)
+        document=layout(translated_json)
+        from .source_recovery import recover_masks
+        source,cleanup=recover_masks(Image.fromarray((pixels*255).round().astype('uint8')),document,source,cleanup)
+        data = build(document, width, height, decode(region_actions_json), source)
         source, cleanup = masks(data, source, cleanup)
         plan = data['page_edit_plan']
         preview = Image.fromarray((pixels*255).round().astype('uint8'))

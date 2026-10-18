@@ -10,7 +10,7 @@ import uuid
 from .tools.run_project import (Project, ProjectError, Paused, InputError, ACTIVE, FINISHED,
     atomic_write, json_bytes, read_json, project_lock, normalise_image, digest, workflow_bindings)
 
-VERSION = '0.6.3'
+VERSION = '0.6.4'
 
 
 def _write_run(folder, run):
@@ -44,7 +44,7 @@ class CanvasExecution:
         project._prepare_project(inventory=inventory)
         return project
 
-    def _eligible(self, project, page, retry):
+    def _eligible(self, project, page, retry, retry_review=False):
         state = project.state(page)
         if not state or state.get('input_sha256') != page['input_sha256']: return True
         if state['status'] in FINISHED:
@@ -54,7 +54,7 @@ class CanvasExecution:
                     state.update(status='needs_review',reason='project_artifact_missing_or_modified')
                     project._save(state)
                     break
-            return False
+            return retry_review and state['status']=='needs_review'
         if state['status'] == 'failed':
             if retry: return True
             if state.get('reason') == 'execution_failed' and not state.get('failure_message'):
@@ -134,7 +134,9 @@ class CanvasExecution:
                 if run['status'] not in ('running','awaiting_canvas') or run.get('stop_requested'):
                     return {'report':self.snapshot(folder),'ticket':None}
             project = self._project(inputs,folder,graph,client,cached=continuation is not None)
-            retry = run['requested_action']=='실패 재시도' if continuation is not None else action=='실패 재시도'
+            requested=run['requested_action'] if continuation is not None else action
+            retry=requested in ('실패 재시도','실패·검수 재시도')
+            retry_review=requested=='실패·검수 재시도'
             if run and run.get('active_prompt') == prompt_id:
                 state = project.state(next(p for p in project.pages if p['id']==run['active_page']))
                 return self._page_result(project,run,state,source_id)
@@ -155,7 +157,7 @@ class CanvasExecution:
                         if run and run.get('active_prompt') == state['prompt_id'] and state['status'] not in ACTIVE:
                             run.update(active_prompt=None,last_resolved_prompt=state['prompt_id'])
                 if continuation is None:
-                    run['page_ids']=[p['id'] for p in project.pages if self._eligible(project,p,retry)]
+                    run['page_ids']=[p['id'] for p in project.pages if self._eligible(project,p,retry,retry_review)]
                     # The live graph remains authoritative; processing changes are
                     # rejected by the same fingerprint, while prefix links may migrate.
                     atomic_write(folder/'workflow.api.json',json_bytes(graph))

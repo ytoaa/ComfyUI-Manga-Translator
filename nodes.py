@@ -256,7 +256,7 @@ class MangaRegionCrops:
                     'auto_deskew': ('BOOLEAN', {'default':False,'tooltip':'검출 마스크 안에서 회전과 여러 행이 확인될 때만 OCR 입력을 수평 보정합니다. 인식 정확도 보증은 아닙니다.'}),
                     'text_pixel_mask': ('MASK', {'tooltip':'회전 분석용 원문 검출 마스크. 원본 픽셀은 바꾸지 않습니다.'}),
                     'geometry_policy': (['preserve_review','strict'], {'default':'preserve_review',
-                        'tooltip':'회전 크롭에서 글자 잘림/행 불확실성을 확인하면 원문 보존·검수합니다. strict는 OCR 전에 중단합니다.'})}}
+                        'tooltip':'잘린 글줄은 원본 문맥에서 복구·재검증합니다. 복구 불가 시 preserve_review는 원본 보존, strict는 OCR 전에 중단합니다.'})}}
     RETURN_TYPES = ('IMAGE', 'STRING', 'MASK', 'STRING')
     RETURN_NAMES = ('ocr_crops', 'manifest_json', 'edit_region_mask', 'ocr_region_plans')
     OUTPUT_IS_LIST = (True, False, False, True)
@@ -305,7 +305,7 @@ class MangaRegionCrops:
             from .models import pil_image
             source_image=pil_image(images)
         crops, rows, plans = [], [], []
-        entries=[];geometry_protected=[];geometry_review=[]
+        entries=[];geometry_protected=[];geometry_review=[];recovery_audits=[]
         for row in data['regions']:
             box = pixel_box(row['bbox'],width,height,ocr_padding)
             edit = pixel_box(row['bbox'],width,height,edit_margin)
@@ -328,6 +328,23 @@ class MangaRegionCrops:
                 from . import text_geometry
                 plan,analysis=text_geometry.plan(source_image.crop(tuple(box)),
                     deskew_support[0,box[1]:box[3],box[0]:box[2]],row['id'])
+                if analysis.get('reason')=='source_crop_cuts_glyphs':
+                    from .source_recovery import recover
+                    obstacles=protected+[pixel_box(other['bbox'],width,height,edit_margin)
+                        for other in data['regions'] if other['id']!=row['id']]
+                    recovered,audit=recover(source_image,box,deskew_support[0],row['id'],analysis,
+                                            obstacles=obstacles,edit_margin=edit_margin)
+                    recovery_audits.append({'id':row['id'],**{k:v for k,v in audit.items() if k!='ink_mask'}})
+                    if recovered:
+                        plan=recovered['plan'];analysis=plan['evidence']
+                        box=recovered['crop_bbox_pixels'];edit=recovered['edit_bbox_pixels']
+                        source=recovered['bbox_pixels']
+                        row={**row,'source_detection_bbox':row['bbox'],
+                             'bbox':[source[0]*1000/width,source[1]*1000/height,
+                                     source[2]*1000/width,source[3]*1000/height],
+                             'line_bboxes_pixels':recovered['line_bboxes_pixels']}
+                        logging.getLogger(__name__).info('Manga OCR source recovered: id=%s rows=%s added_ink=%s',
+                            row['id'],audit['rows'],audit['added_ink_pixels'])
             if analysis.get('needs_review'):
                 if geometry_policy=='strict':
                     raise ValueError(f"{row['id']}: unverified OCR geometry ({analysis['reason']}); crop={box}; inspect OCR crop/geometry preview")
@@ -336,6 +353,9 @@ class MangaRegionCrops:
                 geometry_review.append({'id':row['id'],'crop_bbox_pixels':box,
                                         'edit_bbox_pixels':edit,'analysis':analysis})
             entries.append((row,box,edit,plan,analysis))
+        if recovery_audits:
+            data={**data,'ocr_geometry_recovery':{'schema':1,'regions':recovery_audits,
+                  'scope':'source_geometry_not_recognition_accuracy'}}
         if geometry_review:
             # Close ownership overlaps before any crop, OCR or cleanup. Earlier
             # safe-looking regions can touch a later unverified crop.

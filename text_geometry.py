@@ -22,7 +22,7 @@ def rotate_rgb(image,angle):
     return image.convert('RGB').rotate(angle,Image.Resampling.BICUBIC,expand=True,fillcolor=color)
 
 
-def _verified_rows(image,support,valid):
+def _verified_rows(image,support,valid,include_glyphs=False):
     """Find repeated glyph baselines, not peaks made by paper texture.
 
     Projections can split a glyph's top and bottom into different 'lines'.
@@ -97,13 +97,19 @@ def _verified_rows(image,support,valid):
         ids=set().union(*(row['ids'] for row in merged))
         mass=int(sum(seeded[i] for i in ids))
         unassigned=[i for i,row in enumerate(merged) if sum(seeded[j]>=3 for j in row['ids'])<3]
-        choices.append((mass,merged,clipped,polarity,unassigned))
+        choices.append((mass,merged,clipped,polarity,unassigned,components))
     if not choices:return [],{'method':'component_baselines','reason':'unverified_glyph_rows','needs_review':True}
-    _,bands,clipped,polarity,unassigned=max(choices,key=lambda c:c[0])
+    _,bands,clipped,polarity,unassigned,components=max(choices,key=lambda c:c[0])
+    # Whole component boxes also let context recovery match the same baselines.
+    glyph_groups=[]
+    for row in bands:
+        boxes=[[int(v)*stride for v in c[:4]] for c in components if c[6] in row['ids']]
+        glyph_groups.append(boxes)
     cuts=[0]+[round((a['bottom']+b['top'])*stride/2) for a,b in zip(bands,bands[1:])]+[image.height]
     rows=[[0,a,image.width,b] for a,b in zip(cuts,cuts[1:])]
     return rows,{'method':'component_baselines','coordinate_frame':'rectified_crop_pixels','analysis_stride':stride,'polarity':polarity,
                  'bands_pixels':[[r['top']*stride,r['bottom']*stride] for r in bands],
+                 **({'glyph_groups_pixels':glyph_groups} if include_glyphs else {}),
                  'clipped_source_rows':clipped,'unassigned_rows':unassigned,
                  'needs_review':bool(clipped or unassigned),
                  'reason':'source_crop_cuts_glyphs' if clipped else 'unassigned_glyph_rows' if unassigned else 'verified_glyph_rows'}
@@ -186,6 +192,16 @@ def planned_inputs(image,value):
     if value.get('rectified_size')!=list(rotated.size):raise ValueError('Invalid rectified source size')
     rows=value.get('rows')
     if not isinstance(rows,list) or not 2<=len(rows)<=32:raise ValueError('Invalid deskew rows')
+    if value.get('row_mode')=='context_glyph_bounds':
+        from .source_recovery import verify_context
+        verify_context(image,value)
+        previous=0;output=[]
+        for row in rows:
+            if (not isinstance(row,list) or len(row)!=4 or any(type(v) is not int for v in row)
+                    or not 0<=row[0]<row[2]<=rotated.width or not previous<=row[1]<row[3]<=rotated.height):
+                raise ValueError('Invalid recovered glyph row bounds')
+            output.append(rotated.crop(tuple(row)));previous=row[3]
+        return output
     previous=0;output=[]
     for row in rows:
         if (not isinstance(row,list) or len(row)!=4 or any(type(v) is not int for v in row)

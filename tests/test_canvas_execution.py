@@ -157,6 +157,24 @@ def test_reload_reconciles_completed_native_prompt_without_rerunning_page(tmp_pa
     assert len(list(folder.glob('pages/*/attempt-*/state.json')))==2
 
 
+def test_explicit_review_retry_preserves_attempts_and_skips_completed_pages(tmp_path):
+    engine,client,inputs,folder=setup_book(tmp_path)
+    for _ in range(2):
+        ident,result=begin(engine,client,inputs,folder)
+        execute_visible_graph(client,ident,result)
+        engine.resolve(folder,result['ticket']['run_id'],ident,client)
+    states=sorted(folder.glob('pages/*/attempt-*/state.json'))
+    reviewed=P.read_json(states[0]);reviewed.update(status='needs_review',reason='unverified_ocr_geometry')
+    P.atomic_write(states[0],P.json_bytes(reviewed))
+    # Existing actions must continue to skip a finished review page.
+    assert begin(engine,client,inputs,folder,action='실패 재시도')[1]['ticket'] is None
+    retry=begin(engine,client,inputs,folder,action='실패·검수 재시도')[1]
+    assert retry['ticket']['relative_path']==reviewed['relative_path']
+    assert retry['report']['pages_selected']==1
+    assert len(list(folder.glob('pages/*/attempt-*/state.json')))==3
+    assert P.read_json(states[0])==reviewed
+
+
 def test_bad_continuation_or_old_workflow_is_rejected_before_page_execution(tmp_path):
     engine,client,inputs,folder=setup_book(tmp_path)
     with pytest.raises(P.Paused): begin(engine,client,inputs,folder,{'run_id':'bad','source_node':'1'})

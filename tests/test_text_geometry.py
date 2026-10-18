@@ -146,6 +146,87 @@ def test_geometry_policy_default_keeps_existing_project_identity():
     assert workflow_fingerprint(graph)!=workflow_fingerprint(old)
 
 
+@pytest.mark.parametrize('angle,cut',[(-17.,110),(13.5,60),(21.,60)])
+def test_clipped_glyphs_are_recovered_from_real_page_context(angle,cut):
+    from geometry_tests import source_recovery as R
+    source,ink,support,_=fixture(angle);h=source.height-cut
+    limited=support.copy();limited[h:]=False
+    box=[0,0,source.width,h]
+    _,analysis=G.plan(source.crop(box),limited[:h],'r1')
+    assert analysis['needs_review']
+    result,audit=R.recover(source,box,limited,'r1',analysis)
+    assert result and audit['status']=='recovered' and audit['added_ink_pixels']>0
+    plan=result['plan'];context=source.crop(result['crop_bbox_pixels'])
+    inputs=G.planned_inputs(context,plan)
+    assert len(inputs)==3 and plan['row_mode']=='context_glyph_bounds'
+    local=R._context_ink(context,plan)
+    a,b,c,d=result['crop_bbox_pixels']
+    # Actual original glyphs beyond the detector crop must be reached, rather
+    # than merely accepting the same truncated OCR input.
+    assert local[h-b:].any()
+    assert (local & ink[b:d,a:c]).sum()>.7*local.sum()
+
+
+def test_context_recovery_will_not_take_another_regions_edit_owner():
+    from geometry_tests import source_recovery as R
+    source,_,support,_=fixture();h=source.height-60;box=[0,0,source.width,h]
+    _,analysis=G.plan(source.crop(box),support[:h],'r1')
+    result,audit=R.recover(source,box,support,'r1',analysis,obstacles=[[0,h,source.width,source.height]])
+    assert result is None and audit['reason']=='neighbour_ownership_conflict'
+
+
+def test_context_continuation_does_not_drop_glyphs_outside_detector_support():
+    from geometry_tests import source_recovery as R
+    source,ink,support,_=fixture();h=source.height-60;box=[0,0,source.width,h]
+    # The detector cannot supply pixels outside its own clipped window.
+    limited=support.copy();limited[h:]=False
+    _,analysis=G.plan(source.crop(box),limited[:h],'r1')
+    result,audit=R.recover(source,box,limited,'r1',analysis)
+    assert result and len(result['plan']['rows'])==3
+    context=source.crop(result['crop_bbox_pixels']);mask=R._context_ink(context,result['plan'])
+    # Compare with the full-support result, not a handpicked font-size limit.
+    full,_=R.recover(source,box,support,'r1',analysis)
+    expected=R._context_ink(source.crop(full['crop_bbox_pixels']),full['plan'])
+    assert np.array_equal(mask,expected)
+
+
+def test_recovered_source_pixels_reach_cleanup_and_changed_inputs_are_rejected():
+    from geometry_tests import source_recovery as R, page_edit as E
+    source,_,support,_=fixture();h=source.height-60
+    mask=support.copy();mask[h:]=False
+    page=tensor(np.asarray(source,np.float32)/255)
+    w,full_h=source.size
+    manifest=json.dumps({'regions':[{'id':'r1','bbox':[0,0,1000,h/full_h*1000]}]})
+    crops,doc,_,plans=N.MangaRegionCrops().crop(page,manifest,0,12,auto_deskew=True,
+                                             text_pixel_mask=torch.from_numpy(mask[None].astype(np.float32)))
+    data=json.loads(doc);row=data['regions'][0]
+    assert 'no_text_reason' not in data and json.loads(plans[0])['row_mode']=='context_glyph_bounds'
+    assert data['ocr_geometry_recovery']['regions'][0]['status']=='recovered'
+    assert len(G.planned_inputs(source.crop(row['crop_bbox_pixels']),json.loads(plans[0])))==3
+    row.update(source='MY PROFILE\nNAME CLASS LABEL\nANOTHER SAMPLE LINE',target='프로필\n이름과 직업\n설명 문장')
+    raw=torch.from_numpy(mask[None].astype(np.float32))
+    edited,raw,cleanup,_,_=E.MangaPageEditPlan().plan(page,json.dumps(data),raw,raw)
+    assert raw[0,h:].any() and cleanup[0,h:].any()
+    assert raw.sum()<raw.numel()*.2  # Never grant the context rectangle as erase pixels.
+    changed=page.clone();changed[:,100,100]=0
+    with pytest.raises(ValueError,match='stale or unverified'):
+        E.MangaPageEditPlan().plan(changed,json.dumps(data),raw,cleanup)
+    modified=deepcopy(json.loads(plans[0]));modified['rows'][0][0]+=1
+    with pytest.raises(ValueError,match='stale or unverified'):
+        G.planned_inputs(source.crop(row['crop_bbox_pixels']),modified)
+    # Manual source preservation still wins after successful reconstruction.
+    kept,kept_mask,_,_,_=E.MangaPageEditPlan().plan(page,json.dumps(data),raw,cleanup,'{"r1":"preserve"}')
+    assert not kept_mask.any() and json.loads(kept)['page_edit_plan']['regions'][0]['action']=='preserve'
+
+
+def test_page_edit_review_inherits_ocr_review_without_relabelling_the_reason():
+    from geometry_tests import page_edit as E
+    data={'regions':[],'needs_review':True,'review_reason':'unverified_ocr_geometry'}
+    result=E.build(data,60,40)
+    assert result['page_edit_plan']['needs_review'] is True
+    assert result['review_reason']=='unverified_ocr_geometry'
+
+
 @pytest.mark.parametrize('change',['size','angle','row_gap','frame'])
 def test_changed_geometry_is_rejected_before_recognition(change):
     source,_,support,_=fixture()

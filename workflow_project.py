@@ -106,9 +106,9 @@ class NativeComfyClient:
         node=graph.get(getattr(self,'source_id',None)) if isinstance(graph,dict) else None
         if not isinstance(node,dict) or node.get('class_type') != 'MangaWorkflowInput': return None
         settings=node.get('inputs',{})
-        if settings.get('input_mode') != '폴더 프로젝트' or settings.get('action') != '실패 재시도': return None
+        if settings.get('input_mode') != '폴더 프로젝트' or settings.get('action') not in ('실패 재시도','실패·검수 재시도'): return None
         return {'kind':'native_queue_outcome_lost','current_prompt_id':current_prompt_id,
-                'previous_prompt_id':state['prompt_id'],'requested_action':'실패 재시도',
+                'previous_prompt_id':state['prompt_id'],'requested_action':settings['action'],
                 'previous_outcome':'unknown','queue_membership':'old_prompt_absent',
                 'checked_at':datetime.now(timezone.utc).isoformat(timespec='seconds')}
 
@@ -411,7 +411,7 @@ class MangaWorkflowInput:
             'image':(['']+files,{'image_upload':True,'tooltip':'이미지 한 장 모드에서 사용합니다. 폴더 모드에서는 무시합니다.'}),
             'input_folder':('STRING',{'default':'manga_book','tooltip':'ComfyUI/input 기준 하위 폴더. 예: manga_book/volume1'}),
             'project_name':('STRING',{'default':'book_01','tooltip':'결과와 재개 기록을 구분하는 이름. 설정을 바꾼 새 실행은 새 이름을 사용하세요.'}),
-            'action':(['시작·재개','실패 재시도','상태 확인','일시정지'],{'default':'시작·재개','tooltip':'폴더 프로젝트의 실행 동작입니다. 현재 페이지를 마친 뒤 일시정지합니다.'})},
+            'action':(['시작·재개','실패 재시도','실패·검수 재시도','상태 확인','일시정지'],{'default':'시작·재개','tooltip':'실패·검수 재시도는 failed와 needs_review 페이지를 새 시도로 처리하고 이전 결과를 보존합니다. 현재 페이지를 마친 뒤 일시정지합니다.'})},
             'hidden':{'prompt':'PROMPT','unique_id':'UNIQUE_ID','extra_pnginfo':'EXTRA_PNGINFO'}}
 
     @classmethod
@@ -420,7 +420,7 @@ class MangaWorkflowInput:
         if input_mode == '폴더 프로젝트':
             try:
                 PROJECTS.destination(folder_paths.get_output_directory(),project_name)
-                if action in ('시작·재개','실패 재시도'):
+                if action in ('시작·재개','실패 재시도','실패·검수 재시도'):
                     PROJECTS.inputs(folder_paths.get_input_directory(),input_folder)
             except ProjectError as exc: return str(exc)
             return True

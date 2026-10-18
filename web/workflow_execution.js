@@ -40,7 +40,7 @@ function sameCanvas(job) {
     const value = fields(node);
     if (value.input_mode !== "폴더 프로젝트" || value.project_name !== job.project_name
         || (job.input_folder && value.input_folder !== job.input_folder)
-        || !["시작·재개", "실패 재시도"].includes(value.action)) return null;
+        || !["시작·재개", "실패 재시도", "실패·검수 재시도"].includes(value.action)) return null;
     return node;
 }
 
