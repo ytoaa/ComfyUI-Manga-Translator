@@ -11,3 +11,9 @@ input/
 *.safetensors
 *.pt
 *.pth
+
+# Reproducible developer outputs and packages
+/validation/
+/dist/
+*.zip
+*.zip.sha256

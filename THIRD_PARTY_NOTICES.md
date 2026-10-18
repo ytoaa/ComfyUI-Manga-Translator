@@ -4,7 +4,7 @@
 
 `inpaint_tiles.py`는 기존 코하루 `inpaint_remote`의 제한된 코어+주변 문맥/마스크 소유권 설계를 참고해 ComfyUI용으로 작성했다. 참고 기준은 위 저장소 commit `ee6d9ddc82d9bfc4718383272f0e4797f805e2cd`의 `patches/remote-models.patch`와 upstream 인페인트 구현이다. Rust scene/실행기 코드는 포함하지 않으며 실제 크롭·크기 복원·타일 마스크 합성은 ComfyUI 기본 노드를 호출한다. 균일색 판정은 검출 말풍선 다각형 대신 주변 픽셀의 보수적 분산 검사로 구현되어 원래 코하루의 색 채우기 판정과 동일하지 않다.
 
-`adapters/model.py`, `model_files.py`, `model_bundle.py`, `hayai.py`, `hayai_files.py`, `options.py`는 [ytoaa/koharu-remote](https://github.com/ytoaa/koharu-remote)의 `dgx/vision/`에서 가져왔다. 기준 커밋은 `ee6d9ddc82d9bfc4718383272f0e4797f805e2cd`이다. 이 여섯 파일의 내용은 변경하지 않았다. SHA256과 원본 경로는 `provenance.json`에 기록한다.
+`adapters/model.py`, `model_files.py`, `model_bundle.py`, `hayai.py`, `hayai_files.py`, `options.py`는 [ytoaa/koharu-remote](https://github.com/ytoaa/koharu-remote)의 `dgx/vision/`에서 가져왔다. 기준 커밋은 `ee6d9ddc82d9bfc4718383272f0e4797f805e2cd`이다. 다섯 파일은 원본과 동일하며 `adapters/hayai.py`에는 출력 검사·진단·Transformers 호환 수정이 있다. 원본 경로·원본 SHA256(`source_sha256`)과 현재 SHA256(`sha256`), 수정 여부는 `provenance.json`에 구분해 기록한다. 기존 저작권·라이선스 고지는 유지한다.
 
 기존 프로젝트가 기반으로 삼은 공식 [Koharu](https://github.com/koharu-rs/koharu)의 버전은 0.83.5, 커밋은 `52bb4f55e2266f72c1523562a583c827ec191ceb`이다. 그 프로젝트의 MIT/Apache-2.0 라이선스 원문과 저작권 고지를 `LICENSE-THIRD-PARTY-MIT`, `LICENSE-THIRD-PARTY-APACHE`에 보존한다. 기존 모델별 전처리·핀된 로더·검증 코드를 독립 패키지에서 활용하기 위한 출처 고지이며 공식 Koharu의 배포나 보증을 뜻하지 않는다.
 
@@ -21,7 +21,7 @@ ComfyUI의 표준 및 Qwen 노드를 워크플로우에서 참조하지만 Comfy
 
 ## 설계 참고만 한 프로젝트
 
-[조사 문서](docs/reference-research.md)에 나열한 `manga-translator-ui`, `comic-translate`, `BallonsTranslator`, `manga-image-translator`, `MangaTranslator`, `ComfyUI-QwenVL`, `ComfyUI-Florence2`, `comfyui-ollama`의 코드·기본 프롬프트·모델·폰트는 가져오지 않았다. 특히 AI renderer의 **구조**를 참고했으며 GPL 코드나 프롬프트를 새 패키지에 복사하지 않았다.
+[보존된 초기 조사](https://github.com/ytoaa/ComfyUI-Manga-Translator/blob/main/docs/history/research.md)에 나열한 `manga-translator-ui`, `comic-translate`, `BallonsTranslator`, `manga-image-translator`, `MangaTranslator`, `ComfyUI-QwenVL`, `ComfyUI-Florence2`, `comfyui-ollama`의 코드·기본 프롬프트·모델·폰트는 가져오지 않았다. 특히 AI renderer의 **구조**를 참고했으며 GPL 코드나 프롬프트를 새 패키지에 복사하지 않았다.
 
 추가 조사한 `ComfyUI-text-replace`, `ComfyUI_LayerStyle_Advance`, `manga-editor-desu`, `ComfyUI-Manga-Autopilot`도 참고 사례이며 그 코드나 포함 폰트를 도입하지 않았다.
 # 스타일 식자 동봉 폰트

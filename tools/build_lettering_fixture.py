@@ -1,4 +1,6 @@
 """Rebuild synthetic lettering images; does not create workflow variants."""
+from argparse import ArgumentParser
+from pathlib import Path
 import json
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -8,9 +10,9 @@ def save_rgb(path, value):
     Image.fromarray((np.clip(value, 0, 1)*255).round().astype('uint8')).save(path)
 
 
-def demo():
-    folder = PACK/'examples'
-    folder.mkdir(exist_ok=True)
+def demo(destination):
+    folder = Path(destination)
+    folder.mkdir(parents=True,exist_ok=True)
     canvas = Image.new('RGB', (1024, 768), '#faf8f2')
     d = ImageDraw.Draw(canvas)
     d.rectangle((28, 28, 560, 330), fill='#eeeeec', outline='#151515', width=4)
@@ -75,4 +77,6 @@ def demo():
 
 
 if __name__ == '__main__':
-    demo()
+    parser=ArgumentParser(description=__doc__)
+    parser.add_argument('--destination',required=True)
+    demo(parser.parse_args().destination)
