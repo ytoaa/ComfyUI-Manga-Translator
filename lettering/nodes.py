@@ -237,6 +237,7 @@ class MangaLetterPrepare:
             data = page_edit.build(data,width,height,padding=region_padding)
         edits = page_edit.validate(data,width,height)
         rows = []
+        orientation={}
         preserved=[]
         support = np.zeros((height, width), np.float32)
         for row, decision in zip(data['regions'],edits['regions']):
@@ -252,6 +253,11 @@ class MangaLetterPrepare:
             if not isinstance(opts, dict) or set(opts)-{'font', 'layout', 'style'}:
                 raise ValueError('Region options may contain only font, layout and style')
             rows.append({'id': row['id'], 'bbox': bounds, 'source_text': row.get('source', ''), 'text': row['target'], **opts})
+            geometry=row.get('ocr_region_plan',{})
+            if geometry.get('strategy')=='mask_supported_deskew_rows':
+                angle=geometry.get('source_angle')
+                core.finite(angle,-25,25,'source_angle')
+                orientation[row['id']]={'source_angle':angle,'scope':'mask_supported_geometric_estimate'}
             x, y, w, h = bounds
             support[y:y+h, x:x+w] = 1
         if text_pixel_mask is not None:
@@ -262,6 +268,7 @@ class MangaLetterPrepare:
             ids.add(ident)
             preserved.append({'id':ident,'bbox':[x0,y0,x1-x0,y1-y0],'reason':'unassigned_source_ink'})
         output = json.dumps({'schema': 1, 'coordinate_format': 'xywh', 'page_size': [width, height], 'regions': rows,
+                            **({'source_orientation':orientation} if orientation else {}),
                             **({'source_preservation':preserved} if preserved else {}),
                             'edit_summary':{'replace_regions':len(rows),'preserve_regions':len(preserved)},
                             **({'needs_review':True} if data.get('needs_review') else {}),

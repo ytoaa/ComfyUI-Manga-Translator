@@ -2,6 +2,8 @@
 
 ComfyUI 캔버스에서 글자 검출 → OCR → 번역 → 원문 제거 → 한글 식자 → 저장까지 실행한다. **제공 워크플로우는 [통합 08 하나](lettering/example_workflows/08-integrated-tiled-cleanup-lettering.json)**다. 첫 입력 노드에서 이미지 한 장과 폴더 프로젝트를 선택한다. 별도 사이드바나 페이지마다 다른 워크플로우는 필요하지 않다.
 
+v0.6.0은 **검출 마스크로 지지되는 기울어진 가로 글줄의 OCR 회전 보정**과 같은 각도의 식자 측정을 추가한다. 새 08의 `MangaRegionCrops.auto_deskew=true`는 각도와 여러 행이 확인될 때만 OCR용 복사본을 보정한다. `MangaInpaintAssemble.blend_width=8`은 원문 획의 제거 강도를 유지하며 마스크 여유 부분의 경계를 완화한다. 새 08을 가져오고, 폴더 프로젝트는 처리 설정이 바뀌므로 새 `project_name`을 사용한다. [보정 조건·좌표·남은 한계](docs/oriented-ocr-v0.6.0.md).
+
 v0.5.2는 통합 08 하단에 **단계별 디버그 행**을 추가한다. 검출·OCR·제거 계획·제거 결과·식자 계획·식자 결과의 `미리보기 아무거나` 6개와 선택/제외 박스·원문 스타일 마스크·새 글자 알파의 이미지 검수를 제공한다. 새 08을 가져오면 연결되어 있으며 기존 프로젝트 이름을 유지할 수 있다. 디버그 가지는 처리 설정이나 품질 판정을 바꾸지 않는다. [출력 포트·사용법·실제 사례 분석](docs/debug-inspection-v0.5.2.md).
 
 v0.5.1은 번역 요청에 **JSON 스키마 출력 제약**을 추가한다. 번역 노드의 `response_format` 기본값은 `json_schema`다. JSON 문법뿐 아니라 페이지별 ID·개수·필드를 지정하며 응답 후 ID/내용 검사도 유지한다. 실패한 응답 두 개와 종료 사유는 `output/manga_translator/translation_failures`에 저장한다. 기존 v0.5.0 프로젝트는 기본 설정으로 이름 변경 없이 `실패 재시도`할 수 있다. [서버 호환 모드·진단·검증 범위](docs/translation-protocol-v0.5.1.md).

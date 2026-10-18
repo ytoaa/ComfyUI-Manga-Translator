@@ -96,8 +96,13 @@
       "edit_margin": 12,
       "allow_empty_page": true,
       "refine_page_columns": true,
+      "auto_deskew": true,
       "images": [
         "1",
+        0
+      ],
+      "text_pixel_mask": [
+        "6",
         0
       ]
     }
@@ -427,6 +432,7 @@
     "class_type": "MangaInpaintAssemble",
     "inputs": {
       "strict_cleanup": true,
+      "blend_width": 8,
       "plan": [
         "16",
         6

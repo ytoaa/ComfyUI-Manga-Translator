@@ -241,21 +241,23 @@ class MangaRegionCrops:
                 'optional': {'allow_empty_page': ('BOOLEAN', {'default': False,
                     'tooltip': '새 08 전용: 0개 영역이면 원본을 미리보기로 전달합니다. OCR에 manifest_json도 연결해야 합니다.'}),
                     'refine_page_columns': ('BOOLEAN', {'default': False,
-                    'tooltip': '반복되는 다단 본문과 단을 가로지르는 중복 검출을 픽셀 여백으로 확인한 경우 OCR 전에 나눕니다. ocr_region_plans를 OCR에 연결하세요.'})}}
+                    'tooltip': '반복되는 다단 본문과 단을 가로지르는 중복 검출을 픽셀 여백으로 확인한 경우 OCR 전에 나눕니다. ocr_region_plans를 OCR에 연결하세요.'}),
+                    'auto_deskew': ('BOOLEAN', {'default':False,'tooltip':'검출 마스크 안에서 회전과 여러 행이 확인될 때만 OCR 입력을 수평 보정합니다. 인식 정확도 보증은 아닙니다.'}),
+                    'text_pixel_mask': ('MASK', {'tooltip':'회전 분석용 원문 검출 마스크. 원본 픽셀은 바꾸지 않습니다.'})}}
     RETURN_TYPES = ('IMAGE', 'STRING', 'MASK', 'STRING')
     RETURN_NAMES = ('ocr_crops', 'manifest_json', 'edit_region_mask', 'ocr_region_plans')
     OUTPUT_IS_LIST = (True, False, False, True)
     FUNCTION = 'crop'
     CATEGORY = 'Manga Translator/Regions'
 
-    def crop(self, images, layout_json, ocr_padding=4, edit_margin=12, allow_empty_page=False, refine_page_columns=False):
+    def crop(self, images, layout_json, ocr_padding=4, edit_margin=12, allow_empty_page=False, refine_page_columns=False, auto_deskew=False, text_pixel_mask=None):
         import torch
         if images.ndim != 4 or images.shape[0] != 1 or images.shape[-1] != 3:
             raise ValueError('Load one RGB page at a time')
         if type(ocr_padding) is not int or not 0 <= ocr_padding <= 128 or type(edit_margin) is not int or not 0 <= edit_margin <= 256:
             raise ValueError('Invalid crop padding or edit margin')
         data = layout(layout_json)
-        if type(allow_empty_page) is not bool or type(refine_page_columns) is not bool:
+        if any(type(v) is not bool for v in (allow_empty_page,refine_page_columns,auto_deskew)):
             raise ValueError('Invalid crop switches')
         if not data['regions'] and not allow_empty_page:
             raise ValueError('No selected text regions; load the updated 08 workflow for unchanged-page output')
@@ -278,6 +280,15 @@ class MangaRegionCrops:
             data, geometry = refine_columns(pil_image(images), data)
             if geometry:
                 logging.getLogger(__name__).info('Manga page columns: %s', encode(data['layout_refinement']))
+        deskew_support=None;source_image=None
+        if auto_deskew:
+            if text_pixel_mask is None:raise ValueError('Connect text_pixel_mask for automatic OCR deskew')
+            import numpy as np
+            deskew_support=text_pixel_mask.detach().cpu().numpy()
+            if deskew_support.shape!=(1,height,width) or not np.isfinite(deskew_support).all():
+                raise ValueError('Deskew source mask must match the page')
+            from .models import pil_image
+            source_image=pil_image(images)
         crops, rows, plans = [], [], []
         for row in data['regions']:
             box = pixel_box(row['bbox'],width,height,ocr_padding)
@@ -296,10 +307,16 @@ class MangaRegionCrops:
                 plan = crop_plan(row['id'], item, box)
             if any(boundary_review.intersects(edit,area) or boundary_review.intersects(box,area) for area in protected):
                 raise ValueError('OCR crop/edit margin overlaps preserved boundary region; reduce padding/margin or review regions')
+            analysis={}
+            if auto_deskew and not plan:
+                from . import text_geometry
+                plan,analysis=text_geometry.plan(source_image.crop(tuple(box)),
+                    deskew_support[0,box[1]:box[3],box[0]:box[2]],row['id'])
             crops.append(images[:,box[1]:box[3],box[0]:box[2],:].clone())
             plans.append(encode(plan))
             mask[:,edit[1]:edit[3],edit[0]:edit[2]] = 1
             rows.append({**row,'crop_bbox_pixels':box,'edit_bbox_pixels':edit,
+                         **({'ocr_geometry_analysis':analysis} if analysis else {}),
                          **({'ocr_region_plan':plan} if plan else {})})
         return (crops,encode({**data,'image_width':width,'image_height':height,'regions':rows}),mask,plans)
 

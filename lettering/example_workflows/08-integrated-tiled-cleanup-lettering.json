@@ -2,7 +2,7 @@
   "id": "6489a8d0-adb0-54db-baf9-5a11c43d9dd8",
   "revision": 1,
   "last_node_id": 64,
-  "last_link_id": 97,
+  "last_link_id": 98,
   "nodes": [
     {
       "id": 1,
@@ -30,7 +30,7 @@
             20,
             49,
             52,
-            81
+            82
           ]
         },
         {
@@ -200,7 +200,7 @@
             3,
             4,
             56,
-            80
+            81
           ]
         }
       ],
@@ -264,7 +264,7 @@
           "type": "STRING",
           "links": [
             7,
-            79
+            80
           ]
         }
       ],
@@ -320,7 +320,8 @@
           "type": "MASK",
           "links": [
             5,
-            17
+            17,
+            79
           ]
         }
       ],
@@ -387,7 +388,7 @@
       ],
       "size": [
         330,
-        210
+        240
       ],
       "flags": {},
       "order": 7,
@@ -397,6 +398,11 @@
           "name": "images",
           "type": "IMAGE",
           "link": 6
+        },
+        {
+          "name": "text_pixel_mask",
+          "type": "MASK",
+          "link": 79
         },
         {
           "name": "layout_json",
@@ -445,6 +451,7 @@
         4,
         12,
         true,
+        true,
         true
       ],
       "widgets_values_named": {
@@ -452,9 +459,10 @@
         "ocr_padding": 4,
         "edit_margin": 12,
         "allow_empty_page": true,
-        "refine_page_columns": true
+        "refine_page_columns": true,
+        "auto_deskew": true
       },
-      "title": "④ OCR 전 단·문단 정리 · 글자 없으면 원본 통과"
+      "title": "④ OCR 전 단·회전 보정 · 확인된 행 분리"
     },
     {
       "id": 9,
@@ -542,7 +550,7 @@
           "type": "STRING",
           "links": [
             12,
-            84
+            85
           ]
         },
         {
@@ -967,7 +975,7 @@
           "name": "plan_report",
           "type": "STRING",
           "links": [
-            86
+            87
           ]
         },
         {
@@ -1653,7 +1661,7 @@
       ],
       "size": [
         330,
-        100
+        120
       ],
       "flags": {},
       "order": 28,
@@ -1683,7 +1691,7 @@
           "name": "cleanup_report",
           "type": "STRING",
           "links": [
-            88
+            89
           ]
         }
       ],
@@ -1691,12 +1699,14 @@
         "Node name for S&R": "MangaInpaintAssemble"
       },
       "widgets_values": [
-        true
+        true,
+        8
       ],
       "widgets_values_named": {
-        "strict_cleanup": true
+        "strict_cleanup": true,
+        "blend_width": 8
       },
-      "title": "⑨ 전체 좌표 복원 · 잔존 원문 검사"
+      "title": "⑨ 전체 좌표 복원 · 경계 완화 · 잔존 원문 검사"
     },
     {
       "id": 30,
@@ -1742,7 +1752,7 @@
           "type": "MASK",
           "links": [
             54,
-            91
+            92
           ]
         }
       ],
@@ -1829,7 +1839,7 @@
           "name": "계획_보고서",
           "type": "STRING",
           "links": [
-            90
+            91
           ]
         }
       ],
@@ -1895,14 +1905,14 @@
           "name": "새_글자_알파",
           "type": "MASK",
           "links": [
-            95
+            96
           ]
         },
         {
           "name": "식자_보고서",
           "type": "STRING",
           "links": [
-            94
+            95
           ]
         }
       ],
@@ -2427,12 +2437,12 @@
         {
           "name": "report_json",
           "type": "STRING",
-          "link": 79
+          "link": 80
         },
         {
           "name": "preview_image",
           "type": "IMAGE",
-          "link": 81
+          "link": 82
         },
         {
           "name": "preview_mask",
@@ -2442,7 +2452,7 @@
         {
           "name": "detection_result",
           "type": "MANGA_DETECTION",
-          "link": 80
+          "link": 81
         }
       ],
       "outputs": [
@@ -2450,14 +2460,14 @@
           "name": "단계_디버그_JSON",
           "type": "STRING",
           "links": [
-            82
+            83
           ]
         },
         {
           "name": "단계_검수_이미지",
           "type": "IMAGE",
           "links": [
-            83
+            84
           ]
         }
       ],
@@ -2490,7 +2500,7 @@
         {
           "name": "source",
           "type": "*",
-          "link": 82
+          "link": 83
         }
       ],
       "outputs": [
@@ -2526,7 +2536,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 83
+          "link": 84
         }
       ],
       "outputs": [],
@@ -2555,7 +2565,7 @@
         {
           "name": "report_json",
           "type": "STRING",
-          "link": 84
+          "link": 85
         },
         {
           "name": "preview_image",
@@ -2578,7 +2588,7 @@
           "name": "단계_디버그_JSON",
           "type": "STRING",
           "links": [
-            85
+            86
           ]
         },
         {
@@ -2616,7 +2626,7 @@
         {
           "name": "source",
           "type": "*",
-          "link": 85
+          "link": 86
         }
       ],
       "outputs": [
@@ -2652,7 +2662,7 @@
         {
           "name": "report_json",
           "type": "STRING",
-          "link": 86
+          "link": 87
         },
         {
           "name": "preview_image",
@@ -2675,7 +2685,7 @@
           "name": "단계_디버그_JSON",
           "type": "STRING",
           "links": [
-            87
+            88
           ]
         },
         {
@@ -2713,7 +2723,7 @@
         {
           "name": "source",
           "type": "*",
-          "link": 87
+          "link": 88
         }
       ],
       "outputs": [
@@ -2749,7 +2759,7 @@
         {
           "name": "report_json",
           "type": "STRING",
-          "link": 88
+          "link": 89
         },
         {
           "name": "preview_image",
@@ -2772,7 +2782,7 @@
           "name": "단계_디버그_JSON",
           "type": "STRING",
           "links": [
-            89
+            90
           ]
         },
         {
@@ -2810,7 +2820,7 @@
         {
           "name": "source",
           "type": "*",
-          "link": 89
+          "link": 90
         }
       ],
       "outputs": [
@@ -2846,7 +2856,7 @@
         {
           "name": "report_json",
           "type": "STRING",
-          "link": 90
+          "link": 91
         },
         {
           "name": "preview_image",
@@ -2856,7 +2866,7 @@
         {
           "name": "preview_mask",
           "type": "MASK",
-          "link": 91
+          "link": 92
         },
         {
           "name": "detection_result",
@@ -2869,14 +2879,14 @@
           "name": "단계_디버그_JSON",
           "type": "STRING",
           "links": [
-            92
+            93
           ]
         },
         {
           "name": "단계_검수_이미지",
           "type": "IMAGE",
           "links": [
-            93
+            94
           ]
         }
       ],
@@ -2909,7 +2919,7 @@
         {
           "name": "source",
           "type": "*",
-          "link": 92
+          "link": 93
         }
       ],
       "outputs": [
@@ -2945,7 +2955,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 93
+          "link": 94
         }
       ],
       "outputs": [],
@@ -2974,7 +2984,7 @@
         {
           "name": "report_json",
           "type": "STRING",
-          "link": 94
+          "link": 95
         },
         {
           "name": "preview_image",
@@ -2984,7 +2994,7 @@
         {
           "name": "preview_mask",
           "type": "MASK",
-          "link": 95
+          "link": 96
         },
         {
           "name": "detection_result",
@@ -2997,14 +3007,14 @@
           "name": "단계_디버그_JSON",
           "type": "STRING",
           "links": [
-            96
+            97
           ]
         },
         {
           "name": "단계_검수_이미지",
           "type": "IMAGE",
           "links": [
-            97
+            98
           ]
         }
       ],
@@ -3037,7 +3047,7 @@
         {
           "name": "source",
           "type": "*",
-          "link": 96
+          "link": 97
         }
       ],
       "outputs": [
@@ -3073,7 +3083,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 97
+          "link": 98
         }
       ],
       "outputs": [],
@@ -3160,7 +3170,7 @@
       5,
       0,
       8,
-      1,
+      2,
       "STRING"
     ],
     [
@@ -3733,6 +3743,14 @@
     ],
     [
       79,
+      6,
+      0,
+      8,
+      1,
+      "MASK"
+    ],
+    [
+      80,
       5,
       0,
       49,
@@ -3740,7 +3758,7 @@
       "STRING"
     ],
     [
-      80,
+      81,
       4,
       0,
       49,
@@ -3748,7 +3766,7 @@
       "MANGA_DETECTION"
     ],
     [
-      81,
+      82,
       1,
       0,
       49,
@@ -3756,7 +3774,7 @@
       "IMAGE"
     ],
     [
-      82,
+      83,
       49,
       0,
       50,
@@ -3764,7 +3782,7 @@
       "STRING"
     ],
     [
-      83,
+      84,
       49,
       1,
       51,
@@ -3772,7 +3790,7 @@
       "IMAGE"
     ],
     [
-      84,
+      85,
       10,
       1,
       52,
@@ -3780,7 +3798,7 @@
       "STRING"
     ],
     [
-      85,
+      86,
       52,
       0,
       53,
@@ -3788,7 +3806,7 @@
       "STRING"
     ],
     [
-      86,
+      87,
       16,
       7,
       54,
@@ -3796,7 +3814,7 @@
       "STRING"
     ],
     [
-      87,
+      88,
       54,
       0,
       55,
@@ -3804,7 +3822,7 @@
       "STRING"
     ],
     [
-      88,
+      89,
       29,
       1,
       56,
@@ -3812,7 +3830,7 @@
       "STRING"
     ],
     [
-      89,
+      90,
       56,
       0,
       57,
@@ -3820,7 +3838,7 @@
       "STRING"
     ],
     [
-      90,
+      91,
       31,
       2,
       58,
@@ -3828,7 +3846,7 @@
       "STRING"
     ],
     [
-      91,
+      92,
       30,
       1,
       58,
@@ -3836,7 +3854,7 @@
       "MASK"
     ],
     [
-      92,
+      93,
       58,
       0,
       59,
@@ -3844,7 +3862,7 @@
       "STRING"
     ],
     [
-      93,
+      94,
       58,
       1,
       60,
@@ -3852,7 +3870,7 @@
       "IMAGE"
     ],
     [
-      94,
+      95,
       32,
       2,
       61,
@@ -3860,7 +3878,7 @@
       "STRING"
     ],
     [
-      95,
+      96,
       32,
       1,
       61,
@@ -3868,7 +3886,7 @@
       "MASK"
     ],
     [
-      96,
+      97,
       61,
       0,
       62,
@@ -3876,7 +3894,7 @@
       "STRING"
     ],
     [
-      97,
+      98,
       61,
       1,
       63,

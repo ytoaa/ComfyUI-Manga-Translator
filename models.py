@@ -513,11 +513,15 @@ class MangaOCRAdaptive:
         if region_plan and (not line_split or text_direction not in ('auto','horizontal')):
             raise ValueError('Verified page rows require line_split and horizontal/auto OCR direction')
         if region_plan:
-            from .layout_refinement import planned_inputs
+            if region_plan.get('strategy')=='mask_supported_deskew_rows':
+                from .text_geometry import planned_inputs
+            else:
+                from .layout_refinement import planned_inputs
             crops = planned_inputs(source,region_plan)
         else:
             crops=(_ocr_line_images(source) if text_direction=='auto' else _ocr_line_images(source,text_direction)) if line_split else [source]
-        runtime['region_plan'] = {k:region_plan[k] for k in ('strategy','region_id') if k in region_plan}
+        runtime['region_plan'] = {k:region_plan[k] for k in ('strategy','region_id','correction_degrees',
+                                 'source_angle','coordinate_frame','rectified_size') if k in region_plan}
         if tight_crop:
             crops=[_tight_ocr_image(image) for image in crops]
         texts, records, previews = [], [], []
@@ -611,7 +615,9 @@ class MangaOCRAdaptive:
                     previews.append(torch.from_numpy(np.asarray(image,dtype=np.float32)/255)[None])
                 chunks.append(text)
                 records.append({'line':line_index,'line_local_bbox':box,'input_size':list(image.size),
-                                **({'region_local_bbox':region_plan['rows'][line_index]} if region_plan else {}),
+                                **({'region_local_bbox':region_plan['rows'][line_index],
+                                    'region_coordinate_frame':region_plan.get('coordinate_frame','source_crop_pixels')}
+                                   if region_plan else {}),
                                 'attempts':attempts,**({'layout_recovery':recovery}
                                     if recovery and 'chunks' in recovery else {})})
             texts.append(join_chunks(chunks))

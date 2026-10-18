@@ -10,7 +10,7 @@ import uuid
 from .tools.run_project import (Project, ProjectError, Paused, InputError, ACTIVE, FINISHED,
     atomic_write, json_bytes, read_json, project_lock, normalise_image, digest, workflow_bindings)
 
-VERSION = '0.5.2'
+VERSION = '0.6.0'
 
 
 def _write_run(folder, run):

@@ -237,11 +237,39 @@ def make_plan(original, source_mask, cleanup_mask, tile_size=512, context=128, m
             'cleanup_mask': permitted, 'tiles': tiles, 'report': report}
 
 
-def assemble(plan, generated, strict_cleanup=True):
+def _blend_cleanup_halo(original,output,cleanup,source,width):
+    """Bounded page-coordinate fades, shared by flat fills and model tiles."""
+    # Axis projections avoid allocating two page-sized coordinate arrays for
+    # a dense 64 MP mask. EDT allocations below remain bounded per core.
+    xs=np.flatnonzero(cleanup.any(axis=0));ys=np.flatnonzero(cleanup.any(axis=1))
+    bounds=[int(xs[0]),int(ys[0]),int(xs[-1])+1,int(ys[-1])+1] if len(xs) else None
+    total=0
+    if bounds is not None:
+        x0,y0,x1,y1=bounds;h,w=cleanup.shape
+        for top in range(y0,y1,512):
+            for left in range(x0,x1,512):
+                bottom,right=min(top+512,y1),min(left+512,x1)
+                if not cleanup[top:bottom,left:right].any():continue
+                a,b=max(0,left-width-1),max(0,top-width-1)
+                c,d=min(w,right+width+1),min(h,bottom+width+1)
+                distance=ndimage.distance_transform_edt(np.pad(cleanup[b:d,a:c],1))[1:-1,1:-1]
+                alpha=np.minimum(distance[top-b:bottom-b,left-a:right-a]/width,1).astype(np.float32)
+                alpha[source[top:bottom,left:right]]=1
+                selected=cleanup[top:bottom,left:right] & (alpha<1)
+                old=original[top:bottom,left:right];new=output[top:bottom,left:right]
+                new[selected]=old[selected]+(new[selected]-old[selected])*alpha[selected,None]
+                total+=int(selected.sum())
+    return {'method':'source_protected_halo','width':width,'blended_halo_pixels':total,
+            'source_pixels_unattenuated':True}
+
+
+def assemble(plan, generated, strict_cleanup=True, blend_width=0):
     if not isinstance(plan, dict) or plan.get('version') != 1:
         raise ValueError('Expected an inpaint tile plan')
     if len(generated) != len(plan['tiles']):
         raise ValueError('Generated tile count differs from plan; no partial page was accepted')
+    if type(blend_width) is not int or not 0<=blend_width<=32:
+        raise ValueError('Cleanup blend width must be 0..32 pixels')
     if not plan['tiles'] and plan.get('report',{}).get('cleanup_skipped'):
         report = {**plan['report'], 'tile_checks': [], 'outside_mask_unchanged': True,
                   'quality_check': 'cleanup skipped because both source and cleanup masks are empty'}
@@ -268,10 +296,12 @@ def assemble(plan, generated, strict_cleanup=True):
             raise ValueError(f'Cleanup tile {index+1} retained nearly all source ink; lettering was stopped. '
                              'Inspect the tile or change the native sampler seed. This is a pixel check, not OCR certification.')
         output[y0:y1, x0:x1][owned] = candidate[owned]
+    edge_blend=(_blend_cleanup_halo(plan['original'],output,plan['cleanup_mask'],plan['source_mask'],blend_width)
+                if blend_width else {'method':'hard_mask','width':0})
     changed_outside = np.any(output != plan['original'], axis=2) & ~plan['cleanup_mask']
     if np.any(changed_outside):
         raise ValueError('Cleanup changed pixels outside the permitted mask')
-    report = {**plan['report'], 'tile_checks': checks,
+    report = {**plan['report'], 'tile_checks': checks,'edge_blend':edge_blend,
               'outside_mask_unchanged': True,
               'quality_check': 'unchanged source-ink heuristic; not a guarantee of text-free output'}
     return output, json.dumps(report, ensure_ascii=False, indent=2)
@@ -311,21 +341,25 @@ class MangaInpaintAssemble:
     def INPUT_TYPES(cls):
         return {'required': {'plan': ('MANGA_INPAINT_PLAN',),
                              'strict_cleanup': ('BOOLEAN', {'default': True})},
-                'optional': {'generated': ('IMAGE', {'lazy': True})}}
+                'optional': {'generated': ('IMAGE', {'lazy': True}),
+                             'blend_width':('INT',{'default':0,'min':0,'max':32,
+                                 'tooltip':'검출 원문 픽셀은 온전히 제거하고 마스크 여유 부분만 부드럽게 합성합니다. 0=기존 경계. 배경 무늬 자체를 복원하는 옵션은 아닙니다.'})}}
     INPUT_IS_LIST = True
     RETURN_TYPES = ('IMAGE', 'STRING')
     RETURN_NAMES = ('cleaned_page', 'cleanup_report')
     FUNCTION = 'finish'
     CATEGORY = 'Manga Translator/Cleanup'
-    def check_lazy_status(self, plan, strict_cleanup, generated=None):
+    def check_lazy_status(self, plan, strict_cleanup, generated=None, blend_width=None):
         # ComfyUI represents an unresolved lazy link as (None,), not only None.
         missing = generated is None or not generated or generated[0] is None
         return ['generated'] if plan[0]['tiles'] and missing else []
-    def finish(self, plan, strict_cleanup, generated=None):
+    def finish(self, plan, strict_cleanup, generated=None, blend_width=None):
         if len(plan) != 1 or len(strict_cleanup) != 1:
             raise ValueError('Assemble exactly one page at a time')
         missing = generated is None or not generated or generated[0] is None
-        result, report = assemble(plan[0], [] if missing else [image(t) for t in generated], strict_cleanup[0])
+        if blend_width is not None and len(blend_width)!=1:raise ValueError('Expected one cleanup blend width')
+        result, report = assemble(plan[0], [] if missing else [image(t) for t in generated], strict_cleanup[0],
+                                 blend_width[0] if blend_width is not None else 0)
         return tensor(result), report
 
 

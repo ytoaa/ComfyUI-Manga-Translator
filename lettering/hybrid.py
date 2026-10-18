@@ -175,6 +175,8 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         raise ValueError('Region overrides exceed 256 KiB')
     overrides=json.loads(region_options_json)
     ids={r['id'] for r in data['regions']}
+    orientations=data.get('source_orientation',{})
+    if not isinstance(orientations,dict) or set(orientations)-ids:raise ValueError('Invalid source orientation IDs')
     if not isinstance(overrides,dict) or set(overrides)-ids: raise ValueError('Overrides need existing region IDs')
     if bubble_mask is not None: bubble_mask=core.mask_array(bubble_mask,original.shape[:2])
     if detection_result is not None:
@@ -213,6 +215,23 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         ref,clean,mask,_=core.crop_region(original,cleaned,support,item['bbox'])
         style,analysis=core.analyze_style(ref,clean,mask)
         measured,ink=profile(ref,clean,mask,font,style['foreground'])
+        source_angle=0
+        if ident in orientations:
+            entry=orientations[ident]
+            if not isinstance(entry,dict):raise ValueError('Invalid source orientation')
+            source_angle=entry.get('source_angle')
+            core.finite(source_angle,-25,25,'source_angle')
+            from ..text_geometry import rotation_pixels
+            if rotation_pixels((ref.shape[1],ref.shape[0]),source_angle)>8*1024*1024:
+                raise ValueError('Rectified typography reference exceeds 8 Mi pixels')
+            # Typography measurement shares OCR's rectified frame. Bubble
+            # ownership and the final glyph alpha still use original pixels.
+            def rotated(value,mode):
+                raster=Image.fromarray((value*255).round().astype('uint8'),mode)
+                return np.asarray(raster.rotate(-source_angle,Image.Resampling.NEAREST if mode=='L' else Image.Resampling.BICUBIC,
+                                               expand=True),np.float32)/255
+            rectified,_=profile(rotated(ref,'RGB'),rotated(clean,'RGB'),rotated(mask,'L'),font,style['foreground'])
+            measured=rectified
         style=core.adjust_style(style,**item.get('style',{}))
         layout=dict(item.get('layout',{}))
         # Old JSON controls remain usable; all values are validated by the renderer.
@@ -220,6 +239,8 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         if supplied_direction not in DIRECTIONS: raise ValueError(f'{ident}: invalid direction')
         actual_direction=(forced_direction or
                           (measured['direction'] if supplied_direction=='auto' else supplied_direction))
+        if source_angle and actual_direction=='horizontal' and 'rotation' not in opts:
+            layout.setdefault('rotation',source_angle)
         cap=opts.get('font_cap',layout.pop('max_font',measured['font_cap']))
         core.integer(cap,4,512,'font_cap')
         ratio=opts.get('min_scale',min_scale);core.finite(ratio,.2,1,'min_scale')

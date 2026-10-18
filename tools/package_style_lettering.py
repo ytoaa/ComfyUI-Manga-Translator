@@ -9,7 +9,7 @@ TOP = {'__init__.py', 'nodes.py', 'models.py', 'requirements.txt', 'README.md', 
        'LICENSE-THIRD-PARTY-APACHE', 'LICENSE-THIRD-PARTY-MIT', 'THIRD_PARTY_NOTICES.md',
        'VALIDATION.md', 'provenance.json', 'pytest.ini', '.gitattributes', '.gitignore',
        'limits.py', 'detection_policy.py', 'region_policy.py', 'mask_nodes.py', 'inpaint_tiles.py',
-       'ocr_policy.py', 'layout_refinement.py', 'workflow_project.py', 'workflow_native.py', 'boundary_review.py', 'page_edit.py', 'translation_protocol.py', 'debug_nodes.py'}
+       'ocr_policy.py', 'layout_refinement.py', 'workflow_project.py', 'workflow_native.py', 'boundary_review.py', 'page_edit.py', 'translation_protocol.py', 'debug_nodes.py', 'text_geometry.py'}
 DIRECTORIES = ('adapters', 'docs', 'examples', 'lettering', 'tests', 'tools', 'web')
 
 
@@ -31,7 +31,7 @@ def package(destination):
     files.append(ROOT/'SHA256SUMS')
     destination = Path(destination).resolve()
     destination.mkdir(parents=True, exist_ok=True)
-    output = destination/'ComfyUI-Manga-Translator-integrated-v0.5.2.zip'
+    output = destination/'ComfyUI-Manga-Translator-integrated-v0.6.0.zip'
     temporary = output.with_suffix('.zip.tmp')
     with zipfile.ZipFile(temporary, 'w', zipfile.ZIP_DEFLATED) as archive:
         for path in files:

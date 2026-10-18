@@ -23,7 +23,7 @@ def build():
     mask_slot = 0
     grown = g.add('GrowMask', pos=(1260, 400), title='제거 여유 · 기본 GrowMask')
     g.connect(raw_mask, 0, grown, 'mask')
-    crops = g.add('MangaRegionCrops', {'allow_empty_page': True, 'refine_page_columns': True}, pos=(1260, 50), title='④ OCR 전 단·문단 정리 · 글자 없으면 원본 통과')
+    crops = g.add('MangaRegionCrops', {'allow_empty_page': True, 'refine_page_columns': True,'auto_deskew':True}, pos=(1260, 50), title='④ OCR 전 단·회전 보정 · 확인된 행 분리')
     g.connect(original, 0, crops, 'images')
     g.connect(regions, 0, crops, 'layout_json')
     ocr_model = g.import_model_node(template, 13, (1260, -220))
@@ -68,7 +68,7 @@ def build():
     g.connect(tile_crop, 0, local_comp, 'destination')
     g.connect(restore, 0, local_comp, 'source')
     g.connect(plan, 5, local_comp, 'mask')
-    assemble = g.add('MangaInpaintAssemble', pos=(4620, 650), title='⑨ 전체 좌표 복원 · 잔존 원문 검사')
+    assemble = g.add('MangaInpaintAssemble', {'blend_width':8}, pos=(4620, 650), title='⑨ 전체 좌표 복원 · 경계 완화 · 잔존 원문 검사')
     g.connect(plan, 6, assemble, 'plan')
     g.connect(local_comp, 0, assemble, 'generated')
     prepare = g.add('MangaLetterPrepare', pos=(4620, 50), title='⑩ 번역문과 원문 스타일 연결')
@@ -124,6 +124,7 @@ def build():
     g.connect(original, 2, status, 'source')
     g.note('폴더 처리도 이 워크플로우 안에서 실행합니다. 입력 노드의 input_mode=폴더 프로젝트로 설정하세요.\ninput_folder는 ComfyUI/input 아래의 원본 폴더, project_name은 결과·재개 기록의 이름입니다.\n한 페이지가 현재 Run에서 검출부터 저장까지 실행됩니다. 다음 페이지는 캔버스가 기본 Run 큐로 이어갑니다.\n입력 노드 안에서 현재 페이지·실행 노드·진행률을 실시간 확인합니다. 기본 중지는 현재 페이지에 적용됩니다.\n연속 처리 중지는 다음 페이지 제출을 멈춥니다. 브라우저를 닫으면 다음 페이지는 자동 실행하지 않습니다.\n현재 캔버스의 처리 설정을 확인합니다. 모델·번역·식자 설정을 바꾸려면 새 project_name을 사용하세요.\n이미지를 한꺼번에 텐서 목록으로 합치지 않습니다. OCR/타일 집계는 페이지마다 독립 실행합니다.', (420, -550))
     g.connect(crops, 3, ocr, 'region_plan_json')
+    g.connect(raw_mask,0,crops,'text_pixel_mask')
     # Add read-only observer branches after all legacy IDs. They do not feed
     # inference/cleanup/lettering, and do not change existing project identity.
     inspections=[('detection',regions,0,original,0,None,'검출 · 초록 선택 / 주황 제외'),
