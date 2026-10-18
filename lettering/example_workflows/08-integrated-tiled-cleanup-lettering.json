@@ -2,7 +2,7 @@
   "id": "6489a8d0-adb0-54db-baf9-5a11c43d9dd8",
   "revision": 1,
   "last_node_id": 75,
-  "last_link_id": 127,
+  "last_link_id": 129,
   "nodes": [
     {
       "id": 1,
@@ -32,8 +32,8 @@
             52,
             82,
             104,
-            113,
-            120
+            114,
+            122
           ]
         },
         {
@@ -46,7 +46,9 @@
           "type": "STRING",
           "links": [
             77,
-            108
+            106,
+            109,
+            118
           ]
         },
         {
@@ -673,7 +675,7 @@
         {
           "name": "translated_json",
           "type": "STRING",
-          "link": 106
+          "link": 107
         },
         {
           "name": "filename_prefix",
@@ -691,7 +693,7 @@
           "links": [
             14,
             70,
-            107
+            108
           ]
         }
       ],
@@ -729,12 +731,12 @@
         {
           "name": "context_json",
           "type": "STRING",
-          "link": 109
+          "link": 110
         },
         {
           "name": "target_language",
           "type": "STRING",
-          "link": 110,
+          "link": 111,
           "widget": {
             "name": "target_language"
           }
@@ -745,7 +747,7 @@
           "name": "translated_json",
           "type": "STRING",
           "links": [
-            112
+            113
           ]
         }
       ],
@@ -799,7 +801,7 @@
         {
           "name": "translated_json",
           "type": "STRING",
-          "link": 116
+          "link": 117
         },
         {
           "name": "source_mask",
@@ -997,7 +999,7 @@
           "type": "MANGA_INPAINT_PLAN",
           "links": [
             47,
-            121
+            123
           ]
         },
         {
@@ -1712,14 +1714,14 @@
           "name": "cleaned_page",
           "type": "IMAGE",
           "links": [
-            119
+            121
           ]
         },
         {
           "name": "cleanup_report",
           "type": "STRING",
           "links": [
-            122
+            124
           ]
         }
       ],
@@ -1820,7 +1822,7 @@
         {
           "name": "cleaned",
           "type": "IMAGE",
-          "link": 117
+          "link": 119
         },
         {
           "name": "source_mask",
@@ -2012,7 +2014,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 118
+          "link": 120
         }
       ],
       "outputs": [],
@@ -2789,7 +2791,7 @@
         {
           "name": "report_json",
           "type": "STRING",
-          "link": 123
+          "link": 125
         },
         {
           "name": "preview_image",
@@ -3191,7 +3193,7 @@
           "name": "재사용_보고서",
           "type": "STRING",
           "links": [
-            124
+            126
           ]
         }
       ],
@@ -3225,6 +3227,11 @@
           "name": "document_json",
           "type": "STRING",
           "link": 105
+        },
+        {
+          "name": "page_context_json",
+          "type": "STRING",
+          "link": 106
         }
       ],
       "outputs": [
@@ -3232,7 +3239,7 @@
           "name": "검수_문서",
           "type": "STRING",
           "links": [
-            106
+            107
           ]
         },
         {
@@ -3272,12 +3279,12 @@
         {
           "name": "ocr_json",
           "type": "STRING",
-          "link": 107
+          "link": 108
         },
         {
           "name": "project_report",
           "type": "STRING",
-          "link": 108
+          "link": 109
         }
       ],
       "outputs": [
@@ -3285,22 +3292,22 @@
           "name": "번역_문맥",
           "type": "STRING",
           "links": [
-            109,
-            114
+            110,
+            115
           ]
         },
         {
           "name": "문맥_보고서",
           "type": "STRING",
           "links": [
-            127
+            129
           ]
         },
         {
           "name": "번역_언어",
           "type": "STRING",
           "links": [
-            110
+            111
           ]
         }
       ],
@@ -3339,17 +3346,17 @@
         {
           "name": "original",
           "type": "IMAGE",
-          "link": 113
+          "link": 114
         },
         {
           "name": "dependency_json",
           "type": "STRING",
-          "link": 114
+          "link": 115
         },
         {
           "name": "value",
           "type": "STRING",
-          "link": 112,
+          "link": 113,
           "widget": {
             "name": "value"
           }
@@ -3360,14 +3367,14 @@
           "name": "문서",
           "type": "STRING",
           "links": [
-            115
+            116
           ]
         },
         {
           "name": "재사용_보고서",
           "type": "STRING",
           "links": [
-            125
+            127
           ]
         }
       ],
@@ -3402,7 +3409,12 @@
         {
           "name": "document_json",
           "type": "STRING",
-          "link": 115
+          "link": 116
+        },
+        {
+          "name": "page_context_json",
+          "type": "STRING",
+          "link": 118
         }
       ],
       "outputs": [
@@ -3410,7 +3422,7 @@
           "name": "검수_문서",
           "type": "STRING",
           "links": [
-            116
+            117
           ]
         },
         {
@@ -3450,12 +3462,12 @@
         {
           "name": "original",
           "type": "IMAGE",
-          "link": 120
+          "link": 122
         },
         {
           "name": "value",
           "type": "IMAGE",
-          "link": 119
+          "link": 121
         },
         {
           "name": "dependency_json",
@@ -3465,12 +3477,12 @@
         {
           "name": "cleanup_plan",
           "type": "MANGA_INPAINT_PLAN",
-          "link": 121
+          "link": 123
         },
         {
           "name": "report_json",
           "type": "STRING",
-          "link": 122
+          "link": 124
         }
       ],
       "outputs": [
@@ -3478,16 +3490,16 @@
           "name": "지운_배경",
           "type": "IMAGE",
           "links": [
-            117,
-            118
+            119,
+            120
           ]
         },
         {
           "name": "재사용_보고서",
           "type": "STRING",
           "links": [
-            123,
-            126
+            125,
+            128
           ]
         }
       ],
@@ -3520,7 +3532,7 @@
         {
           "name": "source",
           "type": "*",
-          "link": 124
+          "link": 126
         }
       ],
       "outputs": [
@@ -3555,7 +3567,7 @@
         {
           "name": "source",
           "type": "*",
-          "link": 125
+          "link": 127
         }
       ],
       "outputs": [
@@ -3590,7 +3602,7 @@
         {
           "name": "source",
           "type": "*",
-          "link": 126
+          "link": 128
         }
       ],
       "outputs": [
@@ -3625,7 +3637,7 @@
         {
           "name": "source",
           "type": "*",
-          "link": 127
+          "link": 129
         }
       ],
       "outputs": [
@@ -4435,6 +4447,14 @@
     ],
     [
       106,
+      1,
+      2,
+      66,
+      1,
+      "STRING"
+    ],
+    [
+      107,
       66,
       0,
       12,
@@ -4442,7 +4462,7 @@
       "STRING"
     ],
     [
-      107,
+      108,
       12,
       0,
       67,
@@ -4450,7 +4470,7 @@
       "STRING"
     ],
     [
-      108,
+      109,
       1,
       2,
       67,
@@ -4458,7 +4478,7 @@
       "STRING"
     ],
     [
-      109,
+      110,
       67,
       0,
       13,
@@ -4466,7 +4486,7 @@
       "STRING"
     ],
     [
-      110,
+      111,
       67,
       2,
       13,
@@ -4474,7 +4494,7 @@
       "STRING"
     ],
     [
-      112,
+      113,
       13,
       0,
       68,
@@ -4482,7 +4502,7 @@
       "STRING"
     ],
     [
-      113,
+      114,
       1,
       0,
       68,
@@ -4490,7 +4510,7 @@
       "IMAGE"
     ],
     [
-      114,
+      115,
       67,
       0,
       68,
@@ -4498,7 +4518,7 @@
       "STRING"
     ],
     [
-      115,
+      116,
       68,
       0,
       69,
@@ -4506,7 +4526,7 @@
       "STRING"
     ],
     [
-      116,
+      117,
       69,
       0,
       14,
@@ -4514,7 +4534,15 @@
       "STRING"
     ],
     [
-      117,
+      118,
+      1,
+      2,
+      69,
+      1,
+      "STRING"
+    ],
+    [
+      119,
       70,
       0,
       31,
@@ -4522,7 +4550,7 @@
       "IMAGE"
     ],
     [
-      118,
+      120,
       70,
       0,
       34,
@@ -4530,7 +4558,7 @@
       "IMAGE"
     ],
     [
-      119,
+      121,
       29,
       0,
       70,
@@ -4538,7 +4566,7 @@
       "IMAGE"
     ],
     [
-      120,
+      122,
       1,
       0,
       70,
@@ -4546,7 +4574,7 @@
       "IMAGE"
     ],
     [
-      121,
+      123,
       16,
       6,
       70,
@@ -4554,7 +4582,7 @@
       "MANGA_INPAINT_PLAN"
     ],
     [
-      122,
+      124,
       29,
       1,
       70,
@@ -4562,7 +4590,7 @@
       "STRING"
     ],
     [
-      123,
+      125,
       70,
       1,
       56,
@@ -4570,7 +4598,7 @@
       "STRING"
     ],
     [
-      124,
+      126,
       65,
       1,
       71,
@@ -4578,7 +4606,7 @@
       "STRING"
     ],
     [
-      125,
+      127,
       68,
       1,
       72,
@@ -4586,7 +4614,7 @@
       "STRING"
     ],
     [
-      126,
+      128,
       70,
       1,
       73,
@@ -4594,7 +4622,7 @@
       "STRING"
     ],
     [
-      127,
+      129,
       67,
       1,
       74,

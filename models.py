@@ -419,6 +419,10 @@ def _empty_ocr_page(images, manifest_json):
     return True
 
 
+def _uniform_ocr_crop(images):
+    return all(low==high for low,high in pil_image(images).getextrema())
+
+
 def _save_ocr_failure(source, image, diagnostic):
     """Keep inspectable inputs even though a failed node cannot emit previews."""
     try:
@@ -473,7 +477,7 @@ class MangaOCRAdaptive:
     FUNCTION='read'
     CATEGORY='Manga Translator/OCR'
     def check_lazy_status(self, images, model=None, manifest_json=None, **options):
-        if _empty_ocr_page(images,manifest_json):
+        if _empty_ocr_page(images,manifest_json) or _uniform_ocr_crop(images):
             return []
         return ['model'] if model is None else []
 
@@ -533,6 +537,10 @@ class MangaOCRAdaptive:
         if sum(len(parts) for parts in planned) > 128:
             raise ValueError('OCR chunk count exceeds limit=128 per region')
         work_count=sum(len(parts) for parts in planned)
+        if all(low==high for low,high in source.getextrema()):
+            report={'status':'empty_crop','ocr_skipped':True,
+                    'empty_crop_verified':{'method':'uniform_rgb_pixels'},'region_plan':region_plan}
+            return ('',json.dumps(report),[images])
         def recognize(image,line_index,box):
             attempts=[];generation=[]
             try:

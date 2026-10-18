@@ -241,7 +241,8 @@ class MangaLetterPrepare:
         preserved=[]
         support = np.zeros((height, width), np.float32)
         for row, decision in zip(data['regions'],edits['regions']):
-            core.clean_text(row.get('target'))
+            from ..document import validate_target
+            validate_target(row)
             bounds = decision['bbox_pixels']
             x0, y0, x1, y1 = bounds
             bounds = [x0, y0, x1-x0, y1-y0]

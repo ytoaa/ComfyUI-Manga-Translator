@@ -127,7 +127,8 @@ def test_only_one_project_worker_and_repeated_start_does_not_duplicate(tmp_path)
 
 
 def test_single_page_and_marked_page_use_native_loader_without_dispatch(monkeypatch):
-    calls=[];pixels,mask=object(),object()
+    import torch
+    calls=[];pixels,mask=torch.zeros(1,4,5,3),torch.zeros(1,4,5)
     class Load:
         def load_image(self,name):calls.append(name);return pixels,mask
         @classmethod

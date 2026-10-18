@@ -8,7 +8,7 @@ import os
 import uuid
 import numpy as np
 
-VERSION='0.7.0'
+VERSION='0.7.1'
 MAX_BYTES=256*1024*1024
 
 def root():
@@ -165,7 +165,16 @@ class Checkpoint:
     def _key(self,original,prompt,unique_id,dependency_json,cleanup_plan):
         return identity(original,prompt,unique_id,self.KIND,cleanup_identity(dependency_json,cleanup_plan))
     def check_lazy_status(self,original,value=None,cache_policy='reuse',dependency_json='',prompt=None,unique_id=None,cleanup_plan=None,report_json=None):
-        if prompt and unique_id is not None and cache_policy=='reuse' and read(self._key(original,prompt,unique_id,dependency_json,cleanup_plan),self.KIND) is not None:return []
+        self._pinned=None
+        if prompt and unique_id is not None and cache_policy=='reuse':
+            key=self._key(original,prompt,unique_id,dependency_json,cleanup_plan)
+            cached=read(key,self.KIND)
+            if cached is not None:
+                # A lazy hit suppresses upstream computation. Keep exactly that
+                # verified generation alive until execution consumes it, even
+                # if eviction removes the on-disk files in between.
+                self._pinned=(key,cached,read_report(key) if self.KIND=='image' else None)
+                return []
         needed=['value'] if value is None else []
         if (self.KIND=='image' and report_json is None and prompt and unique_id is not None
                 and 'report_json' in prompt[str(unique_id)].get('inputs',{})):needed.append('report_json')
@@ -173,14 +182,16 @@ class Checkpoint:
     def checkpoint(self,original,value=None,cache_policy='reuse',dependency_json='',prompt=None,unique_id=None,cleanup_plan=None,report_json=None):
         bound=bool(prompt) and unique_id is not None
         key=self._key(original,prompt,unique_id,dependency_json,cleanup_plan) if bound else None
-        cached=read(key,self.KIND) if bound and cache_policy=='reuse' else None
+        pin=getattr(self,'_pinned',None);self._pinned=None
+        pinned=bool(pin and pin[0]==key and cache_policy=='reuse')
+        cached=pin[1] if pinned else read(key,self.KIND) if bound and cache_policy=='reuse' else None
         reused=cached is not None
         if reused:value=cached
         if value is None:raise ValueError('Checkpoint input unavailable')
         if bound and not reused and cache_policy!='off':
             try:write(key,self.KIND,value,report_json)
             except OSError as exc:logging.warning('Checkpoint persistence unavailable: %s',exc)
-        details=(read_report(key) if reused else json.loads(report_json) if report_json else {}) if self.KIND=='image' else {}
+        details=(pin[2] if pinned else read_report(key) if reused else json.loads(report_json) if report_json else {}) if self.KIND=='image' else {}
         report=json.dumps({**(details or {}),'stage_cache':{'stage':self.KIND,'state':'reused' if reused else 'computed','key':key}})
         return {'ui':{'text':[report],'manga_status':[{'state':'reused' if reused else 'computed','message':self.KIND}]},'result':(value,report)}
 

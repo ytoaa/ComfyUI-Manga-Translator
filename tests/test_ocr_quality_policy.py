@@ -65,6 +65,7 @@ def test_explicit_unreadable_markers_are_not_recognized_text(text):
 
 def test_layout_recovery_cannot_accept_a_different_unknown_marker(monkeypatch):
     source = Image.new('RGB', (120, 70), 'white')
+    source.putpixel((0,0),(0,0,0))
     monkeypatch.setattr(M, 'pil_image', lambda _: source)
     monkeypatch.setattr(M, '_ocr_line_images', lambda _: [source])
     monkeypatch.setattr(P, 'recovery_parts', lambda *a: (
@@ -95,6 +96,7 @@ def test_short_correct_name_and_manga_elongation_remain_valid():
 @pytest.mark.parametrize('recovered', [False, True])
 def test_unknown_span_has_bounded_retry_and_never_silently_loses_text(monkeypatch, guard, recovered):
     source = Image.new('RGB', (120, 70), 'white')
+    source.putpixel((0,0),(0,0,0))
     monkeypatch.setattr(M, 'pil_image', lambda _: source)
     saved = []
     monkeypatch.setattr(M, '_save_ocr_failure', lambda src, crop, diagnostic: saved.append(diagnostic) or 'fixture.json')
@@ -258,7 +260,8 @@ def test_explicit_vertical_direction_controls_column_reading_order():
 
 def test_token_limit_retries_once_with_double_budget_and_records_actual_attempts(monkeypatch):
     from ocr_quality_tests.adapters.hayai import HayaiOutputError
-    monkeypatch.setattr(M,'pil_image',lambda _:Image.new('RGB',(278,446),'white'))
+    from tests.ocr_fixture import nonuniform_image
+    monkeypatch.setattr(M,'pil_image',lambda _:nonuniform_image((278,446)))
     calls=[]
     class Model:
         def ocr(self,image,options,max_patches):
@@ -276,7 +279,8 @@ def test_token_limit_retries_once_with_double_budget_and_records_actual_attempts
                                                   (2048,True,[2048]),(256,False,[256])])
 def test_persistent_token_limit_stops_without_accepting_partial_text(monkeypatch,budget,enabled,expected):
     from ocr_quality_tests.adapters.hayai import HayaiOutputError
-    monkeypatch.setattr(M,'pil_image',lambda _:Image.new('RGB',(278,446),'white'))
+    from tests.ocr_fixture import nonuniform_image
+    monkeypatch.setattr(M,'pil_image',lambda _:nonuniform_image((278,446)))
     calls=[]
     class Model:
         def ocr(self,image,options,max_patches):
@@ -289,7 +293,8 @@ def test_persistent_token_limit_stops_without_accepting_partial_text(monkeypatch
 
 def test_token_and_repetition_retries_share_a_three_generation_bound(monkeypatch):
     from ocr_quality_tests.adapters.hayai import HayaiOutputError
-    monkeypatch.setattr(M,'pil_image',lambda _:Image.new('RGB',(278,446),'white'))
+    from tests.ocr_fixture import nonuniform_image
+    monkeypatch.setattr(M,'pil_image',lambda _:nonuniform_image((278,446)))
     calls=[]
     class Model:
         def ocr(self,image,options,max_patches):

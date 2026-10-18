@@ -416,8 +416,6 @@ class MangaCollectOCR:
             return (encode({**data,'page_status':'no_text_detected','ocr_skipped':True}),)
         if len(text)!=len(data['regions']):
             raise ValueError('OCR result count differs from the region count')
-        if any(not isinstance(t,str) or not t.strip() or len(t)>16_000 for t in text):
-            raise ValueError('One region has empty/invalid OCR; inspect crop previews and region boxes')
         reports = None
         if ocr_report_json is not None:
             if len(ocr_report_json) != len(text):
@@ -425,6 +423,11 @@ class MangaCollectOCR:
             reports = [decode(value) for value in ocr_report_json]
             if any(not isinstance(value,dict) for value in reports):
                 raise ValueError('Invalid OCR diagnostic object')
+        empty={i for i,t in enumerate(text) if t=='' and reports is not None
+               and reports[i].get('status')=='empty_crop' and reports[i].get('ocr_skipped') is True
+               and reports[i].get('empty_crop_verified')=={'method':'uniform_rgb_pixels'}}
+        if any(not isinstance(t,str) or (not t.strip() and i not in empty) or len(t)>16_000 for i,t in enumerate(text)):
+            raise ValueError('One region has empty/invalid OCR; inspect crop previews and region boxes')
         for index, row in enumerate(data['regions']):
             expected = row.get('ocr_region_plan')
             if expected and (reports is None or reports[index].get('region_plan') != expected):
@@ -433,10 +436,19 @@ class MangaCollectOCR:
         else: from document import attach,blocks_from_ocr
         rows=[]
         for i,(row,value) in enumerate(zip(data['regions'],text)):
+            if i in empty:continue
             row={**row,'source':value.strip(),**({'ocr_diagnostics':reports[i]} if reports is not None else {})}
             blocks=blocks_from_ocr(row,reports[i]) if reports is not None else []
             if blocks:row['blocks']=blocks
             rows.append(row)
+        if empty:
+            protected=[data['regions'][i].get('edit_bbox_pixels') or pixel_box(data['regions'][i]['bbox'],data['image_width'],data['image_height'],0) for i in sorted(empty)]
+            previous=data.get('boundary_review',{})
+            data={**data,'needs_review':True,'review_reason':'empty_ocr_crop',
+                  'ocr_empty_regions':[data['regions'][i]['id'] for i in sorted(empty)],
+                  'boundary_review':{**previous,'schema':1,'reason':previous.get('reason','empty_ocr_crop'),
+                      'protected_boxes_pixels':previous.get('protected_boxes_pixels',[])+protected}}
+            if not rows:data.update(page_status='no_text_detected',ocr_skipped=True,no_text_reason='empty_ocr_crop')
         return (encode(attach({**data,'regions':rows})),)
 
 

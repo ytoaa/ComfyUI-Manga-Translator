@@ -444,11 +444,18 @@ class MangaWorkflowInput:
                 raise ProjectError('프로젝트 페이지 실행 정보가 올바르지 않습니다.')
             import nodes
             pixels,mask = nodes.LoadImage().load_image(image)
-            return pixels,mask,_encode({'page':marker,'status':'page_running'}),'manga_translator/integrated_tiles','manga_translator/ocr','manga_translator/translation'
+            from .stage_cache import identity
+            report={'page':marker,'status':'page_running','review_identity':{
+                'page_key':f'project/{marker["project"]}/page/{marker["page"]}',
+                'input_sha256':identity(pixels,None,None,'review-page')}}
+            return pixels,mask,_encode(report),'manga_translator/integrated_tiles','manga_translator/ocr','manga_translator/translation'
         if input_mode == '이미지 한 장':
             import nodes
             pixels,mask = nodes.LoadImage().load_image(image)
-            return pixels,mask,_encode({'status':'single_image'}),'manga_translator/integrated_tiles','manga_translator/ocr','manga_translator/translation'
+            from .stage_cache import identity
+            report={'status':'single_image','review_identity':{'page_key':'image/'+image,
+                    'input_sha256':identity(pixels,None,None,'review-page')}}
+            return pixels,mask,_encode(report),'manga_translator/integrated_tiles','manga_translator/ocr','manga_translator/translation'
         from comfy_execution.graph import ExecutionBlocker
         import folder_paths
         from server import PromptServer

@@ -58,7 +58,9 @@ def test_empty_manifest_rejects_wrong_page_and_unexpected_text():
     assert plans == ['{}']
     ocr=S.plugin.NODE_CLASS_MAPPINGS['MangaOCRAdaptive']()
     assert ocr.check_lazy_status(images=crops[0],manifest_json=manifest)==[]
-    assert ocr.check_lazy_status(images=crops[0])==['model']
+    assert ocr.check_lazy_status(images=crops[0])==[]  # Uniform crop is independently verifiable.
+    crop_report=json.loads(ocr.read(crops[0])['result'][1])
+    assert crop_report['status']=='empty_crop' and crop_report['ocr_skipped']
     assert not mask.any()
     with pytest.raises(ValueError,match='matching'):
         ocr.read(S.tensor(S.Image.new('RGB',(99,80))),manifest_json=manifest)

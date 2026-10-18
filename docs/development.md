@@ -62,3 +62,5 @@ python tools/check_repository.py
 가중치가 필요한 명시적 오프라인 CPU 도구는 tools/validate_cpu_models.py입니다. [CPU 모델 관측](validation/cpu-models.md)의 고정 번들과 조건을 따릅니다. 기본 패키지의 운영 CUDA 정책을 CPU로 바꾸지 않습니다.
 
 과거 검증은 docs/history에 보존합니다. 일반 사용법과 개발 명령은 버전별 기록에 추가하지 않고 이 문서와 현재 안내를 수정합니다. 새 관측은 검증 목차와 관련 증거 문서에 추가하며 실제 추론·합성·대역을 구분합니다.
+
+추가 경계 감사는 `python tools/audit_boundaries.py --destination validation/boundary-audit`로 실행합니다. 기본 43개 계약·폰트·장애 주입 검사와, `--actual-ocr --models /path/to/models --row-inputs /path/to/rows`를 더한 63개 검사를 구분합니다. 사용자 행 입력과 모델은 공개 저장소에 포함하지 않습니다. FAIL/ERROR는 종료 코드 1, 인식 관측은 OBSERVED이며 정확도 통과로 합산하지 않습니다. [검증 목차](validation/README.md)에 조건과 이전 실패를 기록합니다.

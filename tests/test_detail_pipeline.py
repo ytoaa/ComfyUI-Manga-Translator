@@ -68,6 +68,7 @@ def test_tight_crop_preserves_small_trailing_punctuation():
 
 def test_adaptive_ocr_uses_larger_patch_budget_for_small_text(monkeypatch):
     source=Image.new('RGB',(100,100),'white')
+    source.putpixel((0,0),(0,0,0))  # Exercise sizing, not the uniform-crop bypass.
     small=Image.new('RGB',(160,32),'white')
     large=Image.new('RGB',(160,80),'white')
     monkeypatch.setattr(M,'pil_image',lambda images:source)

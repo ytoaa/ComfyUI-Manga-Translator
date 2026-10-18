@@ -11,6 +11,35 @@ def digest(value):
     return hashlib.sha256(json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
 
 
+def review_identity(context):
+    """A stable page owner, independent of inference output or attempt number."""
+    value=json.loads(context or '{}')
+    if not isinstance(value,dict):raise ValueError('Review page context must be an object')
+    identity=value.get('review_identity',{})
+    if not isinstance(identity,dict):raise ValueError('Invalid review page identity')
+    if identity and (set(identity)!={'page_key','input_sha256'} or
+            any(not isinstance(identity[k],str) or not identity[k] for k in identity)):
+        raise ValueError('Review identity needs page_key and input_sha256')
+    return identity
+
+
+def review_revision(data,identity,stage):
+    # Diagnostics, cached document mirrors and machine reports are not authored
+    # content. Only fields whose changes can invalidate an edit belong here.
+    fields=('id','kind','bbox','crop_bbox_pixels','edit_bbox_pixels','line_bboxes_pixels','source','blocks','presentation')
+    rows=[]
+    for row in data['regions']:
+        item={k:deepcopy(row[k]) for k in fields if k in row}
+        if stage=='target' and 'target' in row:item['target']=row['target']
+        if 'blocks' in item:
+            keep=('id','source','bbox_local','coordinate_frame','role','presentation')+ (('target',) if stage=='target' else ())
+            item['blocks']=[{k:b[k] for k in keep if k in b} for b in item['blocks']]
+        geometry=row.get('ocr_region_plan',{})
+        item['frame']={k:geometry[k] for k in ('strategy','source_angle','correction_degrees','rectified_size','rows','source_quad') if k in geometry}
+        rows.append(item)
+    return digest({'page':identity,'stage':stage,'size':[data.get('image_width'),data.get('image_height')],'regions':rows})
+
+
 def review_text(value,source=False):
     if __package__: from .text_contract import ocr_problem
     else: from text_contract import ocr_problem
@@ -73,6 +102,16 @@ def validate_blocks(row):
             x,y,z,t=row['crop_bbox_pixels'];size=[z-x,t-y]
         if size and (d>size[0] or e>size[1]):raise ValueError('Paragraph lies outside its source frame')
     return blocks
+
+
+def validate_target(row):
+    from .lettering.core import clean_text
+    blocks=validate_blocks(row)
+    if not blocks:return clean_text(row.get('target'))
+    for block in blocks:clean_text(block.get('target'))
+    if row.get('target')!='\n\n'.join(b['target'] for b in blocks):
+        raise ValueError('Parent translation must match its paragraph targets')
+    return row['target']
 
 
 def translation_units(data):
@@ -145,17 +184,32 @@ class MangaReviewDocument:
     @classmethod
     def INPUT_TYPES(cls):
         return {'required':{'document_json':('STRING',{'forceInput':True}),'stage':(['source','target'],),
-                            'edits_json':('STRING',{'default':'{}','multiline':True})}}
+                            'edits_json':('STRING',{'default':'{}','multiline':True})},
+                'optional':{'page_context_json':('STRING',{'forceInput':True})}}
     RETURN_TYPES=('STRING','STRING');RETURN_NAMES=('검수_문서','검수_보고서');FUNCTION='review'
-    def review(self,document_json,stage='source',edits_json='{}'):
+    def review(self,document_json,stage='source',edits_json='{}',page_context_json='{}'):
         if len(edits_json.encode())>1024*1024:raise ValueError('Review edits exceed 1 MiB')
         if __package__:from .nodes import layout
         else:from nodes import layout
-        data=layout(document_json);revision=digest(data);edits=json.loads(edits_json)
-        if not isinstance(edits,dict) or set(edits)-{'pages'}:raise ValueError('Review edits need a pages object')
+        data=layout(document_json);identity=review_identity(page_context_json)
+        revision=review_revision(data,identity,stage);edits=json.loads(edits_json)
+        if not isinstance(edits,dict) or set(edits)-{'pages','identities'}:raise ValueError('Review edits need pages and optional identities objects')
         pages=edits.get('pages',{})
         if not isinstance(pages,dict) or len(pages)>256:raise ValueError('Review supports at most 256 page revisions')
-        result=apply_edits(data,pages.get(revision,{}),stage)
-        report=json.dumps({'stage':stage,'input_revision':revision,'edited_regions':len(pages.get(revision,{}))},ensure_ascii=False)
-        return {'ui':{'manga_document':[{'stage':stage,'input_revision':revision,'document':result}],'text':[report]},
+        owners=edits.get('identities',{})
+        if not isinstance(owners,dict) or any(not isinstance(k,str) or not isinstance(v,str) for k,v in owners.items()):
+            raise ValueError('Review identities must map revisions to page keys')
+        selected=pages.get(revision,{}) if identity and owners.get(revision)==identity['page_key'] else {}
+        stale=[key for key in pages if key!=revision and owners.get(key)==identity.get('page_key')]
+        legacy=[key for key in pages if key not in owners]
+        result=apply_edits(data,selected,stage)
+        report=json.dumps({'stage':stage,'input_revision':revision,'edited_regions':len(selected),
+            'page_identity':identity.get('page_key'),'identity_verified':bool(identity),
+            **({'stale_edits':stale} if stale else {}),
+            **({'legacy_edits':legacy,'conflicts':['이전 교정은 페이지 소유권이 없어 자동 적용하지 않았습니다. 새 통합 08에서 확인 후 다시 저장하세요.']} if legacy else {}),
+            **({'conflicts':['페이지 식별 정보가 없습니다. 입력의 상태 출력을 page_context_json에 연결하세요.']} if not identity else {})},ensure_ascii=False)
+        return {'ui':{'manga_document':[{'stage':stage,'input_revision':revision,'page_identity':identity.get('page_key'),
+                                       'identity_verified':bool(identity),'warnings':json.loads(report).get('conflicts',[])+
+                                           (['원문 또는 배치가 바뀐 이전 교정이 있습니다. 확인 후 다시 저장하세요.'] if stale else []),
+                                       'document':result}],'text':[report]},
                 'result':(json.dumps(result,ensure_ascii=False),report)}

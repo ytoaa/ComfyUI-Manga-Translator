@@ -256,14 +256,14 @@ def native_retry(engine,client,inputs,folder,*,running=True,action='실패 재�
     return ident,engine.begin(inputs,folder,g,client,ident,source,action)
 
 
-def test_repeated_pause_reports_this_invocation_action_not_previous_start(tmp_path):
+def test_repeated_pause_reports_this_action_without_replacing_unresolved_owner(tmp_path):
     engine,client,inputs,folder=setup_book(tmp_path)
     old,result=begin(engine,client,inputs,folder)
     first=begin(engine,client,inputs,folder)[1]
     assert first['report']['requested_action']=='시작·재개'
     second=begin(engine,client,inputs,folder,action='실패 재시도')[1]
     assert second['report']['requested_action']=='실패 재시도'
-    assert second['report']['run_id'] != first['report']['run_id']
+    assert second['report']['run_id'] == first['report']['run_id']
     assert second['report']['recovery_check']['code']=='native_ownership_or_restart_unverified'
     assert second['report']['recovery_check']['retry_requested']
     assert second['report']['recovery_check']['previous_prompt_id']==old

@@ -18,11 +18,15 @@ class Node {
  await app.extension.beforeRegisterNodeDef(Node,{name:'MangaReviewDocument'});
  const node=new Node(1);node.onNodeCreated();
  const data={regions:[{id:'r1',source:'Original',target:'Title\n\nBody',blocks:[{id:'b1',role:'heading',source:'Heading',target:'Title'},{id:'b2',role:'body',source:'Body',target:'Body'}]}]};
- node.onExecuted({manga_document:[{stage:'target',input_revision:'pageA',document:data}]});
+ const snapshot={stage:'target',input_revision:'pageA',page_identity:'project/a/page/1',identity_verified:true,document:data};
+ node.onExecuted({manga_document:[snapshot]});
  const fields=node.mangaPanelBody.children.filter(e=>e.tag==='textarea');assert.equal(fields.length,2);
  fields[1].value='수정 <img src=x>';fields[1].fire('input');
  node.mangaPanelBody.children.find(e=>e.tag==='button').fire('click');
  const edits=JSON.parse(node.widgets[0].value);assert.equal(edits.pages.pageA.r1.blocks[1].target,'수정 <img src=x>');assert.equal(edits.pages.pageA.r1.target,undefined);
+ assert.equal(edits.identities.pageA,'project/a/page/1');
+ node.onExecuted({manga_document:[snapshot]});
+ assert.equal(node.mangaPanelBody.children.filter(e=>e.tag==='textarea')[1].value,'수정 <img src=x>');
  node.onExecuted({manga_document:[{stage:'target',input_revision:'pageB',document:data}]});
  node.mangaPanelBody.children.find(e=>e.tag==='textarea').value='Other';node.mangaPanelBody.children.find(e=>e.tag==='textarea').fire('input');
  assert.ok(JSON.parse(node.widgets[0].value).pages.pageA);assert.ok(JSON.parse(node.widgets[0].value).pages.pageB);

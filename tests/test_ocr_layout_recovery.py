@@ -88,6 +88,7 @@ def test_persistent_bad_rows_stop_without_recursing_and_save_actual_failed_input
 
 def test_no_evidence_means_no_arbitrary_slices_and_diagnostic_failure_does_not_hide_error(monkeypatch):
     source=Image.new('RGB',(580,203),'white')
+    source.putpixel((0,0),(0,0,0))
     assert not P.recovery_parts(source)[0]
     monkeypatch.setattr(M,'pil_image',lambda _:source)
     monkeypatch.setitem(sys.modules,'folder_paths',types.SimpleNamespace(get_output_directory=lambda: (_ for _ in ()).throw(OSError())))
@@ -162,7 +163,8 @@ def test_one_large_connected_glyph_is_not_turned_into_separate_text_rows():
 @pytest.mark.parametrize('enabled,line_split,strategy',[(False,True,'disabled_by_retry_option'),
     (True,False,'disabled_by_line_split'),(True,True,'no_verified_alternative')])
 def test_failure_report_distinguishes_disabled_recovery_from_no_safe_split(monkeypatch,tmp_path,enabled,line_split,strategy):
-    monkeypatch.setattr(M,'pil_image',lambda _:Image.new('RGB',(580,203),'white'))
+    from tests.ocr_fixture import nonuniform_image
+    monkeypatch.setattr(M,'pil_image',lambda _:nonuniform_image((580,203)))
     monkeypatch.setitem(sys.modules,'folder_paths',types.SimpleNamespace(get_output_directory=lambda:str(tmp_path)))
     class Model:
         def ocr(self,*a,**kw):return {'text':'顔の集の集の集の集の集落'}

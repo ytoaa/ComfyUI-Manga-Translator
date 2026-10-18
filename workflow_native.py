@@ -10,7 +10,7 @@ import uuid
 from .tools.run_project import (Project, ProjectError, Paused, InputError, ACTIVE, FINISHED,
     atomic_write, json_bytes, read_json, project_lock, normalise_image, digest, workflow_bindings)
 
-VERSION = '0.7.0'
+VERSION = '0.7.1'
 
 
 def _write_run(folder, run):
@@ -47,7 +47,7 @@ class CanvasExecution:
     def _eligible(self, project, page, retry, retry_review=False):
         state = project.state(page)
         if not state or state.get('input_sha256') != page['input_sha256']: return True
-        if project._settings_changed and state.get('workflow_sha256')!=project.workflow_sha256:return True
+        if not project.processing_current(state,page):return True
         if state['status'] in FINISHED:
             for name,sha in state.get('artifacts',{}).items():
                 path = project._attempt_dir(state)/name
@@ -141,16 +141,24 @@ class CanvasExecution:
             if run and run.get('active_prompt') == prompt_id:
                 state = project.state(next(p for p in project.pages if p['id']==run['active_page']))
                 return self._page_result(project,run,state,source_id)
+            if continuation is None and run and run.get('active_prompt'):
+                old=project.state(next(p for p in project.recovery_pages if p['id']==run['active_page']))
+                if old and old['status'] in ACTIVE and project._queue_identity(old):
+                    # Reject only this invocation. Do not pause or replace the
+                    # owner's persisted run; its completion ticket is still live.
+                    report=self.report(project,run)
+                    report.update(status='paused',running=False,message='다른 실행이 이 프로젝트를 처리 중입니다. 기존 실행 상태를 보존했습니다.')
+                    return {'report':report,'ticket':None}
             try:
                 if continuation is None:
-                    # Record this actual invocation before reconciliation can
-                    # pause. An older run's action must never label this Run.
-                    run = {'schema':1,'run_id':uuid.uuid4().hex,'project_id':project.project_id,
+                    # Prepare a replacement, but keep the active owner until
+                    # reconciliation proves its outcome. A rejected invocation
+                    # must not invalidate an outstanding completion ticket.
+                    candidate = {'schema':1,'run_id':uuid.uuid4().hex,'project_id':project.project_id,
                            'source_node':str(source_id),'source_folder':str(inputs.resolve()),
                            'requested_action':action,'invocation_prompt_id':prompt_id,
                            'status':'running','phase':'selecting','visited':[],'page_ids':[],
                            'active_prompt':None,'stop_requested':False}
-                    _write_run(folder,run)
                 for page in project.recovery_pages:
                     state = project.state(page)
                     if state and state['status'] in ACTIVE:
@@ -158,6 +166,7 @@ class CanvasExecution:
                         if run and run.get('active_prompt') == state['prompt_id'] and state['status'] not in ACTIVE:
                             run.update(active_prompt=None,last_resolved_prompt=state['prompt_id'])
                 if continuation is None:
+                    run=candidate
                     run['page_ids']=[p['id'] for p in project.pages if self._eligible(project,p,retry,retry_review)]
                     # The live graph remains authoritative; processing changes are
                     # rejected by the same fingerprint, while prefix links may migrate.
@@ -193,6 +202,7 @@ class CanvasExecution:
                 if not run:
                     run={'schema':1,'run_id':uuid.uuid4().hex,'project_id':project.project_id,'source_node':str(source_id),
                          'source_folder':str(inputs.resolve()),'requested_action':action,'visited':[],'page_ids':[]}
+                if continuation is None:run['requested_action']=action
                 run.update(status='paused',phase='paused',message=str(exc),stop_requested=True)
                 if hasattr(exc,'recovery_check'): run['recovery_check']=exc.recovery_check
                 _write_run(folder,run)
@@ -200,7 +210,10 @@ class CanvasExecution:
 
     def _page_result(self, project, run, state, source_id):
         prefix=state['output_prefix']
-        return {'report':self.report(project,run),'image_reference':state.get('uploaded_reference'),
+        report=self.report(project,run)
+        report['review_identity']={'page_key':f'project/{project.project_id}/page/{state["id"]}',
+                                   'input_sha256':state['input_sha256']}
+        return {'report':report,'image_reference':state.get('uploaded_reference'),
             'prefixes':(prefix+'/result',prefix+'/ocr',prefix+'/translation'),
             'ticket':{'project_name':project.destination.name,'run_id':run['run_id'],
                       'source_node':str(source_id),'prompt_id':state['prompt_id'],

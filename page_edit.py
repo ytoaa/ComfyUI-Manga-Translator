@@ -44,7 +44,7 @@ def pixel_bounds(box, width, height):
 
 def build(data, width, height, actions=None, source_mask=None, padding=12):
     from .nodes import layout, encode, pixel_box, verified_dot_text
-    from .lettering.core import clean_text
+    from .document import validate_target
     data = layout(encode(data))
     if any(data.get(key, expected) != expected
            for key, expected in (('image_width', width), ('image_height', height))):
@@ -59,7 +59,7 @@ def build(data, width, height, actions=None, source_mask=None, padding=12):
         raise ValueError('Region actions need existing IDs and replace/preserve values')
     decisions = []
     for row in data['regions']:
-        clean_text(row.get('target'))
+        validate_target(row)
         if not isinstance(row.get('source'), str) or not row['source'].strip():
             raise ValueError('Page edit planning needs collected source OCR text')
         box = pixel_bounds(row.get('edit_bbox_pixels', pixel_box(row['bbox'], width, height, padding)), width, height)

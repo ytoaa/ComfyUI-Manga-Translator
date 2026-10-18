@@ -16,14 +16,16 @@ function review(node, snapshot) {
     const body = node.mangaPanelBody;
     if (!body) return;
     body.replaceChildren();
-    const {stage, input_revision: revision, document: data} = snapshot;
+    const {stage, input_revision: revision, document: data, page_identity: owner} = snapshot;
     const edits = widget(node, "edits_json");
     function current() {
         try { const result = JSON.parse(edits.value || "{}"); result.pages ||= {}; return result; }
         catch { throw new Error("edits_json JSON을 먼저 확인하세요."); }
     }
     function save(id, field, value, block) {
+        if(snapshot.identity_verified === false)throw new Error('페이지 식별 입력을 연결한 뒤 교정하세요.');
         const patch = current(); patch.pages[revision] ||= {}; const row = patch.pages[revision][id] ||= {};
+        if(owner){patch.identities ||= {};patch.identities[revision]=owner;}
         if (block) {
             row.blocks ||= clone(data.regions.find(r => r.id === id).blocks);
             row.blocks.find(b => b.id === block)[field] = value;
@@ -31,13 +33,17 @@ function review(node, snapshot) {
         edits.value = JSON.stringify(patch); edits.callback?.(edits.value);
         status(node, {state:"ready",message:"수정 저장됨 · Run으로 반영"});node.setDirtyCanvas?.(true,true);
     }
-    for (const region of data.regions || []) {
+    let pending;
+    try {pending=current().pages[revision] || {};} catch(error) {status(node,{state:'error',message:error.message});return;}
+    for (const raw of data.regions || []) {
+        const region={...raw,...pending[raw.id]};
         const blocks = region.blocks?.length ? region.blocks : [region];
         for (const block of blocks) {
             const label = document.createElement("label");
             label.textContent = `${region.id}${block === region ? "" : ` / ${block.id}`} · ${block.role === "heading" ? "제목" : "본문"}`;
             label.style.cssText = "display:block;margin:10px 0 5px;color:#bed1e9;font-size:11px";
             const input = document.createElement("textarea");
+            input.disabled=snapshot.identity_verified === false;
             input.value = block[stage] || "";input.rows = block.role === "heading" ? 2 : 4;
             input.style.cssText = "box-sizing:border-box;width:100%;resize:vertical;border:1px solid #43556e;border-radius:8px;padding:10px;background:#111d2d;color:#f0f5fc;font:inherit;line-height:1.55";
             input.addEventListener("input", () => {try {save(region.id,stage,input.value,block === region ? null : block.id);} catch(error) {status(node,{state:"error",message:error.message});}});
@@ -46,16 +52,21 @@ function review(node, snapshot) {
     }
     if (stage === "target" && data.regions?.length) {
         const approve = document.createElement("button");approve.textContent = "이 페이지 번역 확정";
+        approve.disabled=snapshot.identity_verified === false;
         approve.style.cssText = "width:100%;margin-top:14px;padding:10px;border:1px solid #5b91b0;border-radius:8px;background:#17394c;color:#e5fbff;font:inherit;cursor:pointer";
         approve.addEventListener("click", () => {
             try {
                 const patch=current();patch.pages[revision] ||= {};
+                if(snapshot.identity_verified === false)throw new Error('페이지 식별 입력을 연결한 뒤 확정하세요.');
+                if(owner){patch.identities ||= {};patch.identities[revision]=owner;}
                 for(const r of data.regions) {const row=patch.pages[revision][r.id] ||= {};if(!row.blocks && !Object.hasOwn(row,"target"))row.target=r.target;}
                 edits.value=JSON.stringify(patch);edits.callback?.(edits.value);
                 status(node,{state:"ready",message:"확정 저장됨 · Run으로 반영"});node.setDirtyCanvas?.(true,true);
             } catch(error) {status(node,{state:"error",message:error.message});}
         });body.append(approve);
     }
+    if(snapshot.identity_verified === false)status(node,{state:'error',message:'페이지 식별 정보가 없습니다. 새 통합 08의 page_context_json 연결을 확인하세요.'});
+    else if(snapshot.warnings?.length)status(node,{state:'error',message:snapshot.warnings.join(' ')});
 }
 app.registerExtension({
     name:"manga-translator.node-ui",

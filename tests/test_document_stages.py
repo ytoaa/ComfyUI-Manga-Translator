@@ -42,12 +42,13 @@ def test_source_correction_invalidates_translation_and_old_edit_plan():
 
 
 def test_review_is_bound_to_page_revision_and_same_value_can_approve():
-    data={'regions':[row()]};node=D.MangaReviewDocument();revision=D.digest(data)
-    edits=json.dumps({'pages':{revision:{'r1':{'target':'제목\n\n수정'}}}})
-    out=json.loads(node.review(json.dumps(data),'target',edits)['result'][0])
+    data={'regions':[row()]};node=D.MangaReviewDocument();identity={'page_key':'project/a/page/1','input_sha256':'a'*64}
+    revision=D.review_revision(data,identity,'target');context=json.dumps({'review_identity':identity})
+    edits=json.dumps({'pages':{revision:{'r1':{'target':'제목\n\n수정'}}},'identities':{revision:identity['page_key']}})
+    out=json.loads(node.review(json.dumps(data),'target',edits,context)['result'][0])
     assert out['regions'][0]['blocks'][1]['target']=='수정'
     other=deepcopy(data);other['regions'][0]['source']='Different'
-    assert json.loads(node.review(json.dumps(other),'target',edits)['result'][0])['regions'][0]['target']==row()['target']
+    assert json.loads(node.review(json.dumps(other),'target',edits,context)['result'][0])['regions'][0]['target']==row()['target']
 
 
 @pytest.mark.parametrize('text',['<UNK_SPAN>','<br>','\x00',''])

@@ -306,6 +306,8 @@ def workflow_fingerprint(graph, bind=None, *, legacy=False):
     # Omitted optional input on existing 08 canvases has this same runtime
     # default. Adding its visible widget must not invalidate old project IDs.
     for node in canonical.values():
+        if node['class_type']=='MangaReviewDocument':
+            node['inputs'].pop('edits_json',None)
         if node['class_type']=='MangaDetectorDetail' and node['inputs'].get('boundary_policy')=='preserve_review':
             node['inputs'].pop('boundary_policy')
         if node['class_type']=='MangaTranslate' and node['inputs'].get('response_format')=='json_schema':
@@ -447,8 +449,26 @@ class Project:
         folders = list(self._page_dir(page).glob('attempt-*'))
         number = max((int(p.name.split('-')[1]) for p in folders if re.fullmatch(r'attempt-\d{6}', p.name)), default=0)+1
         return {**page, 'attempt':number, 'status':'preparing', 'workflow_sha256':self.config['workflow_sha256'],
+                'review_sha256':self.review_fingerprint(page),
                 'resource_contract_version':RESOURCE_CONTRACT_VERSION,
                 'created_at':datetime.now(timezone.utc).isoformat(timespec='seconds')}
+
+    def review_fingerprint(self,page):
+        owner=f'project/{self.project_id}/page/{page["id"]}'
+        selected={}
+        for key,node in self.graph.items():
+            if node['class_type']!='MangaReviewDocument':continue
+            edits=json.loads(node['inputs'].get('edits_json','{}'))
+            if not isinstance(edits,dict):raise ProjectError('Invalid review edits')
+            identities=edits.get('identities',{});pages=edits.get('pages',{})
+            if not isinstance(identities,dict) or not isinstance(pages,dict):raise ProjectError('Invalid review edit identity')
+            owned={rev:patch for rev,patch in pages.items() if identities.get(rev)==owner}
+            if owned:selected[key]=owned
+        return digest(json.dumps(selected,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()) if selected else None
+
+    def processing_current(self,state,page):
+        return (state.get('workflow_sha256') in (self.workflow_sha256,self.legacy_workflow_sha256)
+                and state.get('review_sha256')==self.review_fingerprint(page))
 
     def _prepare_project(self, inventory=None):
         path = self.destination/'project.json'
@@ -794,7 +814,7 @@ class Project:
         state = self.state(page)
         if state and state['status'] in ACTIVE:
             self._resume(state)
-        if state and state['input_sha256'] == page['input_sha256']:
+        if state and state['input_sha256'] == page['input_sha256'] and self.processing_current(state,page):
             if state['status'] == 'failed' and not self.retry_failed:
                 if state.get('failure_diagnostics_missing'):
                     raise Paused('이전 실패의 ComfyUI 오류 상세가 없습니다. 서버 로그를 확인한 뒤 실패 재시도를 선택하세요.')
