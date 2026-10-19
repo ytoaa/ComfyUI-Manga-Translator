@@ -41,13 +41,16 @@ class Scene:
             if inner is not None:inner=inner.rotate(angle,Image.Resampling.BICUBIC,expand=True)
         full = Image.new('L', self.clean.size);full.paste(alpha, xy)
         mask = np.asarray(full)>0
-        yy, xx = np.where(mask)
-        if not len(xx):raise ValueError('Invisible generated reference: '+ident)
-        box = [int(xx.min()), int(yy.min()), int(xx.max()+1), int(yy.max()+1)]
         self.image.paste(stroke_color if inner is not None else color, mask=full)
         if inner is not None:
             pigment=Image.new('L',self.clean.size);pigment.paste(inner,xy)
             self.image.paste(color,mask=pigment)
+            # Independently resampled fill/outline can have different 1px
+            # bicubic fringes. Truth must cover both painted alpha layers.
+            mask |= np.asarray(pigment)>0
+        yy, xx = np.where(mask)
+        if not len(xx):raise ValueError('Invisible generated reference: '+ident)
+        box = [int(xx.min()), int(yy.min()), int(xx.max()+1), int(yy.max()+1)]
         if frame is None:
             frame = [max(0, box[0]-12), max(0, box[1]-12), min(self.clean.width, box[2]+12), min(self.clean.height, box[3]+12)]
         self.rows.append({'id': ident, 'text': text, 'kind': kind, 'bbox_pixels': box,
