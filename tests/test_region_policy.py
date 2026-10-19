@@ -103,3 +103,46 @@ def test_two_multiline_blocks_are_not_joined_as_single_rows():
         pixels=zeros((75,500),bool);pixels[8:28,5:490]=True;pixels[44:64,5:300]=True
         rows.append({**_item([10,y,510,y+75],.9),'mask':{'x':10,'y':y,'width':500,'height':75,'runs':rle(pixels)}})
     assert len(policy.group_adjacent_lines(rows,[])) == 2
+
+
+def _cross_label_pair():
+    from copy import deepcopy
+    mask = {'x': 10, 'y': 10, 'width': 20, 'height': 10, 'runs': [20, 40, 140]}
+    text = {**_item([10, 10, 30, 20], .9), 'mask': mask}
+    effect = {**deepcopy(text), 'label': 'onomatopoeia', 'score': .8}
+    return text, effect
+
+
+def test_identical_cross_label_segmentation_enters_ocr_once_and_retains_winner_kind():
+    text, effect = _cross_label_pair()
+    raw = {'protocol': 1, 'image_width': 100, 'image_height': 100,
+           'detections': [text, effect]}
+    selected = json.loads(policy.MangaDetectionRegionsResolved().convert(raw, include_sfx=True)[0])
+    assert len(selected['regions']) == 1
+    assert selected['regions'][0]['kind'] == 'text'
+    assert selected['region_resolution']['input_regions'] == 2
+    effect['score'] = .95
+    selected = json.loads(policy.MangaDetectionRegionsResolved().convert(raw, include_sfx=True)[0])
+    assert len(selected['regions']) == 1 and selected['regions'][0]['kind'] == 'sfx'
+    text_only = json.loads(policy.MangaDetectionRegionsResolved().convert(raw, include_sfx=False)[0])
+    assert len(text_only['regions']) == 1 and text_only['regions'][0]['kind'] == 'text'
+
+
+def test_cross_label_overlap_and_identical_boxes_with_distinct_masks_stay_separate():
+    text, effect = _cross_label_pair()
+    effect['mask']['runs'] = [30, 40, 130]
+    assert len(policy.merge_detector_regions([text, effect], .75)) == 2
+    text, effect = _cross_label_pair()
+    effect['bbox'][2] += 1
+    assert len(policy.merge_detector_regions([text, effect], .75)) == 2
+    text, effect = _cross_label_pair()
+    effect['bbox'] = [40, 10, 60, 20]
+    effect['mask']['x'] = 40
+    assert len(policy.merge_detector_regions([text, effect], .75)) == 2
+
+
+def test_cross_label_boxes_without_positive_mask_evidence_stay_separate():
+    for mask in (None, {}, {'runs': []}, {'runs': [200]}, {'runs': [200, 0]}):
+        text, effect = _cross_label_pair()
+        text['mask'] = effect['mask'] = mask
+        assert len(policy.merge_detector_regions([text, effect], .75)) == 2

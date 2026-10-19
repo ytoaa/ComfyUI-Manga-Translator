@@ -38,8 +38,22 @@ def _same_line_fragments(a, b):
     return vertical >= .8 and horizontal >= .1
 
 
+def _identical_cross_label_source(a, b):
+    """One segmentation may be classified as both text and an effect.
+
+    Overlap alone cannot distinguish a caption from the effect behind it.
+    Only an identical, nonempty segmentation and identical bounds prove this
+    narrow alias; maskless or merely overlapping cross-label regions remain.
+    """
+    if {a['label'], b['label']} != {'text', 'onomatopoeia'} or a['bbox'] != b['bbox']:
+        return False
+    mask = a.get('mask')
+    return (isinstance(mask, dict) and mask == b.get('mask') and
+            isinstance(mask.get('runs'), list) and any(mask['runs'][1::2]))
+
+
 def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CONTAINMENT_OVERLAP):
-    """Merge same-label duplicates transitively without dropping detected extent.
+    """Merge duplicates transitively without dropping detected extent.
 
     A pair is considered the same logical region when either ordinary IoU is
     high enough or at least 90% of the smaller rectangle is contained in the
@@ -53,9 +67,10 @@ def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CON
         for left in range(len(items)):
             for right in range(left + 1, len(items)):
                 a, b = items[left], items[right]
-                if a['label'] != b['label']:
+                alias = _identical_cross_label_source(a, b)
+                if a['label'] != b['label'] and not alias:
                     continue
-                same = (iou(a['bbox'], b['bbox']) >= iou_threshold or
+                same = (alias or iou(a['bbox'], b['bbox']) >= iou_threshold or
                         containment_overlap(a['bbox'], b['bbox']) >= containment_threshold or
                         _same_line_fragments(a['bbox'], b['bbox']))
                 if not same:
