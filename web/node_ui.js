@@ -59,7 +59,13 @@ function review(node, snapshot) {
                 const patch=current();patch.pages[revision] ||= {};
                 if(snapshot.identity_verified === false)throw new Error('페이지 식별 입력을 연결한 뒤 확정하세요.');
                 if(owner){patch.identities ||= {};patch.identities[revision]=owner;}
-                for(const r of data.regions) {const row=patch.pages[revision][r.id] ||= {};if(!row.blocks && !Object.hasOwn(row,"target"))row.target=r.target;}
+                for(const r of data.regions) {
+                    const row=patch.pages[revision][r.id] ||= {};
+                    if(!row.blocks && !Object.hasOwn(row,"target")) {
+                        if(r.blocks?.length)row.blocks=clone(r.blocks);
+                        else row.target=r.target;
+                    }
+                }
                 edits.value=JSON.stringify(patch);edits.callback?.(edits.value);
                 status(node,{state:"ready",message:"확정 저장됨 · Run으로 반영"});node.setDirtyCanvas?.(true,true);
             } catch(error) {status(node,{state:"error",message:error.message});}

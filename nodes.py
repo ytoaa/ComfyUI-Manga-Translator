@@ -8,17 +8,19 @@ from pathlib import Path
 from urllib import request, error, parse
 if __package__:
     from . import translation_protocol, text_contract
+    from .limits import MAX_DOCUMENT_CHARACTERS, check_document_budget
 else:
     import translation_protocol, text_contract
+    from limits import MAX_DOCUMENT_CHARACTERS, check_document_budget
 
 
 def encode(value):
-    return json.dumps(value, ensure_ascii=False, allow_nan=False)
+    result=json.dumps(value, ensure_ascii=False, allow_nan=False)
+    return check_document_budget(result)
 
 
 def decode(value):
-    if not isinstance(value, str) or len(value) > 200_000:
-        raise ValueError('JSON text must be at most 200,000 characters')
+    check_document_budget(value)
     value = value.strip()
     if value.startswith('```'):
         lines = value.splitlines()
@@ -426,6 +428,14 @@ class MangaCollectOCR:
         empty={i for i,t in enumerate(text) if t=='' and reports is not None
                and reports[i].get('status')=='empty_crop' and reports[i].get('ocr_skipped') is True
                and reports[i].get('empty_crop_verified')=={'method':'uniform_rgb_pixels'}}
+        uncertain={i for i,t in enumerate(text) if t=='' and reports is not None
+                   and reports[i].get('status')=='unverified_input' and reports[i].get('ocr_skipped') is True
+                   and reports[i].get('needs_review') is True
+                   and isinstance(reports[i].get('input_evidence'),dict)
+                   and reports[i]['input_evidence'].get('method')=='insufficient_text_evidence'
+                   and reports[i]['input_evidence'].get('reason') in ('degenerate_crop','smooth_pixels',
+                       'isolated_pixels','edge_spanning_rule','uncorrelated_low_contrast_pixels')}
+        empty |= uncertain
         if any(not isinstance(t,str) or (not t.strip() and i not in empty) or len(t)>16_000 for i,t in enumerate(text)):
             raise ValueError('One region has empty/invalid OCR; inspect crop previews and region boxes')
         for index, row in enumerate(data['regions']):
@@ -442,13 +452,14 @@ class MangaCollectOCR:
             if blocks:row['blocks']=blocks
             rows.append(row)
         if empty:
+            reason='insufficient_ocr_input_evidence' if uncertain else 'empty_ocr_crop'
             protected=[data['regions'][i].get('edit_bbox_pixels') or pixel_box(data['regions'][i]['bbox'],data['image_width'],data['image_height'],0) for i in sorted(empty)]
             previous=data.get('boundary_review',{})
-            data={**data,'needs_review':True,'review_reason':'empty_ocr_crop',
+            data={**data,'needs_review':True,'review_reason':reason,
                   'ocr_empty_regions':[data['regions'][i]['id'] for i in sorted(empty)],
-                  'boundary_review':{**previous,'schema':1,'reason':previous.get('reason','empty_ocr_crop'),
+                  'boundary_review':{**previous,'schema':1,'reason':previous.get('reason',reason),
                       'protected_boxes_pixels':previous.get('protected_boxes_pixels',[])+protected}}
-            if not rows:data.update(page_status='no_text_detected',ocr_skipped=True,no_text_reason='empty_ocr_crop')
+            if not rows:data.update(page_status='no_text_detected',ocr_skipped=True,no_text_reason=reason)
         return (encode(attach({**data,'regions':rows})),)
 
 

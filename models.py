@@ -42,25 +42,63 @@ def catalog(kind):
     return dict(sorted(found.items()))
 
 
+def _bundle_generation(folder):
+    from .stage_cache import file_identity
+    return tuple((p.name,file_identity(p)) for p in sorted(folder.iterdir()) if p.is_file())
+
+
+class _GenerationBoundBackend:
+    """Do not label resident inference with files replaced during execution."""
+    def __init__(self,backend,folder,generation):
+        self._backend,self._folder,self._generation=backend,folder,generation
+        self.cache_identity={'folder':str(folder),'files':dict(generation)}
+    def __getattr__(self,name):
+        value=getattr(self._backend,name)
+        if name not in ('detect','ocr') or not callable(value):return value
+        def infer(*args,**kwargs):
+            self._verify()
+            result=value(*args,**kwargs)
+            self._verify()
+            return result
+        return infer
+    def _verify(self):
+        if _bundle_generation(self._folder)!=self._generation:
+            raise ValueError('Resident model bundle changed; reload the model before inference')
+
+
 def load(kind, model_name):
     available = catalog(kind)
     if model_name not in available:
         raise ValueError('Select an existing complete model bundle from models/manga_translator/'+kind)
     folder = available[model_name]
-    key = (kind,str(folder))
+    generation=_bundle_generation(folder)
+    key = (kind,str(folder),generation)
     if key not in _MODELS:
         if kind=='detection':
             from .adapters.model import Backend
         else:
             from .adapters.hayai import Backend
-        _MODELS[key] = Backend(folder)
+        backend=Backend(folder)
+        if generation!=_bundle_generation(folder):
+            raise ValueError('Model bundle changed during loading; retry with a stable bundle')
+        for old in list(_MODELS):
+            if old[:2]==key[:2]:del _MODELS[old]
+        _MODELS[key] = _GenerationBoundBackend(backend,folder,generation)
     return _MODELS[key]
 
 
-def pil_image(images):
+def _rgb_array(images):
     if images.ndim!=4 or images.shape[0]!=1 or images.shape[-1]!=3:
         raise ValueError('Expected one RGB image')
-    pixels = np.clip(images[0].detach().cpu().numpy()*255,0,255).round().astype(np.uint8)
+    array=images[0].detach().cpu().numpy()
+    if not array.size or not np.isfinite(array).all() or array.min()<0 or array.max()>1:
+        raise ValueError('Expected finite RGB pixels within [0, 1]')
+    return array
+
+
+def pil_image(images):
+    array=_rgb_array(images)
+    pixels = (array*255).round().astype(np.uint8)
     return Image.fromarray(pixels).convert('RGB')
 
 
@@ -333,6 +371,10 @@ def _ocr_once(model,image,options,max_patches,repetition_penalty,retry_on_repeti
 
 class MangaDetectorLoader:
     @classmethod
+    def IS_CHANGED(cls,model_name):
+        from .stage_cache import model_identity
+        return model_identity('MangaDetectorLoader',{'model_name':model_name})
+    @classmethod
     def INPUT_TYPES(cls):
         return {'required': {'model_name': (list(catalog('detection')) or ['(no models found)'],)}}
     RETURN_TYPES = ('MANGA_DETECTOR_MODEL',)
@@ -343,6 +385,10 @@ class MangaDetectorLoader:
 
 
 class MangaOCRLoader:
+    @classmethod
+    def IS_CHANGED(cls,model_name):
+        from .stage_cache import model_identity
+        return model_identity('MangaOCRLoader',{'model_name':model_name})
     @classmethod
     def INPUT_TYPES(cls):
         return {'required': {'model_name': (list(catalog('ocr')) or ['(no models found)'],)}}
@@ -416,11 +462,43 @@ def _empty_ocr_page(images, manifest_json):
             or images.shape[-1] != 3
             or (data.get('image_width'),data.get('image_height')) != (images.shape[2],images.shape[1])):
         raise ValueError('Empty-page OCR requires the matching MangaRegionCrops manifest and page preview')
+    _rgb_array(images)
     return True
 
 
 def _uniform_ocr_crop(images):
     return all(low==high for low,high in pil_image(images).getextrema())
+
+
+def _unverified_ocr_input(image):
+    """Recognize weak pixel evidence, without certifying absence of language.
+
+    A rule can be a sound mark and an impulse a tiny period. Preserve these for
+    review, rather than inventing OCR text. Coherent faint strokes remain eligible.
+    """
+    gray=np.asarray(image,dtype=np.float32).mean(axis=2)
+    height,width=gray.shape
+    if min(height,width)<2:return {'method':'insufficient_text_evidence','reason':'degenerate_crop'}
+    for values in (gray,gray.T):
+        changes=np.diff(values[0])
+        if (np.all(values==values[:1]) and np.max(np.abs(changes))<=1
+                and (np.all(changes>=0) or np.all(changes<=0))):
+            return {'method':'insufficient_text_evidence','reason':'smooth_pixels'}
+    background=float(np.median(gray));ink=np.abs(gray-background)>max(1,float(np.ptp(gray))*.35)
+    ys,xs=np.nonzero(ink)
+    if 0<len(xs)<=2:
+        return {'method':'insufficient_text_evidence','reason':'isolated_pixels'}
+    if len(xs) and ((ys.max()==ys.min() and xs.max()-xs.min()>=width*.95)
+                    or (xs.max()==xs.min() and ys.max()-ys.min()>=height*.95)):
+        return {'method':'insufficient_text_evidence','reason':'edge_spanning_rule'}
+    if gray.size>=4096 and np.ptp(gray)<=3:
+        correlations=[]
+        for a,b in ((gray[:,:-1],gray[:,1:]),(gray[:-1],gray[1:]),
+                    (gray[:-1,:-1],gray[1:,1:]),(gray[:-1,1:],gray[1:,:-1])):
+            if a.std() and b.std():correlations.append(float(np.corrcoef(a.ravel(),b.ravel())[0,1]))
+        if correlations and max(correlations)<.1:
+            return {'method':'insufficient_text_evidence','reason':'uncorrelated_low_contrast_pixels'}
+    return None
 
 
 def _save_ocr_failure(source, image, diagnostic):
@@ -479,6 +557,7 @@ class MangaOCRAdaptive:
     def check_lazy_status(self, images, model=None, manifest_json=None, **options):
         if _empty_ocr_page(images,manifest_json) or _uniform_ocr_crop(images):
             return []
+        if options.get('quality_guard',False) and _unverified_ocr_input(pil_image(images)):return []
         return ['model'] if model is None else []
 
     def read(self,images,model=None,max_new_tokens=256,base_patches=512,small_text_patches=1024,small_text_px=48,
@@ -540,6 +619,11 @@ class MangaOCRAdaptive:
         if all(low==high for low,high in source.getextrema()):
             report={'status':'empty_crop','ocr_skipped':True,
                     'empty_crop_verified':{'method':'uniform_rgb_pixels'},'region_plan':region_plan}
+            return ('',json.dumps(report),[images])
+        evidence=_unverified_ocr_input(source) if quality_guard else None
+        if evidence:
+            report={'status':'unverified_input','ocr_skipped':True,'needs_review':True,
+                    'input_evidence':evidence,'region_plan':region_plan}
             return ('',json.dumps(report),[images])
         def recognize(image,line_index,box):
             attempts=[];generation=[]

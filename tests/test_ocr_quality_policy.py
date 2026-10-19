@@ -64,8 +64,8 @@ def test_explicit_unreadable_markers_are_not_recognized_text(text):
 
 
 def test_layout_recovery_cannot_accept_a_different_unknown_marker(monkeypatch):
-    source = Image.new('RGB', (120, 70), 'white')
-    source.putpixel((0,0),(0,0,0))
+    from tests.ocr_fixture import nonuniform_image
+    source=nonuniform_image((120,70))
     monkeypatch.setattr(M, 'pil_image', lambda _: source)
     monkeypatch.setattr(M, '_ocr_line_images', lambda _: [source])
     monkeypatch.setattr(P, 'recovery_parts', lambda *a: (
@@ -95,8 +95,8 @@ def test_short_correct_name_and_manga_elongation_remain_valid():
 @pytest.mark.parametrize('guard', [False, True])
 @pytest.mark.parametrize('recovered', [False, True])
 def test_unknown_span_has_bounded_retry_and_never_silently_loses_text(monkeypatch, guard, recovered):
-    source = Image.new('RGB', (120, 70), 'white')
-    source.putpixel((0,0),(0,0,0))
+    from tests.ocr_fixture import nonuniform_image
+    source=nonuniform_image((120,70))
     monkeypatch.setattr(M, 'pil_image', lambda _: source)
     saved = []
     monkeypatch.setattr(M, '_save_ocr_failure', lambda src, crop, diagnostic: saved.append(diagnostic) or 'fixture.json')

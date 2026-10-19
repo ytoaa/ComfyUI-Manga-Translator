@@ -8,9 +8,9 @@ import re
 import uuid
 
 from .tools.run_project import (Project, ProjectError, Paused, InputError, ACTIVE, FINISHED,
-    atomic_write, json_bytes, read_json, project_lock, normalise_image, digest, workflow_bindings)
+    atomic_write, json_bytes, read_json, project_lock, normalise_image, digest, workflow_bindings, workflow_fingerprint)
 
-VERSION = '0.7.1'
+VERSION = '0.7.2'
 
 
 def _write_run(folder, run):
@@ -24,7 +24,8 @@ def _read_run(folder):
     run = read_json(path)
     if (not isinstance(run,dict) or run.get('schema') != 1
             or not re.fullmatch(r'[a-f0-9]{32}',str(run.get('run_id','')))
-            or not isinstance(run.get('visited'),list) or not isinstance(run.get('page_ids'),list)):
+            or not isinstance(run.get('visited'),list) or not isinstance(run.get('page_ids'),list)
+            or ('workflow_file' in run and run['workflow_file']!=f'runs/{run["run_id"]}.workflow.json')):
         raise ProjectError('Invalid canvas project run; preserve its records')
     return run
 
@@ -35,6 +36,13 @@ def prefix_bindings(graph):
         if graph[bind[key]]['inputs'].get('filename_prefix') != [bind['load'],slot]:
             raise ProjectError('폴더의 캔버스 실행에는 새 통합 08의 저장 경로 연결이 필요합니다. 새 JSON을 가져오세요.')
     return bind
+
+
+def _run_settings(graph):
+    # Common settings exclude page edits for reusable project revisions, but an
+    # automatic run also freezes its authored edits for reproducible completion.
+    return (workflow_fingerprint(graph),{key:json.loads(node['inputs'].get('edits_json','{}'))
+            for key,node in graph.items() if node['class_type']=='MangaReviewDocument'})
 
 
 class CanvasExecution:
@@ -134,6 +142,11 @@ class CanvasExecution:
                     raise Paused('연속 실행 정보가 현재 프로젝트와 다릅니다. 자동 제출을 멈췄습니다.')
                 if run['status'] not in ('running','awaiting_canvas') or run.get('stop_requested'):
                     return {'report':self.snapshot(folder),'ticket':None}
+                saved_graph=read_json(folder/run.get('workflow_file','workflow.api.json'))
+                if _run_settings(graph)!=_run_settings(saved_graph):
+                    report=self.snapshot(folder)
+                    report.update(status='paused',running=False,message='연속 실행 중 설정이 변경됐습니다. 현재 실행을 멈춘 뒤 새로 시작하세요. 기존 기록은 보존했습니다.')
+                    return {'report':report,'ticket':None}
             project = self._project(inputs,folder,graph,client,cached=continuation is not None)
             requested=run['requested_action'] if continuation is not None else action
             retry=requested in ('실패 재시도','실패·검수 재시도')
@@ -141,7 +154,7 @@ class CanvasExecution:
             if run and run.get('active_prompt') == prompt_id:
                 state = project.state(next(p for p in project.pages if p['id']==run['active_page']))
                 return self._page_result(project,run,state,source_id)
-            if continuation is None and run and run.get('active_prompt'):
+            if run and run.get('active_prompt'):
                 old=project.state(next(p for p in project.recovery_pages if p['id']==run['active_page']))
                 if old and old['status'] in ACTIVE and project._queue_identity(old):
                     # Reject only this invocation. Do not pause or replace the
@@ -168,6 +181,8 @@ class CanvasExecution:
                 if continuation is None:
                     run=candidate
                     run['page_ids']=[p['id'] for p in project.pages if self._eligible(project,p,retry,retry_review)]
+                    run['workflow_file']=f'runs/{run["run_id"]}.workflow.json'
+                    atomic_write(folder/run['workflow_file'],json_bytes(graph))
                     # The live graph remains authoritative; processing changes are
                     # rejected by the same fingerprint, while prefix links may migrate.
                     atomic_write(folder/'workflow.api.json',json_bytes(graph))
@@ -267,7 +282,7 @@ class CanvasExecution:
         with project_lock(folder):
             run=_read_run(folder)
             if not run or run['run_id'] != run_id: raise Paused('이전 연속 실행의 응답입니다. 다음 페이지를 제출하지 않습니다.')
-            graph=read_json(folder/'workflow.api.json')
+            graph=read_json(folder/run.get('workflow_file','workflow.api.json'))
             project=self._project(Path(run['source_folder']),folder,graph,client,cached=True)
             if run.get('last_resolved_prompt') == prompt_id:
                 return {'pending':False,'continue':False,'report':self.report(project,run)}

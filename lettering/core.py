@@ -16,7 +16,7 @@ from scipy import ndimage
 from ..text_contract import ocr_problem
 
 from ..limits import (MAX_SOURCE_PIXELS, MAX_REGION_PIXELS, MAX_RASTER_PIXELS,
-                      MAX_TYPOGRAPHY_PIXELS, MAX_LETTERING_REGIONS)
+                      MAX_TYPOGRAPHY_PIXELS, MAX_LETTERING_REGIONS, MAX_DOCUMENT_BYTES)
 
 # Backward-compatible name used by older tests/extensions.  Page acceptance is
 # deliberately distinct from region/raster budgets below.
@@ -511,8 +511,8 @@ def apply_candidate_texture(layer, alpha, candidate, strength=.35, max_shift=.12
 
 
 def parse_regions(document, shape):
-    if not isinstance(document, str) or len(document.encode('utf-8')) > 262144:
-        raise ValueError('Regions JSON exceeds 256 KiB')
+    if not isinstance(document, str) or len(document.encode('utf-8')) > MAX_DOCUMENT_BYTES:
+        raise ValueError('Regions JSON exceeds shared transport budget')
     data = json.loads(document)
     if not isinstance(data, dict) or data.get('schema') != 1 or data.get('coordinate_format') != 'xywh':
         raise ValueError('Expected schema=1 and coordinate_format="xywh"')
@@ -528,7 +528,7 @@ def parse_regions(document, shape):
         ids.add(item['id'])
         bbox(item.get('bbox'), shape)
         clean_text(item.get('text'))
-        if set(item)-{'id', 'bbox', 'text', 'source_text', 'font', 'layout', 'style','frame_quad','parent_id','role'}:
+        if set(item)-{'id', 'bbox', 'text', 'source_text', 'font', 'layout', 'style','frame_quad','parent_id','block_id','role'}:
             raise ValueError('Unknown region field')
         if not isinstance(item.get('layout', {}), dict) or not isinstance(item.get('style', {}), dict):
             raise ValueError('layout and style must be objects')

@@ -8,7 +8,7 @@ import os
 import uuid
 import numpy as np
 
-VERSION='0.7.1'
+VERSION='0.7.2'
 MAX_BYTES=256*1024*1024
 
 def root():
@@ -50,7 +50,7 @@ def model_identity(kind,inputs):
     return None
 
 
-def upstream(graph,ident,seen=None,stage=None,authored_in_extra=False):
+def upstream(graph,ident,seen=None,stage=None,authored_in_extra=False,model_files=True):
     seen=set() if seen is None else set(seen)
     if str(ident) in seen:raise ValueError('Cycle in checkpoint dependencies')
     seen.add(str(ident));node=graph[str(ident)];kind=node['class_type']
@@ -61,21 +61,22 @@ def upstream(graph,ident,seen=None,stage=None,authored_in_extra=False):
         if key in ('filename_prefix','cache_policy'):continue
         if kind=='MangaReviewDocument' and key=='edits_json' and authored_in_extra:continue
         if isinstance(value,list) and len(value)==2 and isinstance(value[0],str) and value[0] in graph:
-            inputs[key]={'slot':value[1],'node':upstream(graph,value[0],seen,stage,authored_in_extra)}
+            inputs[key]={'slot':value[1],'node':upstream(graph,value[0],seen,stage,authored_in_extra,model_files)}
         else:inputs[key]=value
-    model=model_identity(kind,node.get('inputs',{}))
+    model=model_identity(kind,node.get('inputs',{})) if model_files else None
     return {'type':kind,'inputs':inputs,**({'model_files':model} if model is not None else {})}
 
 
-def identity(original,prompt,unique_id,stage,extra=''):
+def identity(original,prompt,unique_id,stage,extra='',model_files=True):
     array=original.detach().cpu().numpy()
     if array.ndim!=4 or array.shape[0]!=1 or array.shape[-1]!=3 or array.size>64*1024*1024*3 or not np.isfinite(array).all():raise ValueError('Checkpoint needs one finite RGB page')
-    config=upstream(prompt,unique_id,stage=stage,authored_in_extra=stage=='text' and bool(extra)) if prompt and unique_id else {}
+    config=upstream(prompt,unique_id,stage=stage,authored_in_extra=stage=='text' and bool(extra),model_files=model_files) if prompt and unique_id else {}
     header=json.dumps([VERSION,stage,list(array.shape),str(array.dtype),config,extra],sort_keys=True,ensure_ascii=False,allow_nan=False).encode()
     return hashlib.sha256(header+array.tobytes()).hexdigest()
 
 
-def read(key,kind):
+def read_entry(key,kind):
+    """Read pixels and diagnostics against one verified manifest snapshot."""
     try:
         folder=root()/key[:2]/key
         if (folder/'manifest.json').stat().st_size>2_100_000:return None
@@ -85,16 +86,26 @@ def read(key,kind):
         if meta['key']!=key or meta['kind']!=kind or path.stat().st_size>MAX_BYTES:return None
         raw=path.read_bytes()
         if hashlib.sha256(raw).hexdigest()!=meta['sha256']:return None
+        report=meta.get('report_json');details=None
+        if 'report_json' in meta:
+            if not isinstance(report,str) or hashlib.sha256(report.encode()).hexdigest()!=meta.get('report_sha256'):return None
+            details=json.loads(report)
+            if not isinstance(details,dict):return None
         if kind=='image':
             import torch
             a=np.load(io.BytesIO(raw),allow_pickle=False)
             if a.dtype!=np.float32 or a.ndim!=4 or a.shape[0]!=1 or a.shape[-1]!=3 or not np.isfinite(a).all():return None
-            return torch.from_numpy(a.copy())
+            return torch.from_numpy(a.copy()),details
         value=json.loads(raw)
-        if kind=='text' and isinstance(value,str):return value
-        if kind=='detection' and isinstance(value,dict) and value.get('protocol')==1:return value
+        if kind=='text' and isinstance(value,str):return value,details
+        if kind=='detection' and isinstance(value,dict) and value.get('protocol')==1:return value,details
     except (OSError,ValueError,KeyError,EOFError,TypeError):pass
     return None
+
+
+def read(key,kind):
+    entry=read_entry(key,kind)
+    return entry[0] if entry is not None else None
 
 
 def write(key,kind,value,report_json=None):
@@ -118,14 +129,8 @@ def write(key,kind,value,report_json=None):
 
 
 def read_report(key):
-    try:
-        path=root()/key[:2]/key/'manifest.json'
-        if path.stat().st_size>2_100_000:return None
-        meta=json.loads(path.read_text());report=meta.get('report_json')
-        if not isinstance(report,str) or hashlib.sha256(report.encode()).hexdigest()!=meta.get('report_sha256'):return None
-        result=json.loads(report)
-        return result if isinstance(result,dict) else None
-    except (OSError,ValueError,TypeError,AttributeError):return None
+    entry=read_entry(key,'image')
+    return entry[1] if entry is not None else None
 
 
 def cleanup_identity(extra,plan):
@@ -164,16 +169,20 @@ class Checkpoint:
         return hashlib.sha256(json.dumps([VERSION,config],sort_keys=True,ensure_ascii=False).encode()).hexdigest()
     def _key(self,original,prompt,unique_id,dependency_json,cleanup_plan):
         return identity(original,prompt,unique_id,self.KIND,cleanup_identity(dependency_json,cleanup_plan))
+    def _selection(self,original,prompt,unique_id,dependency_json,cleanup_plan):
+        # Freeze dependency files selected by a lazy hit, but verify semantic
+        # inputs and page pixels again when consuming that selected generation.
+        return identity(original,prompt,unique_id,self.KIND,cleanup_identity(dependency_json,cleanup_plan),model_files=False)
     def check_lazy_status(self,original,value=None,cache_policy='reuse',dependency_json='',prompt=None,unique_id=None,cleanup_plan=None,report_json=None):
         self._pinned=None
         if prompt and unique_id is not None and cache_policy=='reuse':
             key=self._key(original,prompt,unique_id,dependency_json,cleanup_plan)
-            cached=read(key,self.KIND)
-            if cached is not None:
+            entry=read_entry(key,self.KIND)
+            if entry is not None:
                 # A lazy hit suppresses upstream computation. Keep exactly that
                 # verified generation alive until execution consumes it, even
                 # if eviction removes the on-disk files in between.
-                self._pinned=(key,cached,read_report(key) if self.KIND=='image' else None)
+                self._pinned=(key,*entry,self._selection(original,prompt,unique_id,dependency_json,cleanup_plan))
                 return []
         needed=['value'] if value is None else []
         if (self.KIND=='image' and report_json is None and prompt and unique_id is not None
@@ -181,18 +190,19 @@ class Checkpoint:
         return needed
     def checkpoint(self,original,value=None,cache_policy='reuse',dependency_json='',prompt=None,unique_id=None,cleanup_plan=None,report_json=None):
         bound=bool(prompt) and unique_id is not None
-        key=self._key(original,prompt,unique_id,dependency_json,cleanup_plan) if bound else None
         pin=getattr(self,'_pinned',None);self._pinned=None
-        pinned=bool(pin and pin[0]==key and cache_policy=='reuse')
-        cached=pin[1] if pinned else read(key,self.KIND) if bound and cache_policy=='reuse' else None
+        pinned=bool(pin and bound and cache_policy=='reuse' and pin[3]==self._selection(original,prompt,unique_id,dependency_json,cleanup_plan))
+        key=pin[0] if pinned else self._key(original,prompt,unique_id,dependency_json,cleanup_plan) if bound else None
+        entry=(pin[1],pin[2]) if pinned else read_entry(key,self.KIND) if bound and cache_policy=='reuse' else None
+        cached=entry[0] if entry is not None else None
         reused=cached is not None
         if reused:value=cached
         if value is None:raise ValueError('Checkpoint input unavailable')
         if bound and not reused and cache_policy!='off':
             try:write(key,self.KIND,value,report_json)
             except OSError as exc:logging.warning('Checkpoint persistence unavailable: %s',exc)
-        details=(pin[2] if pinned else read_report(key) if reused else json.loads(report_json) if report_json else {}) if self.KIND=='image' else {}
-        report=json.dumps({**(details or {}),'stage_cache':{'stage':self.KIND,'state':'reused' if reused else 'computed','key':key}})
+        details=(entry[1] if reused else json.loads(report_json) if report_json else {}) if self.KIND=='image' else {}
+        report=json.dumps({**(details or {}),'stage_cache':{'stage':self.KIND,'state':'reused' if reused else 'computed','key':key,'generation_frozen':pinned}})
         return {'ui':{'text':[report],'manga_status':[{'state':'reused' if reused else 'computed','message':self.KIND}]},'result':(value,report)}
 
 class MangaTextCheckpoint(Checkpoint):RETURN_TYPES=('STRING','STRING');RETURN_NAMES=('문서','재사용_보고서')

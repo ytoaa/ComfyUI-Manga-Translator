@@ -268,11 +268,14 @@ class MangaLetterPrepare:
                     quad=block_quad(row,block);points=np.asarray(quad)
                     left,top=np.maximum(0,np.floor(points.min(axis=0))).astype(int)
                     right,bottom=np.minimum([width,height],np.ceil(points.max(axis=0))).astype(int)
-                    child={**parent,'id':block['id'],'parent_id':row['id'],'role':block.get('role','body'),
+                    from ..document import digest
+                    child_id='paragraph_'+digest([row['id'],block['id']])
+                    while child_id in {r['id'] for r in data['regions']}:child_id+='_'
+                    child={**parent,'id':child_id,'parent_id':row['id'],'block_id':block['id'],'role':block.get('role','body'),
                            'source_text':block['source'],'text':block['target'],'frame_quad':quad,
                            'bbox':[int(left),int(top),int(right-left),int(bottom-top)],**block.get('presentation',{})}
                     rows.append(child)
-                    if row['id'] in orientation:orientation[block['id']]=orientation[row['id']]
+                    if row['id'] in orientation:orientation[child_id]=orientation[row['id']]
                 orientation.pop(row['id'],None)
             x, y, w, h = bounds
             support[y:y+h, x:x+w] = 1

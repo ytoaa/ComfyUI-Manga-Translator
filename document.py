@@ -59,6 +59,9 @@ def attach(data):
             'line_bboxes_pixels':r.get('line_bboxes_pixels')}.items() if v is not None},
          'content':{k:r[k] for k in ('source','target','blocks') if k in r},
          'presentation':r.get('presentation',{}),'authored':r.get('authored',{})} for r in data['regions']]}
+    if __package__:from .limits import check_document_budget
+    else:from limits import check_document_budget
+    check_document_budget(json.dumps(data,ensure_ascii=False,allow_nan=False))
     return data
 
 
@@ -149,6 +152,7 @@ def apply_edits(data,patch,stage):
         if not isinstance(edits,dict) or set(edits)-allowed:raise ValueError('Invalid review edit fields')
         if 'presentation' in edits and (not isinstance(edits['presentation'],dict) or set(edits['presentation'])-{'font','layout','style'}):raise ValueError('Presentation accepts font, layout and style')
         if 'blocks' in edits:
+            if not edits['blocks']:raise ValueError('Paragraph replacement cannot be empty; preserve the region explicitly')
             validate_blocks({**r,'blocks':edits['blocks']})
             if stage=='target':
                 if any(not isinstance(b.get('target'),str) or not b['target'].strip() for b in edits['blocks']):raise ValueError('Every reviewed paragraph needs target text')
@@ -157,7 +161,11 @@ def apply_edits(data,patch,stage):
                 for b in edits['blocks']:
                     if any(b.get(k)!=old[b['id']].get(k) for k in ('source','bbox_local','coordinate_frame')):raise ValueError('Change paragraph source/geometry in source review')
         for key,value in edits.items():
-            if key in ('source','target'):review_text(value,key=='source')
+            if key in ('source','target'):
+                blocks=edits.get('blocks',r.get('blocks',[]))
+                if key=='target' and blocks and value=='\n\n'.join(b.get('target','') for b in blocks):
+                    validate_target({**r,'blocks':blocks,'target':value})
+                else:review_text(value,key=='source')
             r[key]=deepcopy(value);r.setdefault('authored',{})[key]={'origin':'human','base_revision':digest(data)}
         if stage=='source' and edits:
             r.pop('target',None)

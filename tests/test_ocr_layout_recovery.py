@@ -87,8 +87,8 @@ def test_persistent_bad_rows_stop_without_recursing_and_save_actual_failed_input
 
 
 def test_no_evidence_means_no_arbitrary_slices_and_diagnostic_failure_does_not_hide_error(monkeypatch):
-    source=Image.new('RGB',(580,203),'white')
-    source.putpixel((0,0),(0,0,0))
+    from tests.ocr_fixture import nonuniform_image
+    source=nonuniform_image((580,203))
     assert not P.recovery_parts(source)[0]
     monkeypatch.setattr(M,'pil_image',lambda _:source)
     monkeypatch.setitem(sys.modules,'folder_paths',types.SimpleNamespace(get_output_directory=lambda: (_ for _ in ()).throw(OSError())))

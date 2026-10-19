@@ -386,7 +386,8 @@ def transition_cases(a):
             return {'parent_characters':len(r['target'])}
         a.case(f'approve-paragraph-parent-{length}','review_transition','Approval of valid paragraph targets remains valid at the UI/document seam',approve)
     def empty_blocks():
-        out=D.apply_edits({'regions':[row()]},{'r1':{'blocks':[]}},'source')
+        try:out=D.apply_edits({'regions':[row()]},{'r1':{'blocks':[]}},'source')
+        except ValueError as exc:return {'rejected':str(exc),'scope':'explicit empty replacement rejection'}
         require(bool(out['regions'][0]['source'].strip()),'Empty source blocks create an invalid recognized source without an explicit deletion action',{'source':out['regions'][0]['source']})
     a.case('source-review-empty-block-list','review_transition','Reject empty paragraph replacement or represent explicit region deletion',empty_blocks)
     def same_block_id():
@@ -418,11 +419,14 @@ def transition_cases(a):
         with patch.object(K,'root',lambda:folder):
             key=node._key(image,key_graph,'1','',None)
             K.write(key,'image',image*0,'{"generation":"A"}')
-            original=K.read_report
-            def swapped(k):
-                K.write(k,'image',image,'{"generation":"B"}')
-                return original(k)
-            with patch.object(K,'read_report',side_effect=swapped):node.check_lazy_status(image,prompt=key_graph,unique_id='1')
+            original=Path.read_bytes;swapped=[]
+            def swapped_read(path):
+                raw=original(path)
+                if path.name=='value.bin' and not swapped:
+                    swapped.append(True);K.write(key,'image',image,'{"generation":"B"}')
+                return raw
+            with patch.object(Path,'read_bytes',swapped_read):node.check_lazy_status(image,prompt=key_graph,unique_id='1')
+            require(bool(swapped),'Concurrent writer injection did not run')
             out=node.checkpoint(image,prompt=key_graph,unique_id='1');mean=float(out['result'][0].mean());report=json.loads(out['result'][1])
             require((mean==0 and report.get('generation')=='A') or (mean==1 and report.get('generation')=='B'),
                     'Cached pixels and diagnostics are pinned from different writer generations',{'pixel_mean':mean,'report_generation':report.get('generation')})
@@ -571,6 +575,8 @@ def actual_transition_ocr(a,models):
     sparse=Image.new('RGB',(280,80),'white');sparse.putpixel((3,3),(0,0,0))
     ruled=Image.new('RGB',(280,80),'white');ImageDraw.Draw(ruled).line((0,40,279,40),fill='black',width=1)
     samples={'near-white-noise':noise,'paper-gradient':Image.fromarray(gradient),'isolated-pixel':sparse,'horizontal-rule':ruled}
+    from tests.test_transition_v072 import positive_inputs
+    positive=positive_inputs();samples.update(positive)
     folders=types.SimpleNamespace(models_dir=str(models),get_output_directory=lambda:str(output))
     with patch.dict(sys.modules,{'folder_paths':folders}):
         for engine in E.ENGINES:
@@ -580,14 +586,25 @@ def actual_transition_ocr(a,models):
             for label,image in samples.items():
                 def infer(image=image,label=label,model=model):
                     path=output/(label+'.png');image.save(path);page=torch.from_numpy(np.asarray(image,np.float32).copy()/255)[None]
+                    calls=[];original=model.ocr;is_positive=label in positive
+                    def tracked(*args,**kwargs):
+                        calls.append(1);return original(*args,**kwargs)
+                    observed={'known_no_letters':not is_positive,'model_calls':0,
+                              'input_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
+                              'scope':'pinned CPU OCR pipeline: weak inputs must preserve for review; glyph controls record recognition without an accuracy claim'}
                     try:
-                        result=MangaOCRAdaptiveCached().read(page,model,line_split=False,quality_guard=True,cache_policy='off',retry_on_layout_failure=False)
-                        text=result['result'][0]
-                        return {'text':text,'known_no_letters':True,'false_text_accepted':bool(text.strip()),
-                                'diagnostics':json.loads(result['result'][1]),'input_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
-                                'scope':'real CPU model on deliberately non-text pixels; not a general accuracy benchmark'}
-                    except ValueError as exc:return {'rejected':str(exc)[:1000],'known_no_letters':True,'false_text_accepted':False}
-                a.case(name+'-'+label,'actual_nontext_ocr','Observe near-blank/non-text behavior without calling it recognition accuracy',infer,'actual_model')
+                        with patch.object(model,'ocr',side_effect=tracked):
+                            result=MangaOCRAdaptiveCached().read(page,model,line_split=False,quality_guard=True,cache_policy='off',retry_on_layout_failure=False)
+                        text=result['result'][0];diagnostic=json.loads(result['result'][1])
+                        observed.update(text=text,diagnostics=diagnostic,model_calls=len(calls),false_text_accepted=not is_positive and bool(text.strip()))
+                        if is_positive:require(bool(calls),'Positive glyph control was filtered before model inference',observed)
+                        else:require(not calls and not text.strip() and diagnostic.get('needs_review') is True,'Weak input must preserve for review before model inference',observed)
+                        return observed
+                    except ValueError as exc:
+                        observed.update(rejected=str(exc)[:1000],model_calls=len(calls),false_text_accepted=False)
+                        if is_positive:require(bool(calls),'Positive control rejected before recognition',observed)
+                        return observed
+                a.case(name+'-'+label,'actual_ocr_input_boundary','Preserve weak inputs and keep positive glyph controls eligible; record real CPU recognition separately',infer,'actual_model')
 
 
 def main():

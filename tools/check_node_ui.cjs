@@ -27,6 +27,15 @@ class Node {
  assert.equal(edits.identities.pageA,'project/a/page/1');
  node.onExecuted({manga_document:[snapshot]});
  assert.equal(node.mangaPanelBody.children.filter(e=>e.tag==='textarea')[1].value,'수정 <img src=x>');
+ const longNode=new Node(2);longNode.onNodeCreated();
+ const longData=JSON.parse(JSON.stringify(data));
+ for(const b of longData.regions[0].blocks)b.target='가'.repeat(1024);
+ longData.regions[0].target=longData.regions[0].blocks.map(b=>b.target).join('\n\n');
+ longNode.onExecuted({manga_document:[{...snapshot,input_revision:'longPage',document:longData}]});
+ longNode.mangaPanelBody.children.find(e=>e.tag==='button').fire('click');
+ const approved=JSON.parse(longNode.widgets[0].value).pages.longPage.r1;
+ assert.equal(approved.blocks.length,2);assert.equal(approved.blocks[0].target.length,1024);
+ assert.equal(approved.target,undefined);
  node.onExecuted({manga_document:[{stage:'target',input_revision:'pageB',document:data}]});
  node.mangaPanelBody.children.find(e=>e.tag==='textarea').value='Other';node.mangaPanelBody.children.find(e=>e.tag==='textarea').fire('input');
  assert.ok(JSON.parse(node.widgets[0].value).pages.pageA);assert.ok(JSON.parse(node.widgets[0].value).pages.pageB);

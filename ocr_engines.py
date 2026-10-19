@@ -1,4 +1,5 @@
 """Selectable pinned OCR bundles with atomic, hash-verified first-use acquisition."""
+import errno
 import hashlib
 import json
 from pathlib import Path
@@ -63,7 +64,11 @@ def ensure(engine,download=True,progress=lambda *a:None):
                         output.write(chunk);h.update(chunk);progress(i,len(files),name,count)
                 if h.hexdigest()!=expected:raise ValueError('Downloaded OCR SHA256 mismatch: '+name)
             (temporary/'model-files.json').write_text(json.dumps({'repository':repo,'revision':rev,'files':files}))
-            temporary.rename(destination)
+            try:temporary.rename(destination)
+            except OSError as exc:
+                # Concurrent processes may have completed the exact pinned bundle.
+                # Never overwrite an incomplete or modified existing directory.
+                if exc.errno not in (errno.EEXIST,errno.ENOTEMPTY) or not valid(destination):raise
         finally:
             if temporary.exists():shutil.rmtree(temporary)
     return destination

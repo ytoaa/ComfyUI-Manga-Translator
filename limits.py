@@ -24,3 +24,13 @@ MAX_RASTER_PIXELS = 32 * 1024 * 1024
 # repeated search work while allowing several large high-DPI text blocks.
 MAX_TYPOGRAPHY_PIXELS = 32 * 1024 * 1024
 MAX_LETTERING_REGIONS = 64
+
+# Whole documents include paragraph content, diagnostics and schema mirrors.
+MAX_DOCUMENT_CHARACTERS = 2_000_000
+MAX_DOCUMENT_BYTES = 8 * 1024 * 1024
+
+
+def check_document_budget(text):
+    if not isinstance(text,str) or len(text)>MAX_DOCUMENT_CHARACTERS:
+        raise ValueError('Document exceeds shared JSON transport budget')
+    return text

@@ -413,7 +413,9 @@ class Project:
 
     def _page_dir(self, page): return self.destination/'pages'/page['id']
     def state(self, page):
-        paths = sorted(self._page_dir(page).glob('attempt-*/state.json'))
+        paths = sorted((p for p in self._page_dir(page).glob('attempt-*/state.json')
+                        if re.fullmatch(r'attempt-\d{6,12}',p.parent.name)),
+                       key=lambda p:int(p.parent.name.split('-')[1]))
         if not paths: return None
         state = read_json(paths[-1])
         if (not isinstance(state,dict) or state.get('id') != page['id']
@@ -447,7 +449,8 @@ class Project:
         self.progress({key:state.get(key) for key in ('relative_path','status','reason','prompt_id')})
     def _new(self, page):
         folders = list(self._page_dir(page).glob('attempt-*'))
-        number = max((int(p.name.split('-')[1]) for p in folders if re.fullmatch(r'attempt-\d{6}', p.name)), default=0)+1
+        number = max((int(p.name.split('-')[1]) for p in folders if re.fullmatch(r'attempt-\d{6,12}', p.name)), default=0)+1
+        if number>999_999_999_999:raise ProjectError('Project attempt budget exhausted; preserve this project and start a new directory')
         return {**page, 'attempt':number, 'status':'preparing', 'workflow_sha256':self.config['workflow_sha256'],
                 'review_sha256':self.review_fingerprint(page),
                 'resource_contract_version':RESOURCE_CONTRACT_VERSION,
