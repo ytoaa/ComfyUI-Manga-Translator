@@ -132,6 +132,7 @@
       "text_direction": "auto",
       "retry_on_token_limit": true,
       "retry_on_layout_failure": true,
+      "failure_policy": "preserve_review",
       "cache_policy": "reuse",
       "images": [
         "8",

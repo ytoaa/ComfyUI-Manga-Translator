@@ -319,6 +319,8 @@ def workflow_fingerprint(graph, bind=None, *, legacy=False):
             node['inputs'].pop('response_format')
         if node['class_type']=='MangaRegionCrops' and node['inputs'].get('geometry_policy')=='preserve_review':
             node['inputs'].pop('geometry_policy')
+        if node['class_type']=='MangaOCRAdaptive' and node['inputs'].get('failure_policy')=='stop':
+            node['inputs'].pop('failure_policy')
     return digest(json.dumps(canonical,ensure_ascii=False,sort_keys=True,
                              allow_nan=False,separators=(',',':')).encode())
 

@@ -161,12 +161,43 @@ def test_letter_prepare_propagates_protection_and_crop_margin_cannot_cross_it():
         {'id':'r1','bbox':[100,200,400,800],'source':'SOURCE','target':'번역'}],
         'needs_review':True,'boundary_review':review([[85,20,110,80]])}
     # The logical box ends at x=80; its normal 8px edit margin is unsafe.
-    with pytest.raises(ValueError,match='margin overlaps'):
-        MangaRegionCrops().crop(picture,json.dumps(source))
-    with pytest.raises(ValueError,match='margin overlaps'):
-        MangaRegionCrops().crop(picture,json.dumps(source),ocr_padding=12,edit_margin=0)
+    for padding,margin in ((4,8),(12,0)):
+        crops,manifest,mask,_=MangaRegionCrops().crop(picture,json.dumps(source),ocr_padding=padding,edit_margin=margin)
+        row=json.loads(manifest)['regions'][0]
+        assert row['crop_bbox_pixels'][2] <= 85 and row['edit_bbox_pixels'][2] <= 85
+        assert row['crop_bbox_pixels'][0] <= 20 and row['crop_bbox_pixels'][2] >= 80
+        assert not mask[:,20:80,85:110].any()
+        assert crops[0].shape[2] == row['crop_bbox_pixels'][2]-row['crop_bbox_pixels'][0]
     prepared,_=MangaLetterPrepare().prepare(picture,json.dumps(source),region_padding=0)
     assert json.loads(prepared)['boundary_review']==source['boundary_review']
+
+
+def test_actual_source_overlap_is_preserved_or_rejected_never_cropped_away():
+    import torch
+    from boundary_review_tests.nodes import MangaRegionCrops
+    picture=torch.ones((1,100,200,3))
+    source={'image_width':200,'image_height':100,'regions':[{'id':'r1','bbox':[100,200,500,800]}],
+            'boundary_review':review([[85,20,110,80]])}
+    with pytest.raises(ValueError,match='source overlaps'):
+        MangaRegionCrops().crop(picture,json.dumps(source),geometry_policy='strict')
+    _,manifest,mask,_=MangaRegionCrops().crop(picture,json.dumps(source),geometry_policy='preserve_review')
+    doc=json.loads(manifest)
+    assert not doc['regions'] and doc['needs_review'] and not mask.any()
+    assert doc['ocr_geometry_review']['preserved_region_ids']==['r1']
+
+
+def test_pixel_bounds_snap_round_trip_noise_but_preserve_real_fractional_coverage():
+    from boundary_review_tests.nodes import pixel_box
+    assert pixel_box([100*1000/480,20*1000/140,250*1000/480,100*1000/140],480,140,0)==[100,20,250,100]
+    assert pixel_box([100.01,200.01,400.01,800.01],200,100,0)==[20,20,81,81]
+
+
+@pytest.mark.parametrize('area',[[75,10,90,80],[10,75,80,90],[0,0,18,90],[0,0,90,18]])
+def test_margin_trim_keeps_complete_source_and_no_protected_pixels(area):
+    source=[20,20,70,70]
+    result=B.padded_bounds(source,12,[0,0,100,100],[area])
+    assert result and not B.intersects(result,area)
+    assert result[0]<=20 and result[1]<=20 and result[2]>=70 and result[3]>=70
 
 
 @pytest.mark.parametrize('box',[[0,0,900,100],[-1,0,10,10],[0,0,0,10],[0,0,float('nan'),10]])

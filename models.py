@@ -523,6 +523,13 @@ def _save_ocr_failure(source, image, diagnostic):
         return None
 
 
+class OCRQualityError(ValueError):
+    """A bounded recognition attempt failed, rather than invalid input/runtime."""
+    def __init__(self, message, code, diagnostic_path):
+        super().__init__(message)
+        self.code, self.diagnostic_path = code, diagnostic_path
+
+
 class MangaOCRAdaptive:
     DESCRIPTION = '영역을 행/열로 분리하고 여백을 줄인 뒤 작은 글씨에 더 큰 Hayai patch budget을 자동 배정합니다.'
     @classmethod
@@ -548,7 +555,9 @@ class MangaOCRAdaptive:
                 'retry_on_token_limit': ('BOOLEAN', {'default':False,
                     'tooltip':'토큰 한도에 닿으면 요청 한도를 2배(최대 2048)로 한 번 재시도합니다. 잘린 결과는 반환하지 않습니다.'}),
                 'retry_on_layout_failure': ('BOOLEAN', {'default':False,
-                    'tooltip':'품질 재시도도 실패하면 검증된 행/열 간격에서 입력을 한 번 다시 나눕니다. 계속 실패하면 입력 PNG/진단 JSON을 저장하고 중단합니다.'})}}
+                    'tooltip':'품질 재시도도 실패하면 검증된 행/열 간격에서 입력을 한 번 다시 나눕니다. 계속 실패하면 입력 PNG/진단 JSON을 저장합니다.'}),
+                'failure_policy': (['stop','preserve_review'], {'default':'stop',
+                    'tooltip':'품질 재시도 실패 시 stop은 중단. preserve_review는 해당 영역 전체를 번역하지 않고 원본 보존·검수합니다. 실행 오류는 계속 중단합니다.'})}}
     RETURN_TYPES=('STRING','STRING','IMAGE')
     RETURN_NAMES=('text','ocr_report_json','ocr_inputs')
     OUTPUT_IS_LIST=(False,False,True)
@@ -563,7 +572,31 @@ class MangaOCRAdaptive:
     def read(self,images,model=None,max_new_tokens=256,base_patches=512,small_text_patches=1024,small_text_px=48,
              line_split=True,tight_crop=False,repetition_penalty=1.,retry_on_repetition=True,
              split_long_lines=False,quality_guard=False,text_direction='auto',retry_on_token_limit=False,
-             manifest_json=None,retry_on_layout_failure=False,region_plan_json=None):
+             manifest_json=None,retry_on_layout_failure=False,region_plan_json=None,failure_policy='stop'):
+        options=locals().copy();options.pop('self');options.pop('failure_policy')
+        if failure_policy not in ('stop','preserve_review'):
+            raise ValueError('Invalid OCR failure policy')
+        from .adapters.hayai import HayaiOutputError
+        try:
+            return self._read(**options)
+        except (OCRQualityError,HayaiOutputError) as exc:
+            if (failure_policy=='stop' or isinstance(exc,HayaiOutputError) and
+                    exc.code not in ('ocr_repetition_loop','ocr_token_limit')):
+                raise
+            # Never return earlier lines from a partially rejected region.
+            report={'status':'ocr_quality_rejected','needs_review':True,'ocr_skipped':False,
+                    'region_plan':json.loads(region_plan_json) if region_plan_json else {},
+                    'quality_failure':{'code':exc.code,'policy':'preserve_review',
+                        'diagnostic_path':getattr(exc,'diagnostic_path',None),
+                        'message':str(exc),'notes':getattr(exc,'__notes__',[])},
+                    'quality_scope':'rejected_entire_region_not_recognition_accuracy'}
+            LOG.warning('OCR region preserved for review: %s',exc.code)
+            return ('',json.dumps(report,ensure_ascii=False),[images])
+
+    def _read(self,images,model=None,max_new_tokens=256,base_patches=512,small_text_patches=1024,small_text_px=48,
+              line_split=True,tight_crop=False,repetition_penalty=1.,retry_on_repetition=True,
+              split_long_lines=False,quality_guard=False,text_direction='auto',retry_on_token_limit=False,
+              manifest_json=None,retry_on_layout_failure=False,region_plan_json=None):
         if _empty_ocr_page(images,manifest_json):
             LOG.info('Adaptive OCR skipped: no_text_detected')
             return ('',json.dumps({'status':'no_text_detected','ocr_skipped':True,
@@ -670,11 +703,11 @@ class MangaOCRAdaptive:
                                                'runtime_settings':runtime,
                                                'rejected_text':text})
             recovery_summary={key:recovery[key] for key in ('strategy','rejected') if recovery and key in recovery}
-            raise ValueError(f'OCR 품질 검사 실패 ({issue}); line={line_index}, box={box}, attempts={attempts}. '
+            raise OCRQualityError(f'OCR 품질 검사 실패 ({issue}); line={line_index}, box={box}, attempts={attempts}. '
                              f'line_split={line_split}, retry_on_layout_failure={retry_on_layout_failure}, '
                              f'layout_recovery={recovery_summary}. '
                              f'진단={path or "저장 불가"}. 원본 OCR 크롭과 Hayai 로그를 확인하세요. '
-                             '번역할 원문을 확정하지 않았습니다.')
+                             '번역할 원문을 확정하지 않았습니다.',issue,path)
 
         for line_index, parts in enumerate(planned):
             chunks=[]

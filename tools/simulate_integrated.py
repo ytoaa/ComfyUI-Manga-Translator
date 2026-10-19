@@ -327,6 +327,10 @@ class GraphRunner:
         protected=boundary_review.boxes(selected,*self.original.size)
         expected=[row for row in self.records if not any(boundary_review.intersects(row['bbox'],box) for box in protected)]
         assert len(selected['regions']) == len(expected), 'Lost or duplicated logical regions outside protection'
+        # OCR may reject additional regions after the detector selection.
+        # Use the actual cleanup plan's protection for all downstream checks.
+        protected=plan['report'].get('protected_boxes_pixels',protected)
+        expected=[row for row in expected if not any(boundary_review.intersects(row['bbox'],box) for box in protected)]
         required=np.zeros_like(self.raw)
         for row in expected: required |= row['mask']
         boundary_review.clear(required,protected)

@@ -91,6 +91,24 @@ def test_refined_crop_plans_partition_original_pixels_and_bound_edit_margins():
     assert mask.any()
 
 
+def test_external_narrow_sidebar_does_not_disable_verified_body_columns():
+    image,data=page_fixture()
+    # Original fixture has a narrow outer gutter. Keep the sidebar wholly outside it.
+    draw=ImageDraw.Draw(image)
+    draw.text((3,300),'ID',fill='black')
+    data['regions'].append({'id':'sidebar','kind':'text','bbox':[0,480,55,540]})
+    refined,geometry=P.refine_columns(image,data)
+    assert refined['layout_refinement']['auxiliary_region_ids']==['sidebar']
+    assert next(r for r in refined['regions'] if r['id']=='sidebar')['bbox']==data['regions'][-1]['bbox']
+    boxes=[g['bounds_pixels'] for g in geometry.values()]
+    assert all(intersection(a,b)==0 for i,a in enumerate(boxes) for b in boxes[i+1:])
+    _,raw,_,plans=N.MangaRegionCrops().crop(tensor(image),json.dumps(data),refine_page_columns=True)
+    manifest=json.loads(raw)
+    assert len(manifest['regions'])==len(plans)
+    side=next(r for r in manifest['regions'] if r['id']=='sidebar')
+    assert side['crop_bbox_pixels'][2]<=geometry['sidebar']['ownership_pixels'][2]
+
+
 def test_verified_rows_are_used_before_quality_failure_and_ids_reach_collector():
     image, data = page_fixture()
     crops, manifest, _, plans = N.MangaRegionCrops().crop(tensor(image), json.dumps(data), refine_page_columns=True)

@@ -61,6 +61,7 @@ def test_failed_cleanup_never_reaches_final_save(tmp_path):
 
 def test_short_repeating_ocr_stops_before_translation_cleanup_and_final_save(tmp_path):
     runner=S.GraphRunner(tmp_path)
+    next(n for n in runner.graph.values() if n['class_type']=='MangaOCRAdaptive')['inputs']['failure_policy']='stop'
     class BadOCR:
         calls=0
         def ocr(self,*args,**kwargs):
@@ -76,6 +77,7 @@ def test_short_repeating_ocr_stops_before_translation_cleanup_and_final_save(tmp
 def test_persistent_ocr_token_limit_never_reaches_translation_or_final_save(tmp_path):
     from integrated_simulation.adapters.hayai import HayaiOutputError
     runner=S.GraphRunner(tmp_path)
+    next(n for n in runner.graph.values() if n['class_type']=='MangaOCRAdaptive')['inputs']['failure_policy']='stop'
     class LimitedOCR:
         calls=[]
         def ocr(self,image,options,**kwargs):
@@ -86,6 +88,25 @@ def test_persistent_ocr_token_limit_never_reaches_translation_or_final_save(tmp_
         runner.execute()
     assert runner.ocr.calls == [256,512]
     assert not runner.calls['MangaTranslate'] and runner.qwen_calls == 0 and not runner.saved
+
+
+def test_shipped_ocr_review_policy_preserves_all_failed_regions_through_final_save(tmp_path):
+    import json
+    import numpy as np
+    runner=S.GraphRunner(tmp_path)
+    class BadOCR:
+        calls=0
+        def ocr(self,*a,**kw):
+            self.calls+=1
+            return {'text':'<UNK>'}
+    runner.ocr=BadOCR()
+    report=runner.execute()
+    assert report['needs_review'] and report['final_saved'] and report['qwen_tile_calls']==0
+    assert not report['lettering']['regions']
+    assert np.array_equal(np.asarray(S.Image.open(tmp_path/'final.png')),np.asarray(runner.original))
+    source=json.loads(next((tmp_path/'manga_translator').glob('ocr*.json')).read_text())
+    assert source['review_reason']=='ocr_quality_rejected' and not source['regions']
+    assert len(source['ocr_rejected_regions'])==6
 
 
 def test_shipped_graph_removes_white_residue_missing_from_detector_mask(tmp_path):

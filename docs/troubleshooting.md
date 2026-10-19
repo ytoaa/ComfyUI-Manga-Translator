@@ -20,6 +20,8 @@
 | short_repetition / ocr_repetition_loop | 같은 문자열 반복. 잘못 자른 입력·작은 글자·모델 오독을 구분합니다. 토큰/패치 증가만으로 해결되지 않을 수 있습니다. |
 | ocr_token_limit | EOS/PAD 없이 한도 도달. 문장 밀도·줄 분할과 실제 생성 기록을 확인합니다. |
 | possible_omission | 누락 의심 휴리스틱. 입력 글자 수와 실제 원문을 대조합니다. 정답 판정이 아닙니다. |
+| ocr_quality_rejected | 새 08의 failure_policy=preserve_review에서 제한된 품질 재시도 후 영역 전체를 보존함. ocr_rejected_regions의 코드·진단 입력을 확인하고 교정/재인식합니다. 읽은 앞부분만 번역하지 않습니다. stop은 중단합니다. |
+| source_overlaps_protected_region | 원문 자체가 보호 영역과 겹침. preserve_review는 보존, strict는 중단합니다. 여백만 겹칠 때는 0.7.5부터 원문을 유지하면서 여백을 줄입니다. |
 | invalid/incomplete JSON | 번역 응답 원문·종료 사유·response_format을 확인합니다. finish_reason=stop만으로 완전한 JSON이라고 판단하지 않습니다. |
 | finish_reason=length | 기본 split이 ID 묶음을 나눠 전체 원문 문맥으로 재요청합니다. 요청 예산·각 그룹 응답·실제 종료 사유를 translation_failures에서 봅니다. 짧은 원문도 모델의 과도한 출력으로 한도에 걸릴 수 있습니다. |
 | unverified_bubble_ownership / Source ink crosses a known bubble mask | 원문 획과 말풍선 마스크의 소유권 근거 부족. 기본 정책은 해당/겹친 영역을 원본 복원·검수하며, stop/require_bubble은 중단합니다. 최종 lettering_review의 지지율·후보·보호 좌표를 봅니다. |

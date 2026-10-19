@@ -100,10 +100,14 @@ def layout(value):
 
 
 def pixel_box(box, width, height, padding):
-    return [max(0, math.floor(box[0] * width / 1000) - padding),
-            max(0, math.floor(box[1] * height / 1000) - padding),
-            min(width, math.ceil(box[2] * width / 1000) + padding),
-            min(height, math.ceil(box[3] * height / 1000) + padding)]
+    def scaled(value, extent):
+        raw = value * extent / 1000
+        nearest = round(raw)
+        return nearest if abs(raw-nearest) <= max(1e-9, 8*math.ulp(raw)) else raw
+    return [max(0, math.floor(scaled(box[0], width)) - padding),
+            max(0, math.floor(scaled(box[1], height)) - padding),
+            min(width, math.ceil(scaled(box[2], width)) + padding),
+            min(height, math.ceil(scaled(box[3], height)) + padding)]
 
 
 def iou(a, b):
@@ -309,22 +313,28 @@ class MangaRegionCrops:
         crops, rows, plans = [], [], []
         entries=[];geometry_protected=[];geometry_review=[];recovery_audits=[]
         for row in data['regions']:
-            box = pixel_box(row['bbox'],width,height,ocr_padding)
-            edit = pixel_box(row['bbox'],width,height,edit_margin)
+            source = pixel_box(row['bbox'],width,height,0)
+            owner = [0,0,width,height]
             plan = {}
             if row['id'] in geometry:
-                from .layout_refinement import crop_plan
                 item = geometry[row['id']]
                 # Integer source bounds avoid float-normalization adding a
                 # pixel across an adjacent paragraph's ownership boundary.
                 source = item['bounds_pixels']; owner = item['ownership_pixels']
-                def bounded(padding):
-                    return [max(owner[0], source[0]-padding), max(owner[1], source[1]-padding),
-                            min(owner[2], source[2]+padding), min(owner[3], source[3]+padding)]
-                box, edit = bounded(ocr_padding), bounded(edit_margin)
-                plan = crop_plan(row['id'], item, box)
-            if any(boundary_review.intersects(edit,area) or boundary_review.intersects(box,area) for area in protected):
-                raise ValueError('OCR crop/edit margin overlaps preserved boundary region; reduce padding/margin or review regions')
+            box = boundary_review.padded_bounds(source,ocr_padding,owner,protected)
+            edit = boundary_review.padded_bounds(source,edit_margin,owner,protected)
+            if box is None or edit is None:
+                if geometry_policy=='strict':
+                    raise ValueError('OCR source overlaps preserved boundary region; review regions')
+                analysis={'needs_review':True,'reason':'source_overlaps_protected_region'}
+                geometry_protected.append(source)
+                geometry_review.append({'id':row['id'],'crop_bbox_pixels':source,
+                                        'edit_bbox_pixels':source,'analysis':analysis})
+                entries.append((row,source,source,{},analysis))
+                continue
+            if row['id'] in geometry and 'row_bands_pixels' in geometry[row['id']]:
+                from .layout_refinement import crop_plan
+                plan = crop_plan(row['id'],geometry[row['id']],box)
             analysis={}
             if auto_deskew and not plan:
                 from . import text_geometry
@@ -435,7 +445,25 @@ class MangaCollectOCR:
                    and reports[i]['input_evidence'].get('method')=='insufficient_text_evidence'
                    and reports[i]['input_evidence'].get('reason') in ('degenerate_crop','smooth_pixels',
                        'isolated_pixels','edge_spanning_rule','uncorrelated_low_contrast_pixels')}
-        empty |= uncertain
+        rejected={i for i,t in enumerate(text) if t=='' and reports is not None
+                  and reports[i].get('status')=='ocr_quality_rejected' and reports[i].get('ocr_skipped') is False
+                  and reports[i].get('needs_review') is True
+                  and isinstance(reports[i].get('quality_failure'),dict)
+                  and reports[i]['quality_failure'].get('policy')=='preserve_review'
+                  and reports[i]['quality_failure'].get('code') in ('empty','short_repetition','possible_omission',
+                      'ocr_unrecognized_span','ocr_repetition_loop','ocr_token_limit')}
+        empty |= uncertain | rejected
+        if rejected:
+            from . import boundary_review
+            # A failed region cannot be erased by a successfully read neighbour.
+            bounds=[r.get('edit_bbox_pixels') or pixel_box(r['bbox'],data['image_width'],data['image_height'],0)
+                    for r in data['regions']]
+            changed=True
+            while changed:
+                changed=False
+                for i,box in enumerate(bounds):
+                    if i not in empty and any(boundary_review.intersects(box,bounds[j]) for j in empty):
+                        empty.add(i);changed=True
         if any(not isinstance(t,str) or (not t.strip() and i not in empty) or len(t)>16_000 for i,t in enumerate(text)):
             raise ValueError('One region has empty/invalid OCR; inspect crop previews and region boxes')
         for index, row in enumerate(data['regions']):
@@ -452,11 +480,15 @@ class MangaCollectOCR:
             if blocks:row['blocks']=blocks
             rows.append(row)
         if empty:
-            reason='insufficient_ocr_input_evidence' if uncertain else 'empty_ocr_crop'
+            reason='ocr_quality_rejected' if rejected else 'insufficient_ocr_input_evidence' if uncertain else 'empty_ocr_crop'
             protected=[data['regions'][i].get('edit_bbox_pixels') or pixel_box(data['regions'][i]['bbox'],data['image_width'],data['image_height'],0) for i in sorted(empty)]
             previous=data.get('boundary_review',{})
+            if len(previous.get('protected_boxes_pixels',[]))+len(protected)>512:
+                raise ValueError('OCR protection exceeds limit=512; review page layout')
             data={**data,'needs_review':True,'review_reason':reason,
                   'ocr_empty_regions':[data['regions'][i]['id'] for i in sorted(empty)],
+                  **({'ocr_rejected_regions':[{'id':data['regions'][i]['id'],**reports[i]['quality_failure']}
+                      for i in sorted(rejected)]} if rejected else {}),
                   'boundary_review':{**previous,'schema':1,'reason':previous.get('reason',reason),
                       'protected_boxes_pixels':previous.get('protected_boxes_pixels',[])+protected}}
             if not rows:data.update(page_status='no_text_detected',ocr_skipped=True,no_text_reason=reason)

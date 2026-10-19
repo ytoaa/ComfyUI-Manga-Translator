@@ -109,7 +109,7 @@ class SimulatedServer:
         self.graph_reports[name] = {'scenario':name,'detector_calls':runner.detector.calls,
             'ocr_calls':runner.ocr.calls,'qwen_calls':runner.qwen_calls,
             'final_saved':bool(runner.saved),'simulation_only':True,
-            **{key:report[key] for key in ('outside_mask_unchanged','selected_regions','expected_failure') if key in report}}
+            **{key:report[key] for key in ('outside_mask_unchanged','selected_regions','expected_failure','needs_review') if key in report}}
         self.jobs[ident] = {'history':{'outputs':deepcopy(runner.ui_outputs),'status':status},
                             'image':runner.saved[0].read_bytes() if runner.saved else None,
                             'descriptor':runner.ui_outputs.get(binding['final'],{}).get('images',[None])[0]}
@@ -138,9 +138,9 @@ def simulate(destination):
     server = SimulatedServer(cases)
     project = Project(inputs,destination/'project',read_json(DEFAULT_WORKFLOW),server)
     report = project.run()
-    assert report['counts'] == {'completed':4,'failed':4,'needs_review':2,'unchanged_blank':1}
+    assert report['counts'] == {'completed':4,'failed':3,'needs_review':3,'unchanged_blank':1}
     assert server.submissions == 10
-    expected = {'unresolved_seam':'needs_review','ocr_repetition':'failed','unchanged_cleanup':'failed',
+    expected = {'unresolved_seam':'needs_review','ocr_repetition':'needs_review','unchanged_cleanup':'failed',
                 'impossible_lettering':'failed','corrupt_input':'failed',
                 'no_selected_text':'needs_review','uniform_blank':'unchanged_blank'}
     for page in report['pages']:
@@ -150,6 +150,9 @@ def simulate(destination):
     assert server.graph_reports['unresolved_seam']['selected_regions']==2
     assert server.graph_reports['unresolved_seam']['final_saved']
     assert server.graph_reports['ocr_repetition']['qwen_calls'] == 0
+    assert server.graph_reports['ocr_repetition']['final_saved'] and server.graph_reports['ocr_repetition']['needs_review']
+    rejected=next(p for p in report['pages'] if SCENARIOS[p['relative_path']]=='ocr_repetition')
+    assert Image.open(destination/'project'/rejected['result']).convert('RGB').tobytes()==prepared[rejected['relative_path']][1].original.tobytes()
     assert server.graph_reports['uniform_blank']['ocr_calls'] == server.graph_reports['uniform_blank']['qwen_calls'] == 0
     assert project.run()['counts'] == report['counts'] and server.submissions == 10
     summary = {'simulation_only':True,'model_inference':'RF-DETR/Hayai/vLLM/Qwen replaced by explicit doubles',

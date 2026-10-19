@@ -125,6 +125,19 @@ def refine_columns(image, data):
                     math.ceil(row['bbox'][2]*width/1000),
                     math.ceil(row['bbox'][3]*height/1000)]) for row in data['regions']]
     anchors = _anchors(boxes, width)
+    auxiliary = []
+    if len(anchors) >= 4:
+        typical = float(np.median([a['right']-a['left'] for a in anchors]))
+        body = [a for a in anchors if a['right']-a['left'] >= typical*.55]
+        extra = [(r,b) for r,b in boxes if not any(_covers(b,a) for a in body)]
+        core = [(r,b) for r,b in boxes if any(_covers(b,a) for a in body)]
+        if (len(body) >= 3 and extra and
+                all(b[2] <= min(b[0] for _,b in core)-8 or
+                    b[0] >= max(b[2] for _,b in core)+8 for _,b in extra)):
+            auxiliary = extra
+            ids = {r['id'] for r,_ in extra}
+            boxes = [(r,b) for r,b in boxes if r['id'] not in ids]
+            anchors = body
     if not 3 <= len(anchors) <= 8 or not any(len(a['members']) >= 3 for a in anchors):
         return unchanged
     if any(b['left']-a['right'] < 8 for a, b in zip(anchors, anchors[1:])):
@@ -136,7 +149,9 @@ def refine_columns(image, data):
     crossing = [(row, box) for row, box in boxes if sum(_covers(box, a) for a in anchors) >= 2]
     if len(crossing) < 2:
         return unchanged
-    cuts = [0]
+    left_aux = [b[2] for _,b in auxiliary if b[2] <= anchors[0]['left']-8]
+    right_aux = [b[0] for _,b in auxiliary if b[0] >= anchors[-1]['right']+8]
+    cuts = [(max(left_aux)+min(b[0] for _,b in boxes))//2 if left_aux else 0]
     for left, right in zip(anchors, anchors[1:]):
         relevant = [b for _, b in crossing if _covers(b, left) and _covers(b, right)]
         if not relevant:
@@ -154,7 +169,7 @@ def refine_columns(image, data):
             return unchanged
         cut = a+int(choices[np.argmin(np.abs(choices-(b-a)/2))])+1
         cuts.append(cut)
-    cuts.append(width)
+    cuts.append((max(b[2] for _,b in boxes)+min(right_aux))//2 if right_aux else width)
     panes = []
     verified = 0
     for index, anchor in enumerate(anchors):
@@ -212,10 +227,17 @@ def refine_columns(image, data):
                          'layout_sources': owners, 'layout_column': column+1})
             plans[ident] = {'bounds_pixels': box, 'ownership_pixels': [cuts[column], borders[part], cuts[column+1], borders[part+1]],
                             'row_bands_pixels': [[box[0], a, box[2], b] for a, b in group]}
+    for row, box in auxiliary:
+        if row['id'] in plans:
+            return unchanged
+        owner = [0,0,cuts[0],height] if box[2] <= cuts[0] else [cuts[-1],0,width,height]
+        rows.append({**row,'layout_auxiliary':True})
+        plans[row['id']] = {'bounds_pixels':box,'ownership_pixels':owner}
     if len(rows) > 64:
         raise ValueError('Refined page exceeds 64 logical regions; review detector regions')
     refined = {**data, 'regions': rows, 'layout_refinement': {
-        'strategy': 'verified_page_columns', 'input_regions': len(boxes), 'output_regions': len(rows),
+        'strategy': 'verified_page_columns', 'input_regions': len(boxes)+len(auxiliary), 'output_regions': len(rows),
+        'auxiliary_region_ids': [r['id'] for r,_ in auxiliary],
         'column_cuts_pixels': cuts, 'anchors': anchors, 'overlapping_cross_column_regions': [r['id'] for r, _ in crossing],
         'max_rows_per_region': 8, 'analysis_min_component_pixels': 8,
         'scope': 'layout_only_not_recognition_accuracy'}}
