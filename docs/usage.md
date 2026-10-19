@@ -62,4 +62,6 @@ ComfyUI/output/manga_translator/translation_*.json
 | failed | 단계 오류로 최종 결과를 확정하지 못함 |
 | paused | 실행 신원·큐·자원 등의 문제로 추가 제출 중지 |
 
+식자 단계의 말풍선 소유권 불확실성도 기본으로 원본 보존·검수에 남깁니다. 번역 JSON의 target만으로 식자 완료를 판단하지 않고 최종 식자 보고서와 state.json의 lettering_review를 확인합니다.
+
 영역이 0개인 일반 이미지가 곧 빈 페이지는 아닙니다. 선택 영역이 없으면 OCR·번역·Qwen·식자를 건너뛰고 원본을 남기며 검출 실패 가능성을 검수합니다.

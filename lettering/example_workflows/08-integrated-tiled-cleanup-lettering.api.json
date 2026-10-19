@@ -196,6 +196,8 @@
       "translated_override_json": "",
       "model_revision": "",
       "response_format": "json_schema",
+      "length_recovery": "split",
+      "request_budget": 16,
       "ocr_json": [
         "12",
         0
@@ -488,6 +490,7 @@
       "line_breaks": "reflow",
       "fit_policy": "readable",
       "respect_bubbles": true,
+      "bubble_failure_policy": "preserve_review",
       "original": [
         "1",
         0

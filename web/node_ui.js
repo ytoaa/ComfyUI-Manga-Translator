@@ -2,15 +2,15 @@ import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
 // Node-local views only. No hidden requests, inference or separate project UI.
-const panels = new Set(["MangaWorkflowInput", "MangaReviewDocument", "MangaOCRModel", "MangaOCRAdaptive", "MangaTextCheckpoint", "MangaDetectionCheckpoint", "MangaCleanupCheckpoint", "MangaTranslationContext", "MangaLetterPlan", "MangaLetterApply", "MangaLetteringDirection"]);
-const labels = {ready:"준비됨", reused:"저장 결과 재사용", computed:"계산 완료", completed:"완료", running:"실행 중", error:"확인 필요"};
+const panels = new Set(["MangaReviewDocument", "MangaOCRModel", "MangaOCRAdaptive", "MangaTextCheckpoint", "MangaDetectionCheckpoint", "MangaCleanupCheckpoint", "MangaTranslationContext", "MangaLetterPlan", "MangaLetterApply", "MangaLetteringDirection"]);
+const labels = {ready:"준비됨", reused:"저장 결과 재사용", computed:"계산 완료", completed:"완료", running:"실행 중", error:"확인 필요", needs_review:"검수 필요"};
 const widget = (node, name) => node.widgets?.find(w => w.name === name);
 const clone = value => JSON.parse(JSON.stringify(value));
 function status(node, info) {
     if (!node.mangaPanelStatus) return;
     const state = info.state || "completed";
     node.mangaPanelStatus.textContent = [labels[state] || state, info.engine, info.device, info.message].filter(Boolean).join(" · ");
-    node.mangaPanelStatus.style.color = state === "error" ? "#ffb7b7" : state === "reused" ? "#88e5c4" : "#a7ceff";
+    node.mangaPanelStatus.style.color = ["error","needs_review"].includes(state) ? "#ffb7b7" : state === "reused" ? "#88e5c4" : "#a7ceff";
 }
 function review(node, snapshot) {
     const body = node.mangaPanelBody;
@@ -45,7 +45,7 @@ function review(node, snapshot) {
             const input = document.createElement("textarea");
             input.disabled=snapshot.identity_verified === false;
             input.value = block[stage] || "";input.rows = block.role === "heading" ? 2 : 4;
-            input.style.cssText = "box-sizing:border-box;width:100%;resize:vertical;border:1px solid #43556e;border-radius:8px;padding:10px;background:#111d2d;color:#f0f5fc;font:inherit;line-height:1.55";
+            input.style.cssText = "box-sizing:border-box;display:block;width:100%;max-width:100%;min-width:0;resize:vertical;border:1px solid #43556e;border-radius:8px;padding:10px;background:#111d2d;color:#f0f5fc;font:inherit;line-height:1.55";
             input.addEventListener("input", () => {try {save(region.id,stage,input.value,block === region ? null : block.id);} catch(error) {status(node,{state:"error",message:error.message});}});
             body.append(label,input);
         }
@@ -83,12 +83,23 @@ app.registerExtension({
             const result=created?.apply(this,arguments);this.color="#263a50";this.bgcolor="#152333";
             if (panels.has(data.name) && this.addDOMWidget) {
                 const panel=document.createElement("div");
-                panel.style.cssText="box-sizing:border-box;width:100%;height:100%;overflow:auto;padding:14px;border:1px solid #3c536f;border-radius:12px;background:linear-gradient(145deg,#1c2e45,#142031);color:#e1eaf7;font:12px system-ui,sans-serif";
+                panel.style.cssText="box-sizing:border-box;width:100%;max-width:100%;min-width:0;height:100%;min-height:0;overflow:hidden;display:flex;flex-direction:column;padding:12px;border:1px solid #3c536f;border-radius:12px;background:linear-gradient(145deg,#1c2e45,#142031);color:#e1eaf7;font:12px system-ui,sans-serif";
                 const title=document.createElement("div");title.textContent="MANGA / "+(data.name === "MangaReviewDocument" ? "REVIEW" : "WORKFLOW");title.style.cssText="font-size:10px;letter-spacing:1.5px;color:#8099bb;margin-bottom:8px";
+                title.style.flex="0 0 auto";
                 this.mangaPanelStatus=document.createElement("div");this.mangaPanelStatus.textContent="Run하면 현재 상태가 표시됩니다.";
-                this.mangaPanelBody=document.createElement("div");panel.append(title,this.mangaPanelStatus,this.mangaPanelBody);
-                const view=this.addDOMWidget("manga_node_panel","manga_node_panel",panel,{serialize:false});view.serialize=false;view.options ||= {};view.options.serialize=false;
+                this.mangaPanelStatus.style.cssText="flex:0 0 auto;min-width:0;overflow-wrap:anywhere;max-height:48px;overflow:auto";
+                this.mangaPanelBody=document.createElement("div");this.mangaPanelBody.style.cssText="flex:1 1 auto;min-height:0;min-width:0;overflow:auto;overflow-wrap:anywhere";panel.append(title,this.mangaPanelStatus,this.mangaPanelBody);
+                const height=data.name === "MangaReviewDocument" ? 300 : 104;
+                const view=this.addDOMWidget("manga_node_panel","manga_node_panel",panel,{serialize:false,getMinHeight:()=>height,getMaxHeight:()=>height,getHeight:()=>height});
+                view.computeSize=()=>[0,height];view.serialize=false;view.options ||= {};view.options.serialize=false;
             }return result;
+        };
+        const configured=Node.prototype.onConfigure;
+        Node.prototype.onConfigure=function() {
+            const result=configured?.apply(this,arguments);
+            const needed=this.computeSize?.();
+            if(needed && this.size && this.setSize)this.setSize([Math.max(this.size[0],needed[0]),Math.max(this.size[1],needed[1])]);
+            return result;
         };
         const executed=Node.prototype.onExecuted;
         Node.prototype.onExecuted=function(output) {

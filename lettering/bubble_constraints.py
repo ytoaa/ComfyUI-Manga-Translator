@@ -4,6 +4,13 @@ from scipy import ndimage
 from . import core
 
 
+class BubbleContainmentError(ValueError):
+    """Insufficient ownership evidence, distinct from invalid inputs/budgets."""
+    def __init__(self,message,code,evidence=None):
+        super().__init__(message)
+        self.diagnostic={'code':code,**(evidence or {})}
+
+
 def candidates(provided, detection, shape):
     from ..mask_nodes import _decode_mask
     found=[]
@@ -52,17 +59,20 @@ def largest_rectangle(mask):
 
 
 def constrain(ink,source,items,shape,padding,expand=False):
-    x,y,w,h=source;count=int(ink.sum());matched=[];crossing=False
+    x,y,w,h=source;count=int(ink.sum());matched=[];crossing=False;evidence=[]
     for item in items:
         a,b,c,d=item['bounds'];left,top,right,bottom=overlap(source,item['bounds'])
         if left>=right or top>=bottom:continue
         covered=np.count_nonzero(ink[top-y:bottom-y,left-x:right-x] &
                                   item['mask'][top-b:bottom-b,left-a:right-a])
         coverage=covered/max(1,count)
+        evidence.append({'bubble_index':item['index'],'mask_source':item['source'],
+                         'source_ink_coverage':round(coverage,4),'bounds_xywh':item['bounds']})
         if coverage>=.95:matched.append((item,coverage))
         elif coverage>=.5:crossing=True
     if not matched:
-        if crossing:raise ValueError('Source ink crosses a known bubble mask; review region ownership or bubble segmentation')
+        if crossing:raise BubbleContainmentError('Source ink crosses a known bubble mask; review region ownership or bubble segmentation',
+            'bubble_source_crossing',{'source_ink_pixels':count,'required_coverage':.95,'candidates':evidence})
         return None,{'status':'unavailable','reason':'no_bubble_covers_source_ink'}
     matched.sort(key=lambda pair:pair[0]['pixels']);chosen,coverage=matched[0]
     ambiguous=False
@@ -83,7 +93,7 @@ def constrain(ink,source,items,shape,padding,expand=False):
         right=min(item['bounds'][0]+item['bounds'][2] for item,_ in matched)
         bottom=min(item['bounds'][1]+item['bounds'][3] for item,_ in matched)
         if left>=right or top>=bottom or (right-left)*(bottom-top)>core.MAX_REGION_PIXELS:
-            raise ValueError('Ambiguous overlapping bubble masks; no bounded common interior')
+            raise BubbleContainmentError('Ambiguous overlapping bubble masks; no bounded common interior','bubble_ambiguous_interior',{'candidates':evidence})
         common=np.ones((bottom-top,right-left),bool)
         for item,_ in matched:
             a,b,_,_=item['bounds']
@@ -99,7 +109,7 @@ def constrain(ink,source,items,shape,padding,expand=False):
         label=int(weights.argmax())
         coverage=float(weights[label]/max(1,count))
         if not label or coverage<.95:
-            raise ValueError('Ambiguous overlapping bubble masks; common interior does not cover source ink')
+            raise BubbleContainmentError('Ambiguous overlapping bubble masks; common interior does not cover source ink','bubble_ambiguous_ownership',{'source_ink_coverage':coverage,'candidates':evidence})
         chosen={'bounds':[left,top,right-left,bottom-top],'mask':labels==label,
                 'safe':{},'index':chosen['index'],'source':'detector_intersection'}
         resolution={'strategy':'common_mask_intersection','bubble_indices':[item['index'] for item,_ in matched]}
@@ -114,7 +124,7 @@ def constrain(ink,source,items,shape,padding,expand=False):
         chosen['safe'][clearance]=ndimage.binary_erosion(chosen['mask'],iterations=clearance,border_value=0)
     safe=chosen['safe'][clearance][top-b:bottom-b,left-a:right-a].copy()
     rect=largest_rectangle(safe)
-    if rect is None:raise ValueError('Verified bubble has no safe text interior after clearance')
+    if rect is None:raise BubbleContainmentError('Verified bubble has no safe text interior after clearance','bubble_empty_safe_interior',{'candidates':evidence,'clearance':clearance})
     rect[0]+=left;rect[1]+=top
     report={'status':'verified','mask_source':chosen['source'],'bubble_index':chosen['index'],
             'source_ink_coverage':round(coverage,4),'clearance':clearance,'safe_rectangle':rect,

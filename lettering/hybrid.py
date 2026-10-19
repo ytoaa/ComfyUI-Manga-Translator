@@ -157,12 +157,13 @@ def _curve(layer,alpha,bend):
 def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-Bold.ttf',
                mode='source',direction='auto',min_font=10,min_scale=.55,padding=2,
                region_options_json='{}',bubble_mask=None,detection_result=None,line_breaks='preserve',
-               fit_policy='source_ratio',respect_bubbles=False,page_direction=None,oriented_fit=False):
+               fit_policy='source_ratio',respect_bubbles=False,page_direction=None,oriented_fit=False,bubble_failure_policy='stop'):
     original,cleaned=core.rgb(original),core.rgb(cleaned)
     if original.shape!=cleaned.shape: raise ValueError('Original and cleaned dimensions differ')
     support=core.mask_array(source_mask,original.shape[:2])
     data=core.parse_regions(document,original.shape)
     if mode not in MODES or direction not in DIRECTIONS: raise ValueError('Invalid lettering mode/direction')
+    if bubble_failure_policy not in ('stop','preserve_review'):raise ValueError('Invalid bubble failure policy')
     if page_direction is not None and page_direction not in DIRECTIONS:
         raise ValueError('Invalid page lettering direction')
     forced_direction=page_direction if page_direction not in (None,'auto') else None
@@ -198,6 +199,15 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
     plan['protected_boxes_pixels']=protected+preserved
     plan['preserved_punctuation']=data.get('preserved_punctuation',[])
     plan['source_preservation']=data.get('source_preservation',[])
+    plan['lettering_review']=[]
+    def preserve_item(item,diagnostic):
+        x,y,w,h=item['bbox'] if 'bbox' in item else item['source']
+        box=[x,y,x+w,y+h]
+        boundary_review.restore(plan['cleaned'],original,[box])
+        plan['protected_boxes_pixels'].append(box)
+        plan['needs_review']=True
+        plan['lettering_review'].append({'id':item['id'],'parent_id':item.get('parent_id',item['id']),
+            'bbox_pixels':box,'reason':'unverified_bubble_ownership','diagnostic':diagnostic})
     # Prepare masks once, rather than decoding every detection for every text.
     bubble_items=(bubble_constraints.candidates(bubble_mask,detection_result,original.shape)
                   if respect_bubbles or any(v.get('respect_bubbles') or v.get('require_bubble')
@@ -277,7 +287,10 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
             try:
                 guard,guard_report=bubble_constraints.constrain(ink,source,bubble_items,original.shape,pad,
                                                                selected_mode=='bubble')
-            except ValueError as exc:raise ValueError(f'{ident}: {exc}') from None
+            except bubble_constraints.BubbleContainmentError as exc:
+                if bubble_failure_policy=='stop' or require:raise ValueError(f'{ident}: {exc}') from None
+                preserve_item(item,exc.diagnostic)
+                continue
             if require and guard is None:raise ValueError(f'{ident}: no verified enclosing bubble; require_bubble is enabled')
         bubble=None
         if selected_mode=='bubble' and bubble_mask is not None:
@@ -302,7 +315,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         if guard and guard['rectangle']!=source:
             phases.append((guard['rectangle'],forced_lines or (original_lines if selected_mode=='strict' else 0),
                            'bubble-interior'))
-        prepared={'id':ident,'text':rendered_text,'original_text':item['text'],'line_breaks':breaks,
+        prepared={'id':ident,'parent_id':item.get('parent_id',ident),'text':rendered_text,'original_text':item['text'],'line_breaks':breaks,
                   'font':font,'font_fallback':font_fallback,'style':style,'source':source,
                   'phases':phases,'cap':cap,'floor':floor,'fallback_floor':fallback_floor,
                   'fit_policy':policy,'options':render_options,'bend':curve,
@@ -340,16 +353,30 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
                         'transform':{key:render_options.get(key,0) for key in ('rotation','shear')},
                         'bend':curve,
                         'warning':warning})
+    # A restored region also protects its overlapping neighbours. Otherwise a
+    # later translation could cover the restored source, or fail on a new mask.
+    pending=True
+    while pending and plan['lettering_review']:
+        pending=False
+        for region in list(plan['regions']):
+            x,y,w,h=region['source'];box=[x,y,x+w,y+h]
+            if any(boundary_review.intersects(box,r['bbox_pixels']) for r in plan['lettering_review']):
+                preserve_item(region,{'code':'overlaps_preserved_bubble_region'})
+                plan['regions'].remove(region);reports=[r for r in reports if r['id']!=region['id']];pending=True
+    for item in plan['lettering_review']:
+        a,b,c,d=item['bbox_pixels'];draw.rectangle((a,b,c-1,d-1),outline=(255,60,80),width=3)
     for a,b,c,d in preserved:
         draw.rectangle((a,b,c-1,d-1),outline=(80,160,255),width=2)
     for a,b,c,d in protected:
         draw.rectangle((a,b,c-1,d-1),outline=(255,60,80),width=3)
     report={'schema':1,'regions':reports,'preview':'orange=source frame; cyan=expanded bubble frame; green=safe bubble interior; red=preserved boundary review; blue=preserved source',
-            'protected_boxes_pixels':protected,'needs_review':bool(protected) or plan['needs_review'],
+            'protected_boxes_pixels':plan['protected_boxes_pixels'],'needs_review':bool(protected) or plan['needs_review'],
+            'lettering_review':plan['lettering_review'],
             'page_direction':page_direction,
             'preserved_punctuation':plan['preserved_punctuation'],
             'source_preservation':plan['source_preservation'],
-            **({'page_status':'no_text_detected','lettering_skipped':True} if not reports and not preserved else {}),
+            **({'page_status':'no_text_detected','lettering_skipped':True} if not reports and not preserved and not plan['lettering_review'] else {}),
+            **({'lettering_skipped':True,'skip_reason':'bubble_regions_preserved'} if not reports and plan['lettering_review'] else {}),
             **({'lettering_skipped':True,'skip_reason':'source_preserved'} if not reports and preserved else {}),
             'font_identity':'selected font; source size/direction/alignment are measured estimates',
             'curves':'manual bend only; no automatic curve reconstruction'}
@@ -445,7 +472,9 @@ def render_plan(plan):
         'page_direction':plan.get('page_direction'),
         'preserved_punctuation':plan.get('preserved_punctuation',[]),
         'source_preservation':plan.get('source_preservation',[]),
-        **({'page_status':'no_text_detected','lettering_skipped':True} if not reports and not (plan.get('source_preservation') or plan.get('preserved_punctuation')) else {}),
+        'lettering_review':plan.get('lettering_review',[]),
+        **({'page_status':'no_text_detected','lettering_skipped':True} if not reports and not (plan.get('source_preservation') or plan.get('preserved_punctuation') or plan.get('lettering_review')) else {}),
+        **({'lettering_skipped':True,'skip_reason':'bubble_regions_preserved'} if not reports and plan.get('lettering_review') else {}),
         **({'lettering_skipped':True,'skip_reason':'source_preserved'} if not reports and (plan.get('source_preservation') or plan.get('preserved_punctuation')) else {}),
         'quality_scope':'geometry/style approximation; OCR, translation and GPU cleanup require separate review'},
         ensure_ascii=False,indent=2)

@@ -21,7 +21,7 @@ def response_format(mode, regions):
             'items': {'type': 'object', 'additionalProperties': False,
                       'required': ['id', 'target'], 'properties': {
                           'id': {'type': 'string', 'enum': [r['id'] for r in regions]},
-                          'target': {'type': 'string', 'minLength': 1, 'maxLength': 16000}}}}}}
+                          'target': {'type': 'string', 'minLength': 1, 'maxLength': 2048}}}}}}
     return {'response_format': {'type': 'json_schema', 'json_schema': {
         'name': 'manga_page_translation', 'strict': True, 'schema': schema}}}
 
@@ -57,7 +57,7 @@ def save_failure(source, settings, attempts, code):
                 for row in source['regions']]
         report = {'schema': 1, 'code': code, 'regions': rows,
                   'image_width': source.get('image_width'), 'image_height': source.get('image_height'),
-                  'settings': settings, 'attempts': attempts[:2]}
+                  'settings': settings, 'attempts': attempts[:32]}
         path.write_text(json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2), encoding='utf-8')
         logging.getLogger(__name__).error('Translation failure response saved: %s', path)
         return str(path)

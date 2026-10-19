@@ -21,6 +21,8 @@
 | ocr_token_limit | EOS/PAD 없이 한도 도달. 문장 밀도·줄 분할과 실제 생성 기록을 확인합니다. |
 | possible_omission | 누락 의심 휴리스틱. 입력 글자 수와 실제 원문을 대조합니다. 정답 판정이 아닙니다. |
 | invalid/incomplete JSON | 번역 응답 원문·종료 사유·response_format을 확인합니다. finish_reason=stop만으로 완전한 JSON이라고 판단하지 않습니다. |
+| finish_reason=length | 기본 split이 ID 묶음을 나눠 전체 원문 문맥으로 재요청합니다. 요청 예산·각 그룹 응답·실제 종료 사유를 translation_failures에서 봅니다. 짧은 원문도 모델의 과도한 출력으로 한도에 걸릴 수 있습니다. |
+| unverified_bubble_ownership / Source ink crosses a known bubble mask | 원문 획과 말풍선 마스크의 소유권 근거 부족. 기본 정책은 해당/겹친 영역을 원본 복원·검수하며, stop/require_bubble은 중단합니다. 최종 lettering_review의 지지율·후보·보호 좌표를 봅니다. |
 | Font lacks requested characters | 선택 폰트·동봉 대체 폰트의 실제 글리프 범위를 확인합니다. 누락 문자를 삭제하지 않습니다. |
 | no safe lettering fit / collision | 보고된 영역의 번역·방향·줄바꿈·허용 공간을 확인합니다. 프레임만 무작정 늘리면 그림/이웃 침범이 생길 수 있습니다. |
 | Project model/workflow settings changed | 같은 프로젝트의 처리 설정이 달라짐. 이전 결과를 보존하고 새 project_name으로 실행합니다. |
@@ -53,7 +55,11 @@ v0.6.3에서 보존된 needs_review 페이지는 업데이트 뒤 **실패·검�
 | MangaInpaintPlan.plan_report | 실효 마스크·타일·단색 보완 |
 | MangaInpaintAssemble.cleanup_report | 합성·잔존 원문 검사 |
 | MangaLetterPlan.계획_보고서 | 방향·원문 크기 추정·수평 작업 범위·회전·스타일 |
-| MangaLetterApply.식자_보고서 | 실제 글자 크기·줄바꿈·알파·사용한 배치 단계 |
+| MangaLetterApply.식자_보고서 | 실제 글자 크기·줄바꿈·알파·사용한 배치 단계, lettering_review 보존 사유·보호 좌표 |
+
+식자에서 보존한 영역은 번역 JSON에 target이 있어도 실제 결과에는 원문이 남습니다. 최종 식자 보고서와 폴더 state.json의 `lettering_review`를 함께 확인합니다. 수집 단계는 보존 영역의 픽셀이 원본과 같은지도 검증합니다.
+
+노드 상태/검수 패널은 내부에서 스크롤합니다. 업데이트 후 ComfyUI 재시작·브라우저 새로고침을 하고 노드 크기를 확인하세요. 입력 노드는 자체 진행 패널 하나를 사용합니다. 실제 ComfyUI 버전/확장 조합별 시각 검증은 별도입니다.
 
 디버그 노드 `MangaDebugInspect`는 읽기 전용입니다. `단계_디버그_JSON` → 미리보기 아무거나, `단계_검수_이미지` → 이미지 미리보기에 연결합니다. 검출 stage에는 원본·영역 JSON·검출 결과가 함께 필요합니다. 내부 plan 객체나 마스크 RLE 전체보다 보고서 STRING을 연결합니다.
 

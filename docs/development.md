@@ -23,6 +23,8 @@ node tools/check_canvas_frontend.cjs
 node tools/check_node_ui.cjs
 ```
 
+추가 브라우저 CSS 검사는 개발 환경에 Playwright와 Chromium을 준비하고 `node tools/check_node_layout.cjs`로 실행합니다. `MANGA_LAYOUT_CHROMIUM`으로 실행 파일을 지정할 수 있습니다. 5종 노드 × 3너비 × 2확장 등록 순서의 30개 슬롯을 검사하며, 노드 API는 대역이므로 운영 ComfyUI 전체 시각 검사와 구분합니다. 브라우저가 시작하지 못하면 PASS로 기록하지 않습니다.
+
 별도 환경에서만 CPU torch를 설치합니다. 모델 대역으로 실행한 회귀를 실제 GPU/모델 품질 결과라고 부르지 않습니다.
 
 ## 워크플로우와 시각 자료 재생성

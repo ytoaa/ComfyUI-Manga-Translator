@@ -48,7 +48,7 @@ def reply(content=BODY, reason='stop'):
             'usage': {'completion_tokens': 85}}
 
 
-def run(monkeypatch, responses):
+def run(monkeypatch, responses, length_recovery="stop"):
     calls = []
     def api(base, path, key, timeout, payload=None):
         calls.append(payload)
@@ -56,7 +56,7 @@ def run(monkeypatch, responses):
         return responses[len(calls)-1]
     monkeypatch.setattr(N, 'api_json', api)
     return calls, lambda: N.MangaTranslate().translate(N.encode(SOURCE), 'http://unused/v1',
-        'fixture-model', 'Korean', '', 4096, 300)[0]
+        'fixture-model', 'Korean', '', 4096, 300, length_recovery=length_recovery)[0]
 
 
 def test_model_html_breaks_become_real_newlines_with_visible_evidence(monkeypatch):
@@ -172,7 +172,7 @@ def test_two_bad_responses_stop_with_metadata_and_no_partial_output(monkeypatch)
 
 
 @pytest.mark.parametrize('reason', ['length', 'content_filter', 'error'])
-def test_non_normal_completion_is_not_salvaged_or_retried(monkeypatch, reason):
+def test_non_normal_completion_in_stop_policy_is_not_salvaged_or_retried(monkeypatch, reason):
     calls, translate = run(monkeypatch, [reply(BODY, reason)])
     with pytest.raises(ValueError, match='did not finish normally') as exc:
         translate()
@@ -250,7 +250,7 @@ def test_diagnostic_failure_keeps_original_translation_error(monkeypatch):
     def broken(): raise OSError('no disk')
     monkeypatch.setattr(N.translation_protocol, 'failure_root', broken)
     calls, translate = run(monkeypatch, [reply('{'), reply('{')])
-    with pytest.raises(ValueError, match='after one retry; diagnostics=unavailable'): translate()
+    with pytest.raises(ValueError, match='after one retry.*diagnostics=unavailable'): translate()
     assert len(calls) == 2
 
 

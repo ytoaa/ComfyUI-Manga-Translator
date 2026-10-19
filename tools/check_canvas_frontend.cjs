@@ -57,6 +57,9 @@ const flush = async () => { for(let i=0;i<8;i++) await new Promise(resolve=>setI
     assert.match(first.node.mangaStatus.value,/OCR 실행/); // Real frontend emits a node string.
     first.event('progress',{prompt_id:'prompt-1',node:'8',value:2,max:8});
     assert.match(first.node.mangaStatus.value,/2\/8/);
+    const statusWidget=first.node.widgets.find(w=>w.type==='manga_status');
+    assert.equal(statusWidget.options.getMinHeight(),106);assert.equal(statusWidget.options.getMaxHeight(),106);
+    assert.equal(statusWidget.computeSize(600)[0],0);assert.match(first.node.mangaStatus.style.cssText,/max-width:100%/);
     assert.equal(first.queued.length,0);
     first.event('execution_success',{prompt_id:'prompt-1'});await flush();
     assert.equal(first.queued.length,1);

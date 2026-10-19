@@ -87,8 +87,12 @@ Manga OCR은 `kha-white/manga-ocr-base`의 고정 revision `aa6573bd10b0d446cbf6
 | api_key_env | MANGA_LLM_API_KEY — 키는 ComfyUI 프로세스의 환경변수로 전달 |
 | max_tokens / timeout | 4096 / 300초 |
 | response_format | json_schema |
+| length_recovery | split — 출력 한도 도달 시 ID 묶음 분할. stop은 즉시 중단 |
+| request_budget | 16 — 최초 생성·형식 재시도·길이 복구를 합친 최대 요청 수. 1–32 |
 
 `json_schema`는 페이지의 ID·개수·필드를 요청에 지정합니다. 서버가 지원하지 않으면 `json_object` 또는 `prompt_only`를 명시적으로 선택합니다. 자동으로 제약을 해제하지 않습니다. 응답 후 클라이언트의 JSON/ID/문자열 검사도 수행하며 JSON/영역 계약 실패만 한 번 재생성합니다. HTTP 실패·빈 답변·비정상 종료의 부분 결과는 채택하지 않습니다.
+
+`finish_reason=length`이면 잘린 응답은 파싱·이어쓰기·부분 저장에 사용하지 않습니다. 기본 split은 영역 ID 묶음을 반으로 나누고 전체 페이지 원문·용어집·검수 문맥을 유지해 다시 요청합니다. 단일 영역은 한 번만 재생성하며 max_tokens는 자동으로 늘리지 않습니다. 모든 묶음의 ID와 번역이 검증돼야 페이지 결과를 반환합니다. 단위별 target은 2,048자 한도입니다. 요청 예산 소진·서버 오류·미해결 응답은 진단과 함께 중단합니다.
 
 번역문은 일반 텍스트입니다. 번역기가 새로 만든 `<br>` 계열은 실제 개행으로 정규화하고, 미해결 `<UNK>` 계열은 거부합니다. 임의 HTML 전체를 지우지는 않습니다.
 
@@ -109,6 +113,10 @@ Manga OCR은 `kha-white/manga-ocr-base`의 고정 revision `aa6573bd10b0d446cbf6
 원문 제거의 기본값은 512px 소유 코어, 128px 문맥, 최대 64타일입니다. `uniform_fill=true`, `recover_uniform_ink=true`로 확인된 단색 영역을 보완하며 남은 타일만 Qwen에 보냅니다. `strict_cleanup=true`는 잔존 원문 의심 시 중단합니다. `blend_width=8`은 제거 마스크 여유의 경계를 완화하며 원문 획의 제거 강도는 유지합니다.
 
 식자는 `MangaLetterPlan`의 `line_breaks=reflow`, `fit_policy=readable`, `min_font=10`, `min_scale=0.55`, `respect_bubbles=true`가 기본입니다. reflow는 단일 개행을 풀어 폭을 활용하며 빈 줄 문단은 유지합니다. 말풍선은 실제 검출 마스크가 있을 때 제약으로 사용합니다. 공간 부족·보존 영역 침범·이웃 번역 충돌은 오류로 남깁니다.
+
+`bubble_failure_policy=preserve_review`는 말풍선 소유권/공통 내부 공간의 근거가 불확실한 영역과 겹친 이웃을 원본 복원·보호하고 나머지 식자를 진행합니다. `stop` 또는 영역별 `require_bubble=true`는 중단합니다. 마스크를 임의로 합치거나 기존 95% 원문 획 지지 기준을 낮추지 않습니다. 잘못된 입력·분석 예산 초과·일반 공간 부족은 계속 오류입니다. 최종 `lettering_review`가 있으면 폴더는 needs_review이며 보존 영역이 번역 완료된 것은 아닙니다.
+
+새 옵션은 최신 통합 08을 가져오면 보입니다. 구형 캔버스의 누락 옵션은 기본값을 사용하며, 기존 URL·모델·폰트 설정은 확인 후 옮깁니다.
 
 영역별 `region_options_json` 예:
 

@@ -40,9 +40,28 @@ class Node {
  node.mangaPanelBody.children.find(e=>e.tag==='textarea').value='Other';node.mangaPanelBody.children.find(e=>e.tag==='textarea').fire('input');
  assert.ok(JSON.parse(node.widgets[0].value).pages.pageA);assert.ok(JSON.parse(node.widgets[0].value).pages.pageB);
  for(const w of node.widgets.filter(w=>w.type==='manga_node_panel')){assert.equal(w.serialize,false);assert.equal(w.options.serialize,false);}
+ for(const kind of ['MangaWorkflowInput','MangaReviewDocument','MangaOCRAdaptive','MangaLetterPlan','MangaLetterApply']) {
+  class SizingNode {
+   constructor(){this.widgets=[];this.size=[420,600];}
+   addDOMWidget(name,type,element,options){const w={name,type,element,options};this.widgets.push(w);return w;}
+   computeSize(){return [300,400];}setSize(size){this.size=size;}
+  }
+  await app.extension.beforeRegisterNodeDef(SizingNode,{name:kind});
+  const sizing=new SizingNode();sizing.onNodeCreated();sizing.onConfigure();
+  const views=sizing.widgets.filter(w=>w.type==='manga_node_panel');
+  assert.equal(views.length,kind==='MangaWorkflowInput'?0:1);
+  assert.deepEqual(Array.from(sizing.size),[420,600]);
+  for(const view of views){
+   const h=kind==='MangaReviewDocument'?300:104;
+   assert.equal(view.options.getHeight(),h);assert.equal(view.options.getMinHeight(),h);assert.equal(view.options.getMaxHeight(),h);
+   assert.equal(view.computeSize(240)[0],0);assert.equal(view.computeSize(240)[1],h);
+   assert.match(view.element.style.cssText,/max-width:100%/);assert.match(sizing.mangaPanelBody.style.cssText,/overflow:auto/);
+   sizing.onExecuted({manga_status:[{state:'needs_review',message:'보존 검수'}]});assert.match(sizing.mangaPanelStatus.textContent,/검수 필요/);
+  }
+ }
  app.extension.setup();listeners.get('manga_model_progress')({detail:{node:'1',index:0,total:6,file:'weights',bytes:2097152}});
  assert.match(node.mangaPanelStatus.textContent,/2.0 MiB/);
  listeners.get('execution_error')({detail:{node_id:'1',exception_message:'Model unavailable'}});assert.match(node.mangaPanelStatus.textContent,/Model unavailable/);
  assert.ok(!node.mangaPanelBody.children.some(e=>e.tag==='img'));
- console.log('PASS: paragraph review, revision-scoped edits, approval preservation, text escaping, model progress and nonserialized UI');
+ console.log('PASS: paragraph review, revision-scoped edits, approval preservation, text escaping, model progress, bounded panel sizing and nonserialized UI');
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -182,13 +182,14 @@ app.registerExtension({
             const status = document.createElement("textarea");
             status.readOnly = true;
             status.value = "이미지 한 장 / 폴더 프로젝트를 선택하고 Run";
-            status.style.cssText = "width:100%;height:100%;min-height:90px;resize:none;box-sizing:border-box;background:#20232a;color:#e9edf2;border:1px solid #4b5363;border-radius:5px;padding:8px;font:13px/1.5 sans-serif;";
+            status.style.cssText = "display:block;width:100%;max-width:100%;min-width:0;height:100%;min-height:0;overflow:auto;overflow-wrap:anywhere;white-space:pre-wrap;resize:none;box-sizing:border-box;background:#20232a;color:#e9edf2;border:1px solid #4b5363;border-radius:5px;padding:8px;font:13px/1.5 sans-serif;";
             const display = this.addDOMWidget("현재 페이지 · 실시간 진행", "manga_status", status, {
-                serialize: false, getValue: () => status.value, setValue: value => { status.value = value; },
+                serialize: false, getMinHeight: () => 106, getMaxHeight: () => 106, getHeight: () => 106,
+                getValue: () => status.value, setValue: value => { status.value = value; },
             });
             display.serialize = false;
             display.options = { ...(display.options || {}), serialize: false };
-            display.computeSize = width => [width, 100];
+            display.computeSize = () => [0, 106];
             this.mangaStatus = status;
             const button = this.addWidget("button", "연속 처리 중지 · 현재 페이지 이후", null, async () => {
                 const job = lastTicket.get(String(this.id));

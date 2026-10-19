@@ -310,6 +310,11 @@ def workflow_fingerprint(graph, bind=None, *, legacy=False):
             node['inputs'].pop('edits_json',None)
         if node['class_type']=='MangaDetectorDetail' and node['inputs'].get('boundary_policy')=='preserve_review':
             node['inputs'].pop('boundary_policy')
+        if node['class_type']=='MangaLetterPlan' and node['inputs'].get('bubble_failure_policy')=='preserve_review':
+            node['inputs'].pop('bubble_failure_policy')
+        if node['class_type']=='MangaTranslate':
+            for field,default in (('length_recovery','split'),('request_budget',16)):
+                if node['inputs'].get(field)==default:node['inputs'].pop(field)
         if node['class_type']=='MangaTranslate' and node['inputs'].get('response_format')=='json_schema':
             node['inputs'].pop('response_format')
         if node['class_type']=='MangaRegionCrops' and node['inputs'].get('geometry_policy')=='preserve_review':
@@ -737,6 +742,32 @@ class Project:
                 raise ProtocolError('Invalid source region coordinates')
             if any(before.get(k) != after.get(k) for k in ('bbox','crop_bbox_pixels','edit_bbox_pixels','source')):
                 raise ProtocolError('Translation changed source text or geometry')
+        lettering_review=[]
+        link=self.graph[self.bind['final']]['inputs'].get('images')
+        if isinstance(link,list) and self.graph.get(link[0],{}).get('class_type')=='MangaLetterApply':
+            qa=history.get('outputs',{}).get(link[0],{}).get('manga_lettering_report')
+            if qa is not None:
+                if not isinstance(qa,list) or len(qa)!=1 or not isinstance(qa[0],dict) or qa[0].get('schema')!=1:
+                    raise ProtocolError('Invalid final lettering quality report')
+                lettering_review=qa[0].get('lettering_review',[])
+                if not isinstance(lettering_review,list) or len(lettering_review)>64:
+                    raise ProtocolError('Invalid preserved lettering region list')
+                rows={r['id']:r for r in target['regions']}
+                for item in lettering_review:
+                    if (not isinstance(item,dict) or not isinstance(item.get('parent_id'),str)
+                            or item['parent_id'] not in rows or qa[0].get('needs_review') is not True):
+                        raise ProtocolError('Unowned lettering preservation record')
+                    box=item.get('bbox_pixels');parent=rows[item['parent_id']].get('edit_bbox_pixels')
+                    if (not isinstance(qa[0].get('protected_boxes_pixels'),list) or
+                            (parent is not None and (not isinstance(parent,list) or len(parent)!=4
+                             or any(type(v) not in (int,float) or not math.isfinite(v) for v in parent)))):
+                        raise ProtocolError('Invalid lettering protection geometry')
+                    if (not isinstance(box,list) or len(box)!=4 or any(type(v) is not int for v in box)
+                            or not 0<=box[0]<box[2]<=state['image_size'][0]
+                            or not 0<=box[1]<box[3]<=state['image_size'][1]
+                            or box not in qa[0].get('protected_boxes_pixels',[])
+                            or (parent and not (parent[0]<=box[0]<box[2]<=parent[2] and parent[1]<=box[1]<box[3]<=parent[3]))):
+                        raise ProtocolError('Lettering preservation exceeds its page/region ownership')
         images = history.get('outputs', {}).get(self.bind['final'], {}).get('images')
         if not isinstance(images, list) or len(images) != 1 or not isinstance(images[0],dict):
             raise ProtocolError('Expected exactly one final SaveImage result')
@@ -760,6 +791,7 @@ class Project:
                 if 'page_edit_plan' in target:
                     edits=page_edit.validate(target,*picture.size)
                     protected=edits['protected_boxes_pixels']
+                protected=protected+[r['bbox_pixels'] for r in lettering_review]
                 if boundary_protected:
                     if source.get('boundary_review') != target.get('boundary_review'):
                         raise ProtocolError('Translation changed boundary protection metadata')
@@ -790,6 +822,8 @@ class Project:
                          source.get('boundary_review',{}).get('reason','unresolved_detection_boundary')))
         elif edits is not None and edits.get('needs_review'):
             state.update(status='needs_review',reason=target.get('review_reason','source_edit_plan_requires_review'))
+        if lettering_review:
+            state.update(status='needs_review',reason=state.get('reason') or 'unverified_bubble_ownership',lettering_review=lettering_review)
         self._save(state)
 
     def _resume(self, state):
