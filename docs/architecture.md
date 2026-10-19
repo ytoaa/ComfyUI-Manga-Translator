@@ -1,6 +1,6 @@
 # 현재 구조와 유지보수 경계
 
-기준: v0.7.1 통합 08. [설정](configuration.md) · [개발](development.md) · [한계](known-issues.md)
+기준: v0.7.4 통합 08. [설정](configuration.md) · [개발](development.md) · [한계](known-issues.md)
 
 ## 코드의 책임
 
@@ -18,6 +18,7 @@
 | page_edit.py, boundary_review.py | 교체/보존 결정과 보호 범위의 공통 계약 |
 | inpaint_tiles.py | 실효 마스크·소유 타일·좌표 복원·잔존 원문 검사 |
 | lettering/ | 폰트·방향·줄바꿈·스타일 측정·회전 식자·충돌/말풍선 제약 |
+| lettering/placement.py | 원문 프레임 예약과 기존 허용 공간 안의 제한된 빈 사각형 탐색. 양의 글자 알파를 자르거나 검출 소유권을 인증하지 않음 |
 | workflow_project.py, workflow_native.py, web/ | 캔버스 입력·폴더 업로드·진행/중지·페이지 연속 실행 |
 | tools/run_project.py | 프로젝트 기록·입력/결과 검증의 공유 구현. 위치는 tools지만 운영 노드도 import하므로 실행 ZIP에 필요 |
 | tests/, 나머지 tools/ | 회귀·시뮬레이션·그래프 생성·패키징·명시적 CPU 진단 |

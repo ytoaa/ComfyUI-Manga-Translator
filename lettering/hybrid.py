@@ -7,6 +7,7 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 from . import core
 from . import bubble_constraints
+from . import placement
 from .. import boundary_review
 
 MODES = ('source', 'bubble', 'strict')
@@ -318,7 +319,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         prepared={'id':ident,'parent_id':item.get('parent_id',ident),'text':rendered_text,'original_text':item['text'],'line_breaks':breaks,
                   'font':font,'font_fallback':font_fallback,'style':style,'source':source,
                   'phases':phases,'cap':cap,'floor':floor,'fallback_floor':fallback_floor,
-                  'fit_policy':policy,'options':render_options,'bend':curve,
+                  'fit_policy':policy,'mode':selected_mode,'options':render_options,'bend':curve,
                   'bubble_guard':guard,'bubble_containment':guard_report,
                   'profile':measured,'analysis':json.loads(analysis),'warning':warning}
         if oriented_fit and (item.get('frame_quad') or render_options.get('rotation')):
@@ -383,86 +384,125 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
     return plan,np.asarray(preview,np.float32)/255,json.dumps(report,ensure_ascii=False,indent=2)
 
 
+def _placement_permissions(region, regions, bounds, shape, protected):
+    x,y,w,h=core.bbox(bounds,shape)
+    guard=region.get('bubble_guard')
+    allowed=bubble_constraints.canvas_mask(guard,bounds) if guard else np.ones((h,w),bool)
+    for a,b,c,d in protected:
+        left,top,right,bottom=max(x,a),max(y,b),min(x+w,c),min(y+h,d)
+        if left<right and top<bottom:allowed[top-y:bottom-y,left-x:right-x]=False
+    owned,neighbours=placement.reserve_sources(region,regions,bounds)
+    return allowed & owned,neighbours
+
+
+class LetteringFitError(ValueError):
+    def __init__(self,message,diagnostic):
+        super().__init__(message)
+        self.diagnostic=diagnostic
+
+
 def render_plan(plan):
     if not isinstance(plan,dict) or plan.get('version')!=1 or not isinstance(plan.get('regions'),list):
         raise ValueError('Expected MangaLetterPlan output')
+    if len(plan['regions'])>core.MAX_LETTERING_REGIONS:
+        raise ValueError('Too many active lettering regions')
     result=core.rgb(plan['cleaned']).copy()
     page_alpha=np.zeros(result.shape[:2],np.float32)
-    occupied=np.zeros(result.shape[:2],bool)
+    # A byte per page pixel also identifies the actual colliding paragraph.
+    occupied=np.zeros(result.shape[:2],np.uint8)
     reports=[]
     protected=plan.get('protected_boxes_pixels',[])
-    for region in plan['regions']:
+    for index,region in enumerate(plan['regions']):
         chosen=None;reason='no candidate'
+        reserved_ids=set();collision_ids=set();attempts=0
+        sx,sy,sw,sh=region['source']
+        coincident=any(other is not region and
+            (other['source'][0]+other['source'][2]/2,other['source'][1]+other['source'][3]/2)==(sx+sw/2,sy+sh/2)
+            for other in plan['regions'])
         phases=[(bounds,lines,phase,region['cap'],region['floor']) for bounds,lines,phase in region['phases']]
         fallback_floor=region.get('fallback_floor',region['floor'])
         if fallback_floor<region['floor']:
             phases.extend((bounds,lines,phase+'-readable',region['floor']-1,fallback_floor)
                           for bounds,lines,phase in region['phases'])
         for bounds,lines,phase,ceiling,floor in phases:
-            x,y,w,h=core.bbox(bounds,result.shape)
-            guard=region.get('bubble_guard')
-            allowed=bubble_constraints.canvas_mask(guard,[x,y,w,h]) if guard else None
-            if protected:
-                permitted=np.ones((h,w),bool)
-                for a,b,c,d in protected:
-                    left,top,right,bottom=max(x,a),max(y,b),min(x+w,c),min(y+h,d)
-                    if left<right and top<bottom: permitted[top-y:bottom-y,left-x:right-x]=False
-                allowed=permitted if allowed is None else allowed & permitted
+            bx,by,bw,bh=core.bbox(bounds,result.shape)
+            permission,neighbours=_placement_permissions(region,plan['regions'],bounds,result.shape,protected)
+            reserved_ids.update(neighbours)
+            free=permission & (occupied[by:by+bh,bx:bx+bw]==0)
+            variants=[(bounds,phase)]
+            # Keep explicit strict composition and unresolved coincident source
+            # anchors on the hard failure path. A rotated local frame requires
+            # its own local-space layout; do not replace it with an axis box.
+            if region.get('mode')!='strict' and not region.get('frame_quad') and not coincident:
+                variants.extend((rect,phase+'-free-space') for rect in placement.free_rectangles(free,bounds,region['source']) if rect!=bounds)
             options=dict(region['options'])
             # Reserve vertical clearance before bending, never crop the warped glyph.
             options['padding']=options['padding']+math.ceil(abs(region['bend']))
             for size in range(ceiling,floor-1,-1):
                 scale=size/region['cap']
-                style=scaled_style(region['style'],scale,(w,h))
-                try:
-                    if region.get('frame_quad') and phase.startswith(('source','reflow')):
-                        from . import frame
-                        actual_bounds,layer,alpha,render=frame.render(region['text'],style,region['font'],region['frame_quad'],result.shape,
-                            min_font=size,max_font=size,max_lines=lines,**options)
-                        x,y,w,h=core.bbox(actual_bounds,result.shape)
-                        allowed=bubble_constraints.canvas_mask(guard,actual_bounds) if guard else None
-                        if protected:
-                            permitted=np.ones((h,w),bool)
-                            for a,b,c,d in protected:
-                                left,top,right,bottom=max(x,a),max(y,b),min(x+w,c),min(y+h,d)
-                                if left<right and top<bottom:permitted[top-y:bottom-y,left-x:right-x]=False
-                            allowed=permitted if allowed is None else allowed & permitted
+                for candidate,candidate_phase in variants:
+                    x,y,w,h=core.bbox(candidate,result.shape)
+                    style=scaled_style(region['style'],scale,(w,h))
+                    attempts+=1
+                    try:
+                        if region.get('frame_quad') and phase.startswith(('source','reflow')):
+                            from . import frame
+                            actual_bounds,layer,alpha,render=frame.render(region['text'],style,region['font'],region['frame_quad'],result.shape,
+                                min_font=size,max_font=size,max_lines=lines,**options)
+                        else:
+                            actual_bounds=candidate
+                            layer,alpha,render=core.render_text(region['text'],style,font_name=region['font'],
+                                min_font=size,max_font=size,max_lines=lines,**options)
+                            render=json.loads(render)
+                    except ValueError as exc:
+                        if any(s in str(exc) for s in ('does not fit','leave no space','glyph leaves page boundary')):
+                            reason=str(exc);continue
+                        raise
+                    x,y,w,h=core.bbox(actual_bounds,result.shape)
+                    if not region.get('frame_quad'):
+                        allowed=permission[y-by:y-by+h,x-bx:x-bx+w]
                     else:
-                        actual_bounds=bounds
-                        layer,alpha,render=core.render_text(region['text'],style,font_name=region['font'],
-                            min_font=size,max_font=size,max_lines=lines,**options)
-                        render=json.loads(render)
-                except ValueError as exc:
-                    if any(s in str(exc) for s in ('does not fit','leave no space','glyph leaves page boundary')):
-                        reason=str(exc);continue
-                    raise
-                layer,alpha=_curve(layer,alpha,region['bend'])
-                active=alpha>.01
-                if not active.any(): reason='empty glyph';continue
-                if active[0].any() or active[-1].any() or active[:,0].any() or active[:,-1].any():
-                    reason='transformed glyph touches canvas boundary';continue
-                if allowed is not None and np.any((alpha>0)&~allowed):
-                    reason='lettering would leave the verified bubble mask or enter preserved boundary pixels';continue
-                if np.any(active & occupied[y:y+h,x:x+w]):
-                    reason='neighbouring translation collision';continue
-                chosen=(actual_bounds,layer,alpha,render,style,scale,phase)
-                break
+                        allowed,neighbours=_placement_permissions(region,plan['regions'],actual_bounds,result.shape,protected)
+                        reserved_ids.update(neighbours)
+                    layer,alpha=_curve(layer,alpha,region['bend'])
+                    active=alpha>.01
+                    if not active.any(): reason='empty glyph';continue
+                    if active[0].any() or active[-1].any() or active[:,0].any() or active[:,-1].any():
+                        reason='transformed glyph touches canvas boundary';continue
+                    if np.any((alpha>0)&~allowed):
+                        reason='lettering would leave the verified bubble mask or enter preserved boundary pixels / neighbouring source reservation';continue
+                    conflicts=np.unique(occupied[y:y+h,x:x+w][active])
+                    if conflicts.any():
+                        collision_ids.update(plan['regions'][int(value)-1]['id'] for value in conflicts if value)
+                        reason='neighbouring translation collision';continue
+                    chosen=(actual_bounds,layer,alpha,render,style,scale,candidate_phase)
+                    break
+                if chosen is not None:break
             if chosen is not None: break
         if chosen is None:
-            raise ValueError(f"{region['id']}: no safe lettering fit above {fallback_floor}px ({reason}); "
+            conflicts=sorted(reserved_ids|collision_ids)
+            diagnostic={'region_id':region['id'],'reason':reason,'source_bounds_xywh':region['source'],
+                'conflicting_region_ids':conflicts,'collision_region_ids':sorted(collision_ids),
+                'reserved_source_region_ids':sorted(reserved_ids),'placement_attempts':attempts,
+                'coincident_source_anchors':coincident,'minimum_font':fallback_floor}
+            raise LetteringFitError(f"{region['id']}: no safe lettering fit above {fallback_floor}px ({reason}); "
                              f"source_cap={region['cap']}px, source_floor={region['floor']}px, "
                              f"direction={region['options']['direction']}, bounds_xywh={region['source']}; "
-                             'review text, direction or region options')
+                             f"conflicting_region_ids={conflicts}, placement_attempts={attempts}; "
+                             'review text, direction or region options',diagnostic)
         bounds,layer,alpha,render,style,scale,phase=chosen
         place={'version':1,'bbox_xywh':bounds,'page_size':[result.shape[1],result.shape[0]]}
         result,changed=core.composite(result,layer,alpha,place)
         page_alpha=changed+page_alpha*(1-changed)
-        occupied |= ndimage.binary_dilation(changed>.01,iterations=2)
+        occupied[ndimage.binary_dilation(changed>.01,iterations=2)]=index+1
         reports.append({'id':region['id'],'source_profile':region['profile'],'bbox':bounds,
                         'font_fallback':region.get('font_fallback'),
                         'fit_phase':phase,'scale':round(scale,4),'render':render,
                         'fit_policy':region.get('fit_policy','source_ratio'),
                         'source_floor':region['floor'],'minimum_font':fallback_floor,
+                        'placement':{'policy':'reserve_neighbour_source_frames',
+                            'reserved_source_region_ids':sorted(reserved_ids),'attempts':attempts,
+                            'repositioned':phase.endswith('-free-space')},
                         'source_ratio_relaxed':render['font_size']<region['floor'],
                         'bubble_containment':region.get('bubble_containment',{'status':'disabled'}),
                         'original_text':region['original_text'],'line_breaks':region['line_breaks'],

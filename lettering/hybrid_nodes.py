@@ -3,6 +3,33 @@ from . import core, hybrid
 from .nodes import image, mask, tensor, field
 
 
+def save_fit_failure(plan,diagnostic):
+    """Small replay metadata; do not serialize page tensors or model masks."""
+    import json,logging,uuid
+    from pathlib import Path
+    try:
+        import folder_paths
+        rows=[]
+        for region in plan['regions']:
+            rows.append({key:region[key] for key in ('id','parent_id','source','text','font','cap','floor',
+                'fallback_floor','fit_policy','mode','options','phases','frame_quad','profile','bubble_containment')
+                if key in region})
+        payload={'schema':1,'code':'no_safe_lettering_fit','failure':diagnostic,
+            'regions':rows,'page_size':[plan['cleaned'].shape[1],plan['cleaned'].shape[0]],
+            'protected_boxes_pixels':plan.get('protected_boxes_pixels',[]),
+            'scope':'layout metadata; original pixels, detector masks and OCR source are separate inputs'}
+        raw=json.dumps(payload,ensure_ascii=False,allow_nan=False,indent=2)
+        if len(raw.encode())>2*1024*1024:raise ValueError('Lettering failure metadata exceeds 2 MiB')
+        root=Path(folder_paths.get_output_directory())/'manga_translator'/'lettering_failures'
+        root.mkdir(parents=True,exist_ok=True)
+        path=root/('lettering_'+uuid.uuid4().hex+'.json')
+        path.write_text(raw,encoding='utf-8')
+        return str(path)
+    except (ImportError,AttributeError,OSError,ValueError,TypeError,KeyError) as exc:
+        logging.getLogger(__name__).warning('Lettering diagnostics unavailable: %s',exc)
+        return 'unavailable'
+
+
 class MangaLetterPlan:
     CATEGORY='Manga Translator/스타일 식자'
     DESCRIPTION='원문 크기 상한과 영역 폭에 맞춰 배치합니다. reflow는 단일 줄바꿈을 풀고 가용 폭을 먼저 씁니다. 폰트와 애매한 방향은 직접 지정하세요.'
@@ -51,7 +78,10 @@ class MangaLetterApply:
     FUNCTION='render'
     def render(self,plan):
         import json
-        result,alpha,report=hybrid.render_plan(plan)
+        try:result,alpha,report=hybrid.render_plan(plan)
+        except hybrid.LetteringFitError as exc:
+            path=save_fit_failure(plan,exc.diagnostic)
+            raise hybrid.LetteringFitError(str(exc)+'; diagnostics='+path,exc.diagnostic) from None
         diagnostic=json.loads(report)
         return {'ui':{'manga_lettering_report':[diagnostic],
                       'manga_status':[{'state':'needs_review' if diagnostic['needs_review'] else 'completed',

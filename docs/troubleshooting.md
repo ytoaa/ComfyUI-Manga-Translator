@@ -24,7 +24,8 @@
 | finish_reason=length | 기본 split이 ID 묶음을 나눠 전체 원문 문맥으로 재요청합니다. 요청 예산·각 그룹 응답·실제 종료 사유를 translation_failures에서 봅니다. 짧은 원문도 모델의 과도한 출력으로 한도에 걸릴 수 있습니다. |
 | unverified_bubble_ownership / Source ink crosses a known bubble mask | 원문 획과 말풍선 마스크의 소유권 근거 부족. 기본 정책은 해당/겹친 영역을 원본 복원·검수하며, stop/require_bubble은 중단합니다. 최종 lettering_review의 지지율·후보·보호 좌표를 봅니다. |
 | Font lacks requested characters | 선택 폰트·동봉 대체 폰트의 실제 글리프 범위를 확인합니다. 누락 문자를 삭제하지 않습니다. |
-| no safe lettering fit / collision | 보고된 영역의 번역·방향·줄바꿈·허용 공간을 확인합니다. 프레임만 무작정 늘리면 그림/이웃 침범이 생길 수 있습니다. |
+| no safe lettering fit / collision | 0.7.4는 이웃 원문 프레임을 예약하고 허용된 빈 사각형에서 재조판합니다. 계속 실패하면 conflicting_region_ids와 계획/번역을 확인합니다. 프레임만 무작정 늘리면 그림/이웃 침범이 생길 수 있습니다. |
+| Checkpoint exceeds cache budget | 단일 캐시 값이 256MiB를 초과해 저장을 생략했다는 경고입니다. 계산 결과는 계속 전달됩니다. RGB float32 기준 4200×6030은 약 289.8MiB이며, 같은 실행의 뒤쪽 식자 충돌은 별도 원인입니다. |
 | Project model/workflow settings changed | 같은 프로젝트의 처리 설정이 달라짐. 이전 결과를 보존하고 새 project_name으로 실행합니다. |
 | 이전 prompt가 큐·이력에 없음 | 실행 신원 미확정으로 중지. 같은 캔버스에서 명시적 실패 재시도로 큐·이력을 재대조합니다. 상태 JSON만 수동으로 지우지 않습니다. |
 
@@ -39,6 +40,7 @@ v0.6.3에서 보존된 needs_review 페이지는 업데이트 뒤 **실패·검�
 | detection_failures | 경계 문맥 PNG·검출 시도 JSON |
 | ocr_failures | 원본/실패 입력 PNG·옵션·재시도·거부 원문 JSON |
 | translation_failures | 실패 응답·종료 사유·토큰·계약 오류 JSON |
+| lettering_failures | 실패/충돌 상대 ID·원문 프레임·실제 번역 문자열·배치 옵션·시도 수 JSON. 원본 이미지와 검출 마스크는 별도 입력입니다. |
 | workflow_projects/<project_name> | 페이지별 시도 상태·수집 결과·요약·export |
 
 번역 진단에는 API 키·인증 헤더를 저장하지 않습니다. 원문·응답 내용은 들어갈 수 있으므로 공유 전에 확인합니다. 진단 파일 저장 실패는 원래 처리 오류를 대체하지 않습니다.
