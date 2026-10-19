@@ -1,6 +1,6 @@
 # 현재 구조와 유지보수 경계
 
-기준: v0.7.5 통합 08. [설정](configuration.md) · [개발](development.md) · [한계](known-issues.md)
+기준: v0.7.6 통합 08. [설정](configuration.md) · [개발](development.md) · [한계](known-issues.md)
 
 ## 코드의 책임
 

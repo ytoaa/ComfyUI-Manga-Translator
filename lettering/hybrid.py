@@ -191,7 +191,10 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
     protected=boundary_review.boxes(data,original.shape[1],original.shape[0])
     if detection_result is not None:
         detected=boundary_review.boxes(detection_result,original.shape[1],original.shape[0])
-        if detected and protected != detected:
+        # OCR geometry/quality review may add protection after detection.
+        # Every original detector guard must survive; extra guards only remove
+        # edit permissions and are valid downstream evidence.
+        if any(box not in protected for box in detected):
             raise ValueError('Boundary protection missing or changed in lettering document')
     boundary_review.restore(plan['cleaned'],original,protected)
     preserved=core.source_preservation_boxes(data,original.shape)

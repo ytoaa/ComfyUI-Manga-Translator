@@ -152,6 +152,26 @@ def test_lettering_refuses_every_fit_that_would_touch_protection():
         H.render_plan(plan)
 
 
+def test_lettering_accepts_added_ocr_protection_but_retains_every_detector_guard():
+    spec=importlib.util.spec_from_file_location('review_added_protection_fixture',ROOT/'tests/test_hybrid_lettering.py')
+    T=importlib.util.module_from_spec(spec);spec.loader.exec_module(T)
+    original,clean,mask,doc=T.fixture('확인',width=400,height=200,box=[50,50,250,100])
+    initial=[[340,20,360,70]];extra=[310,100,335,160]
+    data=json.loads(doc);data['boundary_review']=review(initial+[extra]);data['needs_review']=True
+    detected=detection((400,200),[],initial)
+    plan,_,_=H.build_plan(original,clean,mask,json.dumps(data),detection_result=detected)
+    result,alpha,report=H.render_plan(plan)
+    assert json.loads(report)['needs_review'] and alpha.any()
+    for a,b,c,d in initial+[extra]:
+        assert not alpha[b:d,a:c].any()
+        assert np.array_equal(result[b:d,a:c],original[b:d,a:c])
+    # Extra protection must not hide removal or replacement of the first guard.
+    for altered in ([extra],[[339,20,360,70],extra]):
+        data['boundary_review']=review(altered)
+        with pytest.raises(ValueError,match='protection missing or changed'):
+            H.build_plan(original,clean,mask,json.dumps(data),detection_result=detected)
+
+
 def test_letter_prepare_propagates_protection_and_crop_margin_cannot_cross_it():
     import torch
     from boundary_review_tests.nodes import MangaRegionCrops
