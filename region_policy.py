@@ -42,14 +42,11 @@ def _identical_cross_label_source(a, b):
     """One segmentation may be classified as both text and an effect.
 
     Overlap alone cannot distinguish a caption from the effect behind it.
-    Only an identical, nonempty segmentation and identical bounds prove this
-    narrow alias; maskless or merely overlapping cross-label regions remain.
+    Identical original bounds and near-contained, nonempty ink support identify
+    this narrow alias; maskless or merely overlapping rectangles remain.
     """
-    if {a['label'], b['label']} != {'text', 'onomatopoeia'} or a['bbox'] != b['bbox']:
-        return False
-    mask = a.get('mask')
-    return (isinstance(mask, dict) and mask == b.get('mask') and
-            isinstance(mask.get('runs'), list) and any(mask['runs'][1::2]))
+    from .source_ownership import cross_label_alias
+    return cross_label_alias(a, b)
 
 
 def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CONTAINMENT_OVERLAP):
@@ -62,12 +59,13 @@ def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CON
     right-half into one logical text region.
     """
     items = [dict(item) for item in sorted(candidates, key=lambda row: row['score'], reverse=True)]
+    alias_phase = False
     while True:
         merged = False
         for left in range(len(items)):
             for right in range(left + 1, len(items)):
                 a, b = items[left], items[right]
-                alias = _identical_cross_label_source(a, b)
+                alias = alias_phase and _identical_cross_label_source(a, b)
                 if a['label'] != b['label'] and not alias:
                     continue
                 same = (alias or iou(a['bbox'], b['bbox']) >= iou_threshold or
@@ -78,17 +76,23 @@ def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CON
                 winner = a if a['score'] >= b['score'] else b
                 union = [min(a['bbox'][0], b['bbox'][0]), min(a['bbox'][1], b['bbox'][1]),
                          max(a['bbox'][2], b['bbox'][2]), max(a['bbox'][3], b['bbox'][3])]
-                items[left] = {**winner, 'bbox': union}
+                items[left] = {**winner, 'bbox': union,
+                    'source_detector_ids': sorted(set(a.get('source_detector_ids', [])) | set(b.get('source_detector_ids', []))),
+                    'source_labels': sorted(set(a.get('source_labels', [a['label']])) | set(b.get('source_labels', [b['label']]))),
+                    'cross_label_alias': bool(alias or a.get('cross_label_alias') or b.get('cross_label_alias'))}
                 items.pop(right)
                 merged = True
                 break
             if merged:
                 break
         if not merged:
+            if not alias_phase:
+                alias_phase = True
+                continue
             return items
 
 
-def group_adjacent_lines(items, bubbles):
+def group_adjacent_lines(items, bubbles, panels=()):
     """Conservative horizontal paragraph grouping, before IDs are assigned.
 
     Compare original rows, never growing paragraph boxes: otherwise a chain
@@ -113,6 +117,16 @@ def group_adjacent_lines(items, bubbles):
         found = [i for i, bubble in enumerate(bubbles)
                  if _intersection(item['bbox'], bubble['bbox']) / _area(item['bbox']) >= .95]
         return tuple(found)
+    def panel_owner(item):
+        enclosing = [(i, panel) for i, panel in enumerate(panels)
+                     if _intersection(item['bbox'], panel['bbox']) / _area(item['bbox']) >= .95]
+        if not enclosing:
+            return ('ambiguous', id(item)) if any(_intersection(item['bbox'], p['bbox']) for p in panels) else ()
+        # Nested page/panel boxes are normal; overlapping unrelated panels are not.
+        index, inner = min(enclosing, key=lambda pair: _area(pair[1]['bbox']))
+        if any(_intersection(inner['bbox'], p['bbox']) / _area(inner['bbox']) < .99 for _, p in enclosing):
+            return ('ambiguous', id(item))
+        return (index,)
     groups = []
     for row in rows:
         a = row['bbox']; aw, ah = a[2]-a[0], a[3]-a[1]
@@ -124,7 +138,7 @@ def group_adjacent_lines(items, bubbles):
                     not 0 <= a[1]-b[3] <= .55*min(ah,bh) or
                     abs(a[0]-b[0]) > .6*min(ah,bh) or
                     min(aw,bw)/max(aw,bw) < .2 or owner(row) != owner(last) or
-                    len(owner(row)) > 1):
+                    len(owner(row)) > 1 or panel_owner(row) != panel_owner(last)):
                 continue
             matches.append(index)
         if len(matches) == 1:
@@ -136,6 +150,9 @@ def group_adjacent_lines(items, bubbles):
         box = [min(row['bbox'][k] for row in group) if k < 2 else
                max(row['bbox'][k] for row in group) for k in range(4)]
         output.append({**group[0], 'bbox': box,
+                       'source_detector_ids': sorted({v for row in group for v in row.get('source_detector_ids', [])}),
+                       'source_labels': sorted({v for row in group for v in row.get('source_labels', [row['label']])}),
+                       'cross_label_alias': any(row.get('cross_label_alias', False) for row in group),
                        'line_bboxes': [row['bbox'] for row in group]})
     return output
 
@@ -149,10 +166,15 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
     def INPUT_TYPES(cls):
         schema = super().INPUT_TYPES()
         schema['optional'] = {'merge_adjacent_lines': ('BOOLEAN', {'default': False,
-            'tooltip': '가깝고 왼쪽이 정렬된 가로 행을 문단으로 묶습니다. 말풍선이 다르거나 애매하면 분리 유지.'})}
+            'tooltip': '가깝고 왼쪽이 정렬된 가로 행을 문단으로 묶습니다. 말풍선·컷이 다르거나 소유권이 애매하면 분리 유지.'}),
+            'protected_overlap_policy': (['preserve_review','stop'], {'default':'preserve_review',
+            'tooltip':'보호 영역에 닿는 연결 원문만 제외·보존하고 독립 영역은 계속 처리합니다. stop은 페이지를 중단합니다.'})}
         return schema
 
-    def convert(self, result, include_sfx=False, dedupe_iou=0.75, reading_order='top_to_bottom', merge_adjacent_lines=False):
+    def convert(self, result, include_sfx=False, dedupe_iou=0.75, reading_order='top_to_bottom', merge_adjacent_lines=False,
+                protected_overlap_policy='preserve_review'):
+        if protected_overlap_policy not in ('preserve_review', 'stop'):
+            raise ValueError('Invalid protected overlap policy')
         if type(merge_adjacent_lines) is not bool:
             raise ValueError('Invalid paragraph grouping switch')
         if not isinstance(result, dict) or result.get('protocol') != 1 or not isinstance(result.get('detections'), list):
@@ -167,31 +189,67 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
         if any(item.get('tile_provenance', {}).get('clipped_edges')
                for item in result['detections'] if item.get('label') in labels):
             raise ValueError('Unresolved clipped text cannot enter OCR; run detail boundary recovery first')
-        candidates = [_detector_region(item, width, height)
-                      for item in result['detections'] if item.get('label') in labels]
+        candidates = [{**_detector_region(item, width, height), 'source_detector_ids': [f'd{i+1}'],
+                       'source_labels': [item['label']]}
+                      for i, item in enumerate(result['detections']) if item.get('label') in labels]
         selected = merge_detector_regions(candidates, dedupe_iou)
         before_grouping = len(selected)
+        bubbles = [_detector_region(item, width, height) for item in result['detections'] if item.get('label') == 'bubble']
         if merge_adjacent_lines:
-            bubbles = [_detector_region(item, width, height) for item in result['detections']
-                       if item.get('label') == 'bubble']
-            selected = group_adjacent_lines(selected, bubbles)
+            panels = [_detector_region(item, width, height) for item in result['detections'] if item.get('label') == 'panel']
+            selected = group_adjacent_lines(selected, bubbles, panels)
         protected = boundary_review.boxes(result,width,height)
-        if any(boundary_review.intersects(item['bbox'],box) for item in selected for box in protected):
+        overlaps = any(boundary_review.intersects(item['bbox'],box) for item in selected for box in protected)
+        if overlaps and protected_overlap_policy == 'stop':
             raise ValueError('Resolved text overlaps preserved boundary region; review detection geometry')
+        local_review = []
+        if overlaps:
+            from .page_edit import pixel_bounds
+            active = list(selected)
+            changed = True
+            while changed:
+                changed = False
+                for item in list(active):
+                    if any(boundary_review.intersects(item['bbox'], box) for box in protected):
+                        box = pixel_bounds(item['bbox'], width, height)
+                        if box not in protected:protected.append(box)
+                        local_review.append({'detector_ids':item.get('source_detector_ids', []), 'bbox_pixels':box,
+                                             'reason':'protected_region_overlap'})
+                        active.remove(item);changed = True
+            if len(protected) > 512:raise ValueError('Resolved region protection exceeds limit=512; split/review page')
+            selected = active
         selected.sort(key=(lambda row: (row['bbox'][1], row['bbox'][0]))
                       if reading_order == 'top_to_bottom'
                       else (lambda row: (-row['bbox'][0], row['bbox'][1])))
+        from .source_ownership import bubble_verified
+        from .source_ownership import mask_overlap
+        ambiguous = {}
+        for i, a in enumerate(selected):
+            for j, b in enumerate(selected[i+1:], i+1):
+                if a['label'] == b['label'] or iou(a['bbox'], b['bbox']) < .5:
+                    continue
+                support = mask_overlap(a.get('mask'), b.get('mask'))
+                if support and support['smaller_coverage'] >= .85 and support['larger_coverage'] >= .65:
+                    ambiguous.setdefault(i, []).append(f'r{j+1}')
+                    ambiguous.setdefault(j, []).append(f'r{i+1}')
         rows = [{'id': f'r{i+1}',
                  'kind': 'sfx' if item['label'] == 'onomatopoeia' else 'text',
                  'bbox': [item['bbox'][0] / width * 1000,
                           item['bbox'][1] / height * 1000,
                           item['bbox'][2] / width * 1000,
                           item['bbox'][3] / height * 1000],
+                 'source_ownership': {'schema': 1, 'detector_ids': item.get('source_detector_ids', []),
+                     'labels': item.get('source_labels', [item['label']]), 'cross_label_alias': item.get('cross_label_alias', False),
+                     'bubble_verified': bubble_verified(item, bubbles),
+                     **({'review_reason':'ambiguous_cross_label_source','related_region_ids':ambiguous[i]} if i in ambiguous else {})},
                  **({'line_bboxes_pixels': item['line_bboxes']} if 'line_bboxes' in item else {})}
                 for i, item in enumerate(selected)]
         value = encode({'regions': rows, 'origin': 'rfdetr',
+                        **({'needs_review':True,'review_reason':'ambiguous_cross_label_source'} if ambiguous else {}),
                         **({'needs_review':True,'review_reason':'unresolved_detection_boundary',
-                            'boundary_review':result['boundary_review']} if protected else {}),
+                            'boundary_review':{**result.get('boundary_review', {}), 'schema':1,
+                                'protected_boxes_pixels':protected}} if protected else {}),
+                        **({'region_preservation':local_review} if local_review else {}),
                         **({'page_status':'no_text_detected'} if not rows else {}),
                         **({'needs_review':True,'no_text_reason':'excluded_onomatopoeia_present'}
                            if not rows and result.get('detection_audit',{}).get('excluded_onomatopoeia_detections',0) else {}),

@@ -88,7 +88,10 @@ def test_region_manifest_marks_partial_page_and_refuses_overlapping_resolution()
     assert empty['no_text_reason']=='unresolved_detection_boundary'
     data['detections']=[item([150,100,300,200])]
     with pytest.raises(ValueError,match='overlaps preserved'):
-        R.MangaDetectionRegionsResolved().convert(data)
+        R.MangaDetectionRegionsResolved().convert(data,protected_overlap_policy='stop')
+    preserved=json.loads(R.MangaDetectionRegionsResolved().convert(data)[0])
+    assert not preserved['regions'] and preserved['needs_review']
+    assert preserved['region_preservation'][0]['reason']=='protected_region_overlap'
 
 
 def test_pixel_masks_and_grown_cleanup_cannot_erase_protected_artwork():

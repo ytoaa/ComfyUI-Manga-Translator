@@ -528,8 +528,13 @@ def parse_regions(document, shape):
         ids.add(item['id'])
         bbox(item.get('bbox'), shape)
         clean_text(item.get('text'))
-        if set(item)-{'id', 'bbox', 'text', 'source_text', 'font', 'layout', 'style','frame_quad','parent_id','block_id','role'}:
+        if set(item)-{'id', 'bbox', 'text', 'source_text', 'font', 'layout', 'style','frame_quad','parent_id','block_id','role','source_edit_bbox'}:
             raise ValueError('Unknown region field')
+        if 'source_edit_bbox' in item:
+            a,b,w,h=bbox(item['source_edit_bbox'],shape);x,y,c,d=bbox(item['bbox'],shape)
+            if (not isinstance(item.get('parent_id'),str) or not item['parent_id'] or
+                    not (a<=x and b<=y and x+c<=a+w and y+d<=b+h)):
+                raise ValueError('Paragraph restore frame must enclose its child within the parent edit frame')
         if not isinstance(item.get('layout', {}), dict) or not isinstance(item.get('style', {}), dict):
             raise ValueError('layout and style must be objects')
     if sum(r['bbox'][2]*r['bbox'][3] for r in regions) > MAX_TYPOGRAPHY_PIXELS:

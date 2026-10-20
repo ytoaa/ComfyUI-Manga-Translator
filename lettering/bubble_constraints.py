@@ -26,8 +26,25 @@ def candidates(provided, detection, shape):
         for item in detection['detections']:
             if item.get('label')!='bubble' or not isinstance(item.get('mask'),dict):continue
             local,bounds=_decode_mask(item['mask'],shape[1],shape[0])
-            found.append({'mask':local>.5,'bounds':list(bounds),'source':'detector'})
+            current={'mask':local>.5,'bounds':list(bounds),'source':'detector'}
+            # Full/detail passes may report one bubble dozens of times. Keep
+            # their common interior, never a union or the most permissive mask.
+            for previous in found:
+                left,top,right,bottom=overlap(previous['bounds'],current['bounds'])
+                if left>=right or top>=bottom:continue
+                a,b,_,_=previous['bounds'];x,y,_,_=current['bounds']
+                common=(previous['mask'][top-b:bottom-b,left-a:right-a] &
+                        current['mask'][top-y:bottom-y,left-x:right-x])
+                count=int(common.sum());largest=max(int(previous['mask'].sum()),int(current['mask'].sum()))
+                if largest and count/largest>=.95:
+                    exact=(previous['bounds']==current['bounds'] and np.array_equal(previous['mask'],current['mask']))
+                    previous.update(mask=common,bounds=[left,top,right-left,bottom-top],
+                                    source=previous['source'] if exact else 'detector_intersection')
+                    break
+            else:found.append(current)
             if len(found)>64:raise ValueError('Too many detected bubble masks')
+            if sum(row['mask'].size for row in found)>core.MAX_SOURCE_PIXELS:
+                raise ValueError('Bubble mask analysis exceeds the 64 Mi-pixel source-page ceiling')
     if sum(item['mask'].size for item in found)>core.MAX_SOURCE_PIXELS:
         raise ValueError('Bubble mask analysis exceeds the 64 Mi-pixel source-page ceiling')
     for i,item in enumerate(found):

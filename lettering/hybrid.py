@@ -158,13 +158,15 @@ def _curve(layer,alpha,bend):
 def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-Bold.ttf',
                mode='source',direction='auto',min_font=10,min_scale=.55,padding=2,
                region_options_json='{}',bubble_mask=None,detection_result=None,line_breaks='preserve',
-               fit_policy='source_ratio',respect_bubbles=False,page_direction=None,oriented_fit=False,bubble_failure_policy='stop'):
+               fit_policy='source_ratio',respect_bubbles=False,page_direction=None,oriented_fit=False,bubble_failure_policy='stop',
+               fit_failure_policy='stop'):
     original,cleaned=core.rgb(original),core.rgb(cleaned)
     if original.shape!=cleaned.shape: raise ValueError('Original and cleaned dimensions differ')
     support=core.mask_array(source_mask,original.shape[:2])
     data=core.parse_regions(document,original.shape)
     if mode not in MODES or direction not in DIRECTIONS: raise ValueError('Invalid lettering mode/direction')
     if bubble_failure_policy not in ('stop','preserve_review'):raise ValueError('Invalid bubble failure policy')
+    if fit_failure_policy not in ('stop','preserve_review'):raise ValueError('Invalid lettering fit failure policy')
     if page_direction is not None and page_direction not in DIRECTIONS:
         raise ValueError('Invalid page lettering direction')
     forced_direction=page_direction if page_direction not in (None,'auto') else None
@@ -186,8 +188,10 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
             raise ValueError('Invalid bubble detection response')
         if (detection_result.get('image_width'),detection_result.get('image_height'))!=(original.shape[1],original.shape[0]):
             raise ValueError('Bubble detections belong to a different page size')
-    plan={'version':1,'cleaned':cleaned.copy(),'regions':[],
+    plan={'version':1,'cleaned':cleaned.copy(),'regions':[], 'fit_failure_policy':fit_failure_policy,
           'page_direction':page_direction,'needs_review':bool(data.get('needs_review'))}
+    if fit_failure_policy == 'preserve_review':
+        plan['original'] = original.copy()
     protected=boundary_review.boxes(data,original.shape[1],original.shape[0])
     if detection_result is not None:
         detected=boundary_review.boxes(detection_result,original.shape[1],original.shape[0])
@@ -204,14 +208,14 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
     plan['preserved_punctuation']=data.get('preserved_punctuation',[])
     plan['source_preservation']=data.get('source_preservation',[])
     plan['lettering_review']=[]
-    def preserve_item(item,diagnostic):
-        x,y,w,h=item['bbox'] if 'bbox' in item else item['source']
+    def preserve_item(item,diagnostic,reason='unverified_bubble_ownership'):
+        x,y,w,h=core.bbox(item.get('source_edit_bbox',item.get('restore_bounds',item.get('bbox',item.get('source')))),original.shape)
         box=[x,y,x+w,y+h]
         boundary_review.restore(plan['cleaned'],original,[box])
         plan['protected_boxes_pixels'].append(box)
         plan['needs_review']=True
         plan['lettering_review'].append({'id':item['id'],'parent_id':item.get('parent_id',item['id']),
-            'bbox_pixels':box,'reason':'unverified_bubble_ownership','diagnostic':diagnostic})
+            'bbox_pixels':box,'reason':reason,'diagnostic':diagnostic})
     # Prepare masks once, rather than decoding every detection for every text.
     bubble_items=(bubble_constraints.candidates(bubble_mask,detection_result,original.shape)
                   if respect_bubbles or any(v.get('respect_bubbles') or v.get('require_bubble')
@@ -231,8 +235,15 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
             owned=Image.new('L',(ref.shape[1],ref.shape[0]));x,y,_,_=item['bbox']
             ImageDraw.Draw(owned).polygon([(a-x,b-y) for a,b in item['frame_quad']],fill=255)
             mask=mask*(np.asarray(owned)>0)
-        style,analysis=core.analyze_style(ref,clean,mask)
-        measured,ink=profile(ref,clean,mask,font,style['foreground'])
+        try:
+            style,analysis=core.analyze_style(ref,clean,mask)
+            measured,ink=profile(ref,clean,mask,font,style['foreground'])
+        except ValueError as exc:
+            if (fit_failure_policy != 'preserve_review' or opts.get('mode',mode) == 'strict' or
+                    not str(exc).startswith(('Too few text pixels', 'Too few source ink pixels'))):
+                raise
+            preserve_item(item,{'code':'insufficient_source_style_pixels'},'insufficient_source_style_pixels')
+            continue
         source_angle=0
         if ident in orientations:
             entry=orientations[ident]
@@ -319,7 +330,9 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         if guard and guard['rectangle']!=source:
             phases.append((guard['rectangle'],forced_lines or (original_lines if selected_mode=='strict' else 0),
                            'bubble-interior'))
-        prepared={'id':ident,'parent_id':item.get('parent_id',ident),'text':rendered_text,'original_text':item['text'],'line_breaks':breaks,
+        prepared={'id':ident,'parent_id':item.get('parent_id',ident),
+                  'restore_bounds':list(core.bbox(item.get('source_edit_bbox',source), original.shape)),
+                  'text':rendered_text,'original_text':item['text'],'line_breaks':breaks,
                   'font':font,'font_fallback':font_fallback,'style':style,'source':source,
                   'phases':phases,'cap':cap,'floor':floor,'fallback_floor':fallback_floor,
                   'fit_policy':policy,'mode':selected_mode,'options':render_options,'bend':curve,
@@ -404,7 +417,7 @@ class LetteringFitError(ValueError):
         self.diagnostic=diagnostic
 
 
-def render_plan(plan):
+def _render_plan_once(plan):
     if not isinstance(plan,dict) or plan.get('version')!=1 or not isinstance(plan.get('regions'),list):
         raise ValueError('Expected MangaLetterPlan output')
     if len(plan['regions'])>core.MAX_LETTERING_REGIONS:
@@ -414,6 +427,8 @@ def render_plan(plan):
     # A byte per page pixel also identifies the actual colliding paragraph.
     occupied=np.zeros(result.shape[:2],np.uint8)
     reports=[]
+    staged=[]
+    staged_pixels=0
     protected=plan.get('protected_boxes_pixels',[])
     for index,region in enumerate(plan['regions']):
         chosen=None;reason='no candidate'
@@ -495,9 +510,12 @@ def render_plan(plan):
                              'review text, direction or region options',diagnostic)
         bounds,layer,alpha,render,style,scale,phase=chosen
         place={'version':1,'bbox_xywh':bounds,'page_size':[result.shape[1],result.shape[0]]}
-        result,changed=core.composite(result,layer,alpha,place)
-        page_alpha=changed+page_alpha*(1-changed)
-        occupied[ndimage.binary_dilation(changed>.01,iterations=2)]=index+1
+        staged_pixels+=alpha.size
+        if staged_pixels>core.MAX_TYPOGRAPHY_PIXELS:raise ValueError('Staged lettering exceeds typography pixel budget')
+        staged.append((layer,alpha,place))
+        x,y,w,h=core.bbox(bounds,result.shape)
+        active=np.zeros(result.shape[:2],bool);active[y:y+h,x:x+w]=alpha>.01
+        occupied[ndimage.binary_dilation(active,iterations=2)]=index+1
         reports.append({'id':region['id'],'source_profile':region['profile'],'bbox':bounds,
                         'font_fallback':region.get('font_fallback'),
                         'fit_phase':phase,'scale':round(scale,4),'render':render,
@@ -510,6 +528,11 @@ def render_plan(plan):
                         'bubble_containment':region.get('bubble_containment',{'status':'disabled'}),
                         'original_text':region['original_text'],'line_breaks':region['line_breaks'],
                         'outline_width':style['outline_width'],'bend':region['bend'],'warning':region['warning']})
+    # All source ownership and actual glyph alpha checks finish before the
+    # first composite. A rejected attempt cannot leak partially placed layers.
+    for layer,alpha,place in staged:
+        result,changed=core.composite(result,layer,alpha,place)
+        page_alpha=changed+page_alpha*(1-changed)
     return result,page_alpha,json.dumps({'schema':1,'regions':reports,
         'protected_boxes_pixels':protected,'needs_review':plan.get('boundary_review_required',bool(protected)) or plan.get('needs_review',False),
         'page_direction':plan.get('page_direction'),
@@ -521,3 +544,57 @@ def render_plan(plan):
         **({'lettering_skipped':True,'skip_reason':'source_preserved'} if not reports and (plan.get('source_preservation') or plan.get('preserved_punctuation')) else {}),
         'quality_scope':'geometry/style approximation; OCR, translation and GPU cleanup require separate review'},
         ensure_ascii=False,indent=2)
+
+
+def render_plan(plan):
+    """Fit on a working copy; restore failed ownership groups before retrying.
+
+    Actual style still uses the cleaned background. Failed fits never publish
+    that erased source: restore the original edit frame and close all source
+    overlaps, discard prior glyphs, and fit independent regions again.
+    """
+    policy = plan.get('fit_failure_policy', 'stop')
+    if policy not in ('stop', 'preserve_review'):
+        raise ValueError('Invalid lettering fit failure policy')
+    if policy == 'stop':
+        return _render_plan_once(plan)
+    original = core.rgb(plan.get('original'))
+    if original.shape != plan['cleaned'].shape:
+        raise ValueError('Lettering recovery needs the same original page')
+    working = {**plan, 'cleaned':plan['cleaned'].copy(), 'regions':list(plan['regions']),
+               'protected_boxes_pixels':list(plan.get('protected_boxes_pixels', [])),
+               'lettering_review':list(plan.get('lettering_review', []))}
+    for _ in range(len(working['regions'])+1):
+        try:
+            return _render_plan_once(working)
+        except LetteringFitError as exc:
+            failed = next((r for r in working['regions'] if r['id'] == exc.diagnostic['region_id']), None)
+            if failed is None or failed.get('mode') == 'strict':
+                raise
+            parents = {failed.get('parent_id', failed['id'])}
+            blocked = set()
+            boxes = []
+            changed = True
+            while changed:
+                changed = False
+                for region in working['regions']:
+                    if region['id'] in blocked:
+                        continue
+                    x,y,w,h = region.get('restore_bounds', region['source'])
+                    box = [x,y,x+w,y+h]
+                    if region.get('parent_id', region['id']) in parents or any(boundary_review.intersects(box, b) for b in boxes):
+                        blocked.add(region['id']);parents.add(region.get('parent_id', region['id']))
+                        boxes.append(box);changed = True
+            if any(r['id'] in blocked and r.get('mode') == 'strict' for r in working['regions']):
+                raise
+            boundary_review.restore(working['cleaned'], original, boxes)
+            working['protected_boxes_pixels'].extend(box for box in boxes if box not in working['protected_boxes_pixels'])
+            for region in working['regions']:
+                if region['id'] in blocked:
+                    x,y,w,h = region.get('restore_bounds', region['source'])
+                    working['lettering_review'].append({'id':region['id'], 'parent_id':region.get('parent_id', region['id']),
+                        'bbox_pixels':[x,y,x+w,y+h], 'reason':'unfit_lettering_preserved',
+                        'diagnostic':exc.diagnostic})
+            working['regions'] = [r for r in working['regions'] if r['id'] not in blocked]
+            working['needs_review'] = True
+    raise ValueError('Lettering recovery did not converge')

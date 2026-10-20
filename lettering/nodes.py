@@ -272,6 +272,7 @@ class MangaLetterPrepare:
                     child_id='paragraph_'+digest([row['id'],block['id']])
                     while child_id in {r['id'] for r in data['regions']}:child_id+='_'
                     child={**parent,'id':child_id,'parent_id':row['id'],'block_id':block['id'],'role':block.get('role','body'),
+                           'source_edit_bbox':parent['bbox'],
                            'source_text':block['source'],'text':block['target'],'frame_quad':quad,
                            'bbox':[int(left),int(top),int(right-left),int(bottom-top)],**block.get('presentation',{})}
                     rows.append(child)

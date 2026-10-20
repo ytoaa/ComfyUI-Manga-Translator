@@ -348,8 +348,11 @@ class GraphRunner:
         assert all(r['render']['font_size']<=r['source_profile']['font_cap'] for r in lettering['regions'])
         final=self.cache[lettering_id][0][0][0].numpy()
         alpha=self.cache[lettering_id][1][0][0].numpy()
-        assert np.array_equal(final[alpha==0],cleaned[0].numpy()[alpha==0])
-        for a,b,c,d in protected:
+        final_protected=lettering.get('protected_boxes_pixels',protected)
+        expected_background=cleaned[0].numpy().copy()
+        boundary_review.restore(expected_background,np.asarray(self.original,np.float32)/255,final_protected)
+        assert np.array_equal(final[alpha==0],expected_background[alpha==0])
+        for a,b,c,d in final_protected:
             assert not alpha[b:d,a:c].any()
             assert np.array_equal(final[b:d,a:c],np.asarray(self.original,np.float32)[b:d,a:c]/255)
         # The fixture oracle knows whole withheld paragraphs, including text
@@ -363,7 +366,7 @@ class GraphRunner:
                   'selected_regions': len(selected['regions']), 'detector_calls': self.detector.calls,
                   'boundary_recovery': selected.get('region_resolution',{}).get('boundary_recovery',{}),
                   'region_selection':'detector',
-                  'needs_review':bool(protected),'protected_boxes_pixels':protected,
+                  'needs_review':bool(protected) or lettering.get('needs_review',False),'protected_boxes_pixels':final_protected,
                   'ocr_line_calls': self.ocr.calls, 'qwen_tile_calls': self.qwen_calls,
                   'calls': dict(self.calls), 'cleanup': json.loads(self.cache[finish_id][1][0]) if finish_id in self.cache else {**plan['report'],'reused':True},
                   'outside_mask_unchanged': True, 'all_fixture_ink_masked': not bool(protected),

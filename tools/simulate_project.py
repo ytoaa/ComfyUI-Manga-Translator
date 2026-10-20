@@ -109,6 +109,8 @@ class SimulatedServer:
         self.graph_reports[name] = {'scenario':name,'detector_calls':runner.detector.calls,
             'ocr_calls':runner.ocr.calls,'qwen_calls':runner.qwen_calls,
             'final_saved':bool(runner.saved),'simulation_only':True,
+            'rendered_regions':len(report.get('lettering',{}).get('regions',[])),
+            'preserved_lettering_regions':len(report.get('lettering',{}).get('lettering_review',[])),
             **{key:report[key] for key in ('outside_mask_unchanged','selected_regions','expected_failure','needs_review') if key in report}}
         self.jobs[ident] = {'history':{'outputs':deepcopy(runner.ui_outputs),'status':status},
                             'image':runner.saved[0].read_bytes() if runner.saved else None,
@@ -138,10 +140,10 @@ def simulate(destination):
     server = SimulatedServer(cases)
     project = Project(inputs,destination/'project',read_json(DEFAULT_WORKFLOW),server)
     report = project.run()
-    assert report['counts'] == {'completed':4,'failed':3,'needs_review':3,'unchanged_blank':1}
+    assert report['counts'] == {'completed':4,'failed':2,'needs_review':4,'unchanged_blank':1}
     assert server.submissions == 10
     expected = {'unresolved_seam':'needs_review','ocr_repetition':'needs_review','unchanged_cleanup':'failed',
-                'impossible_lettering':'failed','corrupt_input':'failed',
+                'impossible_lettering':'needs_review','corrupt_input':'failed',
                 'no_selected_text':'needs_review','uniform_blank':'unchanged_blank'}
     for page in report['pages']:
         name = SCENARIOS[page['relative_path']]
@@ -150,6 +152,9 @@ def simulate(destination):
     assert server.graph_reports['unresolved_seam']['selected_regions']==2
     assert server.graph_reports['unresolved_seam']['final_saved']
     assert server.graph_reports['ocr_repetition']['qwen_calls'] == 0
+    unfit=server.graph_reports['impossible_lettering']
+    assert unfit['final_saved'] and unfit['needs_review']
+    assert unfit['preserved_lettering_regions']==1 and unfit['rendered_regions']==5
     assert server.graph_reports['ocr_repetition']['final_saved'] and server.graph_reports['ocr_repetition']['needs_review']
     rejected=next(p for p in report['pages'] if SCENARIOS[p['relative_path']]=='ocr_repetition')
     assert Image.open(destination/'project'/rejected['result']).convert('RGB').tobytes()==prepared[rejected['relative_path']][1].original.tobytes()

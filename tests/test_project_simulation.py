@@ -15,7 +15,7 @@ def test_mixed_folder_runs_actual_08_nodes_and_resumes_without_extra_submissions
     assert result.returncode == 0, result.stderr[-8000:]
     report = json.loads((tmp_path/'simulation/simulation-summary.json').read_text())
     assert report['simulation_only'] is True
-    assert report['counts'] == {'completed':4,'failed':3,'needs_review':3,'unchanged_blank':1}
+    assert report['counts'] == {'completed':4,'failed':2,'needs_review':4,'unchanged_blank':1}
     rejected=next(row for row in report['scenarios'] if row['scenario']=='ocr_repetition')
     assert rejected['needs_review'] and rejected['final_saved'] and rejected['qwen_calls']==0
     assert report['resume_extra_submissions'] == 0 and report['submitted_pages'] == 10

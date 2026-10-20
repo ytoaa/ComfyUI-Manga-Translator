@@ -53,17 +53,18 @@ class MangaLetterPlan:
                         'fit_policy':field(list(hybrid.FIT_POLICIES),'readable=원문 비율 제한으로 맞지 않으면 min_font까지 추가 축소. source_ratio/strict/영역별 min_scale은 비율 제한 유지.',default='source_ratio'),
                         'respect_bubbles':field('BOOLEAN','확인된 말풍선의 실제 픽셀 마스크 밖에 글자 알파가 생기면 거부합니다. 단순 사각형 경계와 다릅니다.',default=False),
                         'page_direction':field('STRING','번역문 방향 노드 출력. 가로/세로 통일은 모든 영역의 방향 설정보다 우선합니다.',forceInput=True),
-                        'bubble_failure_policy':field(['preserve_review','stop'],'말풍선 소유권이 불확실하면 해당 영역과 겹친 이웃만 원본 복원·검수합니다. stop은 페이지를 중단합니다. require_bubble은 항상 중단합니다.',default='preserve_review')}}
+                        'bubble_failure_policy':field(['preserve_review','stop'],'말풍선 소유권이 불확실하면 해당 영역과 겹친 이웃만 원본 복원·검수합니다. stop은 페이지를 중단합니다. require_bubble은 항상 중단합니다.',default='preserve_review'),
+                        'fit_failure_policy':field(['preserve_review','stop'],'최소 크기에서도 배치 불가하면 연결된 원문 편집 영역을 복원·검수하고 독립 영역은 계속 식자합니다. strict는 계속 중단합니다.',default='preserve_review')}}
     RETURN_TYPES=('MANGA_LETTER_PLAN','IMAGE','STRING')
     RETURN_NAMES=('식자_계획','배치_검수','계획_보고서')
     FUNCTION='plan'
     def plan(self,original,cleaned,source_mask,regions_json,default_font='NanumGothic-Bold.ttf',
              mode='source',direction='auto',min_font=10,min_scale=.55,padding=2,
              region_options_json='{}',bubble_mask=None,detection_result=None,line_breaks='preserve',fit_policy='source_ratio',
-             respect_bubbles=False,page_direction=None,oriented_fit=False,bubble_failure_policy='preserve_review'):
+             respect_bubbles=False,page_direction=None,oriented_fit=False,bubble_failure_policy='preserve_review',fit_failure_policy='preserve_review'):
         plan,preview,report=hybrid.build_plan(image(original),image(cleaned),mask(source_mask),regions_json,
             default_font,mode,direction,min_font,min_scale,padding,region_options_json,
-            mask(bubble_mask) if bubble_mask is not None else None,detection_result,line_breaks,fit_policy,respect_bubbles,page_direction,oriented_fit,bubble_failure_policy)
+            mask(bubble_mask) if bubble_mask is not None else None,detection_result,line_breaks,fit_policy,respect_bubbles,page_direction,oriented_fit,bubble_failure_policy,fit_failure_policy)
         return plan,tensor(preview),report
 
 
@@ -83,7 +84,11 @@ class MangaLetterApply:
             path=save_fit_failure(plan,exc.diagnostic)
             raise hybrid.LetteringFitError(str(exc)+'; diagnostics='+path,exc.diagnostic) from None
         diagnostic=json.loads(report)
+        count=len(diagnostic.get('regions',[]))
+        preserved=len(diagnostic.get('lettering_review',[]))+len(diagnostic.get('source_preservation',[]))
+        message=(f"{'부분 처리' if count else '원본 보존'} · 처리 {count}개 · 보존 {preserved}개 · 검수 필요"
+                 if diagnostic['needs_review'] else '검출 영역 없음 · 원본 유지' if not count else '식자 완료')
         return {'ui':{'manga_lettering_report':[diagnostic],
                       'manga_status':[{'state':'needs_review' if diagnostic['needs_review'] else 'completed',
-                          'message':f"원본 보존·검수 {len(diagnostic.get('lettering_review',[]))}개 영역" if diagnostic.get('lettering_review') else '식자 완료'}]},
+                          'message':message}]},
                 'result':(tensor(result),tensor(alpha),report)}

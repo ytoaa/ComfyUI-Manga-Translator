@@ -28,7 +28,7 @@ class RegionEdit:
 
 
 def _digest(data):
-    observed = {key: data.get(key) for key in ('image_width', 'image_height', 'regions', 'boundary_review')}
+    observed = {key: data.get(key) for key in ('image_width', 'image_height', 'regions', 'boundary_review', 'source_review_policy')}
     return hashlib.sha256(json.dumps(observed, ensure_ascii=False, sort_keys=True,
                                     allow_nan=False, separators=(',', ':')).encode()).hexdigest()
 
@@ -42,14 +42,16 @@ def pixel_bounds(box, width, height):
     return [math.floor(box[0]), math.floor(box[1]), math.ceil(box[2]), math.ceil(box[3])]
 
 
-def build(data, width, height, actions=None, source_mask=None, padding=12):
+def build(data, width, height, actions=None, source_mask=None, padding=12, source_review_policy='conservative'):
     from .nodes import layout, encode, pixel_box, verified_dot_text
     from .document import validate_target
     data = layout(encode(data))
     if any(data.get(key, expected) != expected
            for key, expected in (('image_width', width), ('image_height', height))):
         raise ValueError('Page edit coordinates belong to a different page size')
-    data = {**data, 'image_width': width, 'image_height': height}
+    if source_review_policy not in ('conservative', 'legacy'):
+        raise ValueError('Invalid source review policy')
+    data = {**data, 'image_width': width, 'image_height': height, 'source_review_policy': source_review_policy}
     if type(padding) is not int or not 0 <= padding <= 128:
         raise ValueError('Invalid page edit padding')
     ids = {row['id'] for row in data['regions']}
@@ -65,10 +67,24 @@ def build(data, width, height, actions=None, source_mask=None, padding=12):
         box = pixel_bounds(row.get('edit_bbox_pixels', pixel_box(row['bbox'], width, height, padding)), width, height)
         dots = verified_dot_text(row)
         unchanged = dots is not None and row['target'] == dots
-        action = actions.get(row['id'], 'preserve' if unchanged else 'replace')
+        from .source_ownership import review_reason
+        uncertain = review_reason(row, width, height) if source_review_policy == 'conservative' else None
+        action = actions.get(row['id'], 'preserve' if unchanged or uncertain else 'replace')
         reason = ('manual_source_preservation' if action == 'preserve' and row['id'] in actions else
-                  'verified_source_punctuation' if action == 'preserve' else 'translated_region')
+                  'verified_source_punctuation' if unchanged and action == 'preserve' else
+                  uncertain if uncertain and action == 'preserve' else
+                  'manual_source_replacement' if row['id'] in actions else 'translated_region')
         decisions.append(RegionEdit(row['id'], tuple(box), action, reason))
+
+    # Cheap source-space preflight, before any erase/model work. Distinct ink
+    # layers sharing one edit frame are not permission to remove each other.
+    coincident = {row.id for row in decisions if row.action == 'replace'
+                  and any(other.id != row.id and other.action == 'replace' and other.bbox_pixels == row.bbox_pixels
+                          for other in decisions)} if source_review_policy == 'conservative' else set()
+    decisions = [RegionEdit(row.id, row.bbox_pixels, 'preserve', 'coincident_edit_frames')
+                 if row.id in coincident and row.id not in actions and
+                 any(r['id'] == row.id and r.get('source_ownership', {}).get('schema') == 1 for r in data['regions'])
+                 else row for row in decisions]
 
     protected = boundary_review.boxes(data, width, height)
     unassigned = []
@@ -98,7 +114,7 @@ def build(data, width, height, actions=None, source_mask=None, padding=12):
                 decisions[index] = RegionEdit(row.id, row.bbox_pixels, 'preserve', 'protected_region_overlap')
                 protected.append(list(row.bbox_pixels))
                 changed = True
-    edit_review = bool(unassigned) or any(row.reason == 'protected_region_overlap' for row in decisions)
+    edit_review = bool(unassigned) or any(row.reason in ('protected_region_overlap', 'ambiguous_isolated_source', 'unverified_display_text', 'coincident_edit_frames', 'ambiguous_cross_label_source') for row in decisions)
     review = bool(data.get('needs_review')) or edit_review
     plan = {'schema': 1, 'coordinate_format': 'xyxy_pixels', 'page_size': [width, height], 'region_padding':padding,
             'input_sha256': _digest(data), 'regions': [row.json() for row in decisions],
@@ -190,12 +206,14 @@ class MangaPageEditPlan:
         return {'required': {'original': ('IMAGE',), 'translated_json': ('STRING', {'forceInput': True}),
                              'source_mask': ('MASK',), 'cleanup_mask': ('MASK',)},
                 'optional': {'region_actions_json': ('STRING', {'default': '{}', 'multiline': True,
-                    'tooltip': '영역별 원본 보존/교체. 예: {"r1":"preserve"}. 폴더에서는 매 페이지의 같은 ID에 적용합니다. 보존 영역과 겹친 이웃은 함께 보존·검수합니다.'})}}
+                    'tooltip': '영역별 원본 보존/교체. 예: {"r1":"preserve"}. 검수 후 replace로 명시하면 문자성 검수만 해제하며 보호 교차는 유지합니다. 폴더에서는 매 페이지의 같은 ID에 적용합니다.'}),
+                    'source_review_policy': (['conservative','legacy'], {'default':'conservative',
+                    'tooltip':'conservative: 검증된 말풍선 밖 짧은 독립 문자·큰 제목은 원본 보존·검수. 실제 문자 판별 보증은 아닙니다. legacy는 기존 교체 정책입니다.'})}}
     RETURN_TYPES = ('STRING', 'MASK', 'MASK', 'IMAGE', 'STRING')
     RETURN_NAMES = ('편집_명세_JSON', '교체할_원문_마스크', '교체할_제거_마스크', '편집_검수', '편집_보고서')
     FUNCTION = 'plan'
 
-    def plan(self, original, translated_json, source_mask, cleanup_mask, region_actions_json='{}'):
+    def plan(self, original, translated_json, source_mask, cleanup_mask, region_actions_json='{}', source_review_policy='conservative'):
         import numpy as np
         from .nodes import layout, decode, encode
         from .lettering.nodes import image, mask, tensor
@@ -206,7 +224,7 @@ class MangaPageEditPlan:
         document=layout(translated_json)
         from .source_recovery import recover_masks
         source,cleanup=recover_masks(Image.fromarray((pixels*255).round().astype('uint8')),document,source,cleanup)
-        data = build(document, width, height, decode(region_actions_json), source)
+        data = build(document, width, height, decode(region_actions_json), source, source_review_policy=source_review_policy)
         source, cleanup = masks(data, source, cleanup)
         plan = data['page_edit_plan']
         preview = Image.fromarray((pixels*255).round().astype('uint8'))

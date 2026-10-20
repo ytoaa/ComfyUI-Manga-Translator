@@ -55,6 +55,7 @@
       "dedupe_iou": 0.75,
       "reading_order": "top_to_bottom",
       "merge_adjacent_lines": true,
+      "protected_overlap_policy": "preserve_review",
       "result": [
         "65",
         0
@@ -213,6 +214,7 @@
     "class_type": "MangaPageEditPlan",
     "inputs": {
       "region_actions_json": "{}",
+      "source_review_policy": "conservative",
       "original": [
         "1",
         0
@@ -492,6 +494,7 @@
       "fit_policy": "readable",
       "respect_bubbles": true,
       "bubble_failure_policy": "preserve_review",
+      "fit_failure_policy": "preserve_review",
       "original": [
         "1",
         0

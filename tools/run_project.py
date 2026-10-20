@@ -825,7 +825,7 @@ class Project:
         elif edits is not None and edits.get('needs_review'):
             state.update(status='needs_review',reason=target.get('review_reason','source_edit_plan_requires_review'))
         if lettering_review:
-            state.update(status='needs_review',reason=state.get('reason') or 'unverified_bubble_ownership',lettering_review=lettering_review)
+            state.update(status='needs_review',reason=state.get('reason') or lettering_review[0].get('reason','unverified_bubble_ownership'),lettering_review=lettering_review)
         self._save(state)
 
     def _resume(self, state):

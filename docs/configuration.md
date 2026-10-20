@@ -144,3 +144,10 @@ Manga OCR은 `kha-white/manga-ocr-base`의 고정 revision `aa6573bd10b0d446cbf6
 외부 번역 서버가 같은 `model` ID로 가중치를 바꾸면 클라이언트가 자동으로 알아낼 수 없습니다. 번역 노드의 `model_revision`을 바꾸거나 번역 checkpoint를 `refresh`로 실행하세요. 로컬 검출/Qwen 파일은 내용 SHA256으로 캐시 신원을 구분하며 파일 stat이 같으면 프로세스 안에서 계산한 해시를 재사용합니다.
 
 OCR 재인식은 `MangaOCRAdaptive.cache_policy=refresh`로 실행합니다. 별도의 집계 문서 캐시를 겹치지 않아 새 OCR 결과가 오래된 페이지 JSON에 가려지지 않습니다. OCR 엔진/입력/분할/생성 설정과 원본 크롭 픽셀을 함께 식별합니다.
+# 원문 영역 검수 옵션
+
+- 영역 변환의 `protected_overlap_policy=preserve_review`: 보호와 연결된 원문만 보존·검수하며 독립 영역은 계속 처리합니다. `stop`은 페이지를 중단합니다.
+- 페이지 편집의 `source_review_policy=conservative`: 검증된 말풍선 밖 짧은 독립 문자·큰 제목을 보존합니다. 사람이 확인한 ID는 `region_actions_json`에서 `replace`로 명시할 수 있습니다. `legacy`는 기존 교체 정책입니다.
+- 식자 계획의 `fit_failure_policy=preserve_review`: 최소 크기에서도 배치가 안 되면 연결된 편집 프레임을 원본 복원합니다. `stop`과 `strict`는 중단합니다.
+
+원문 보존과 부분 처리를 자동 번역 완성으로 해석하지 마세요. [범위와 검증](validation/region-ownership.md)을 확인하세요.
