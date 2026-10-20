@@ -8,9 +8,9 @@ import re
 import uuid
 
 from .tools.run_project import (Project, ProjectError, Paused, InputError, ACTIVE, FINISHED,
-    atomic_write, json_bytes, read_json, project_lock, normalise_image, digest, workflow_bindings, workflow_fingerprint)
+    atomic_write, json_bytes, read_json, project_lock, normalise_image, digest, workflow_bindings, workflow_fingerprint, REVIEW_EDIT_FIELDS)
 
-VERSION = '0.7.10'
+VERSION = '0.7.11'
 
 
 def _write_run(folder, run):
@@ -41,8 +41,8 @@ def prefix_bindings(graph):
 def _run_settings(graph):
     # Common settings exclude page edits for reusable project revisions, but an
     # automatic run also freezes its authored edits for reproducible completion.
-    return (workflow_fingerprint(graph),{key:json.loads(node['inputs'].get('edits_json','{}'))
-            for key,node in graph.items() if node['class_type']=='MangaReviewDocument'})
+    return (workflow_fingerprint(graph),{key:json.loads(node['inputs'].get(REVIEW_EDIT_FIELDS[node['class_type']],'{}'))
+            for key,node in graph.items() if node['class_type'] in REVIEW_EDIT_FIELDS})
 
 
 class CanvasExecution:

@@ -109,7 +109,7 @@ def test_unverified_crop_bypasses_ocr_and_preserves_pixels_before_cleanup(monkey
     monkeypatch.setattr(N,'api_json',lambda *a,**k:pytest.fail('Unverified crop reached translation'))
     translated=N.MangaTranslate().translate(collected,'','','','',4096,300)[0]
     mask=torch.from_numpy(support[None].astype(np.float32))
-    edit,raw,cleanup,_,_=page_edit.MangaPageEditPlan().plan(page,translated,mask,torch.ones_like(mask))
+    edit,raw,cleanup,_,_=page_edit.MangaPageEditPlan().plan(page,translated,mask,torch.ones_like(mask))['result']
     assert not raw.any() and not cleanup.any()
     data=json.loads(edit)
     assert data['boundary_review']['reason']=='unverified_ocr_geometry'
@@ -205,7 +205,7 @@ def test_recovered_source_pixels_reach_cleanup_and_changed_inputs_are_rejected()
     assert len(G.planned_inputs(source.crop(row['crop_bbox_pixels']),json.loads(plans[0])))==3
     row.update(source='MY PROFILE\nNAME CLASS LABEL\nANOTHER SAMPLE LINE',target='프로필\n이름과 직업\n설명 문장')
     raw=torch.from_numpy(mask[None].astype(np.float32))
-    edited,raw,cleanup,_,_=E.MangaPageEditPlan().plan(page,json.dumps(data),raw,raw)
+    edited,raw,cleanup,_,_=E.MangaPageEditPlan().plan(page,json.dumps(data),raw,raw)['result']
     assert raw[0,h:].any() and cleanup[0,h:].any()
     assert raw.sum()<raw.numel()*.2  # Never grant the context rectangle as erase pixels.
     changed=page.clone();changed[:,100,100]=0
@@ -215,7 +215,7 @@ def test_recovered_source_pixels_reach_cleanup_and_changed_inputs_are_rejected()
     with pytest.raises(ValueError,match='stale or unverified'):
         G.planned_inputs(source.crop(row['crop_bbox_pixels']),modified)
     # Manual source preservation still wins after successful reconstruction.
-    kept,kept_mask,_,_,_=E.MangaPageEditPlan().plan(page,json.dumps(data),raw,cleanup,'{"r1":"preserve"}')
+    kept,kept_mask,_,_,_=E.MangaPageEditPlan().plan(page,json.dumps(data),raw,cleanup,'{"r1":"preserve"}')['result']
     assert not kept_mask.any() and json.loads(kept)['page_edit_plan']['regions'][0]['action']=='preserve'
 
 

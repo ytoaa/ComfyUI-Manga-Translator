@@ -2,7 +2,7 @@ import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
 // Node-local views only. No hidden requests, inference or separate project UI.
-const panels = new Set(["MangaReviewDocument", "MangaOCRModel", "MangaOCRAdaptive", "MangaTextCheckpoint", "MangaDetectionCheckpoint", "MangaCleanupCheckpoint", "MangaTranslationContext", "MangaLetterPlan", "MangaLetterApply", "MangaLetteringDirection"]);
+const panels = new Set(["MangaPageEditPlan", "MangaReviewDocument", "MangaOCRModel", "MangaOCRAdaptive", "MangaTextCheckpoint", "MangaDetectionCheckpoint", "MangaCleanupCheckpoint", "MangaTranslationContext", "MangaLetterPlan", "MangaLetterApply", "MangaLetteringDirection"]);
 const labels = {ready:"준비됨", reused:"저장 결과 재사용", computed:"계산 완료", completed:"완료", running:"실행 중", error:"확인 필요", needs_review:"검수 필요"};
 const widget = (node, name) => node.widgets?.find(w => w.name === name);
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -74,6 +74,116 @@ function review(node, snapshot) {
     if(snapshot.identity_verified === false)status(node,{state:'error',message:'페이지 식별 정보가 없습니다. 새 통합 08의 page_context_json 연결을 확인하세요.'});
     else if(snapshot.warnings?.length)status(node,{state:'error',message:snapshot.warnings.join(' ')});
 }
+function editReview(node, snapshot) {
+    const body=node.mangaPanelBody, edits=widget(node,'review_edits_json');
+    if(!body || !edits)return;
+    body.replaceChildren();
+    const revision=snapshot.input_revision, owner=snapshot.page_identity;
+    const current=()=>{
+        const value=JSON.parse(edits.value || '{}');
+        if(!value || Array.isArray(value) || typeof value!=='object')throw Error('review_edits_json을 먼저 확인하세요.');
+        value.pages ||= {};value.identities ||= {};return value;
+    };
+    const patch=id=>{const value=current();return clone(value.identities[revision]===owner ? value.pages[revision]?.[id] || {} : {});};
+    function save(id,value) {
+        if(!owner)throw Error('페이지 식별 정보가 없습니다.');
+        const editsValue=current();editsValue.pages[revision] ||= {};
+        editsValue.pages[revision][id]=value;editsValue.identities[revision]=owner;
+        const pointCount=Object.values(editsValue.pages[revision]).reduce((total,row)=>total+(row.strokes || []).reduce((n,s)=>n+s.points.length,0),0);
+        if(pointCount>4096)throw Error('이 페이지 브러시 4096점 한도입니다. 획을 줄여 저장하세요.');
+        const encoded=JSON.stringify(editsValue);
+        if(new TextEncoder().encode(encoded).length>1048576)throw Error('편집 저장 한도 1 MiB를 넘었습니다.');
+        edits.value=encoded;edits.callback?.(encoded);node.setDirtyCanvas?.(true,true);
+        status(node,{state:'ready',message:'편집 저장됨 · Run으로 제거·식자에 반영'});
+    }
+    const style='box-sizing:border-box;max-width:100%;min-width:0;padding:6px;border:1px solid #43556e;border-radius:6px;background:#142338;color:#e1eaf7;font:inherit';
+    const info=document.createElement('div');
+    info.textContent='주황: 제거 마스크 · 파랑: 원문 획(지우기 불가). 브러시는 원본 픽셀 단위입니다. 수정 후 Run하세요.';
+    info.style.cssText='margin:6px 0;line-height:1.5';body.append(info);
+    for(const region of snapshot.regions || []) {
+        const card=document.createElement('div');card.style.cssText=style+';margin:10px 0';
+        const title=document.createElement('div');title.textContent=`${region.id} · ${region.action==='replace'?'교체':'원본 보존'} · ${region.reason}`;
+        title.style.cssText='overflow-wrap:anywhere;margin-bottom:6px';card.append(title);
+        const select=document.createElement('select');select.style.cssText=style+';width:100%';
+        for(const [value,label] of [['auto','정책에 따라 자동'],['replace','이 영역 교체'],['preserve','이 영역 원본 보존']]) {
+            const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option);
+        }
+        let pending;
+        try {pending=patch(region.id);}catch(error){status(node,{state:'error',message:error.message});return;}
+        select.value=pending.action || 'auto';
+        select.addEventListener('change',()=>{try {save(region.id,{...patch(region.id),action:select.value});}catch(error){status(node,{state:'error',message:error.message});}});
+        card.append(select);
+        const text=document.createElement('div');text.textContent=`${region.source}\n→ ${region.target}`;
+        text.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;max-height:90px;overflow:auto;margin:7px 0';card.append(text);
+        const controls=document.createElement('div');controls.style.cssText='display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:6px 0';
+        const mode=document.createElement('select');mode.style.cssText=style;
+        for(const [value,label] of [['add','제거 범위 칠하기'],['erase','추가 여백 지우기']]){
+            const option=document.createElement('option');option.value=value;option.textContent=label;mode.append(option);
+        }mode.value='add';controls.append(mode);
+        const radius=document.createElement('input');radius.type='number';radius.min=1;radius.max=32;radius.value=8;
+        radius.title='브러시 반경 · 원본 픽셀';radius.style.cssText=style+';width:55px';controls.append(radius);
+        const undo=document.createElement('button');undo.textContent='획 취소';undo.style.cssText=style;controls.append(undo);
+        const reset=document.createElement('button');reset.textContent='영역 편집 초기화';reset.style.cssText=style;controls.append(reset);card.append(controls);
+        const canvas=document.createElement('canvas');canvas.width=region.preview_size[0];canvas.height=region.preview_size[1];
+        canvas.style.cssText='display:block;max-width:100%;height:auto;touch-action:none;cursor:crosshair;border:1px solid #43556e';
+        canvas.title='제거할 글자 획만 칠하세요. 영역 밖과 보호 영역은 편집되지 않습니다.';card.append(canvas);body.append(card);
+        // The DOM contract harness has no raster API. Real browser drawing is
+        // independently exercised by the Chromium layout/pointer check.
+        if(!canvas.getContext)continue;
+        const ctx=canvas.getContext('2d'), layer=document.createElement('canvas');layer.width=canvas.width;layer.height=canvas.height;
+        const mask=layer.getContext('2d');
+        const base=new Image(), overlay=new Image(), ink=new Image();
+        const [a,b,c,d]=region.bbox_pixels,sx=canvas.width/(c-a),sy=canvas.height/(d-b);
+        let active=null,ready=false,loaded=0;
+        function drawStroke(stroke) {
+            mask.save();mask.scale(sx,sy);mask.translate(-a,-b);
+            mask.globalCompositeOperation=stroke.mode==='erase'?'destination-out':'source-over';
+            mask.fillStyle=mask.strokeStyle='rgba(255,96,32,0.45)';mask.lineWidth=stroke.radius*2+1;mask.lineCap=mask.lineJoin='round';
+            mask.beginPath();stroke.points.forEach(([x,y],i)=>i?mask.lineTo(x,y):mask.moveTo(x,y));mask.stroke();
+            for(const [x,y] of stroke.points){mask.beginPath();mask.arc(x,y,stroke.radius,0,Math.PI*2);mask.fill();}mask.restore();
+        }
+        function repaint() {
+            if(!ready)return;
+            ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(base,0,0);
+            mask.clearRect(0,0,canvas.width,canvas.height);mask.drawImage(overlay,0,0);
+            for(const stroke of patch(region.id).strokes || [])drawStroke(stroke);
+            if(active)drawStroke(active);
+            ctx.drawImage(layer,0,0);ctx.drawImage(ink,0,0);
+        }
+        for(const [image,uri] of [[base,region.image],[overlay,region.overlay],[ink,region.source_overlay]]) {
+            image.onload=()=>{if(++loaded===3){ready=true;repaint();}};image.src=uri;
+        }
+        function point(event) {
+            const rect=canvas.getBoundingClientRect();
+            return [Math.min(c-1,Math.max(a,Math.floor(a+(event.clientX-rect.left)*(c-a)/rect.width))),
+                    Math.min(d-1,Math.max(b,Math.floor(b+(event.clientY-rect.top)*(d-b)/rect.height)))];
+        }
+        canvas.addEventListener('pointerdown',event=>{
+            if(!ready || (event.button!==undefined && event.button!==0))return;
+            const r=Number(radius.value);
+            if(!Number.isInteger(r)||r<1||r>32){status(node,{state:'error',message:'브러시 반경은 1~32 정수입니다.'});return;}
+            active={mode:mode.value,radius:r,points:[point(event)]};canvas.setPointerCapture(event.pointerId);repaint();
+        });
+        canvas.addEventListener('pointermove',event=>{
+            if(!active || active.points.length>=256)return;
+            const p=point(event),last=active.points.at(-1);
+            if(p[0]!==last[0]||p[1]!==last[1]){active.points.push(p);repaint();}
+        });
+        canvas.addEventListener('pointerup',()=>{
+            if(!active)return;
+            try {
+                const value=patch(region.id);value.strokes ||= [];
+                if(value.strokes.length>=128)throw Error('영역 브러시 128획 한도입니다.');
+                value.strokes.push(active);save(region.id,value);
+            }catch(error){status(node,{state:'error',message:error.message});}
+            active=null;repaint();
+        });
+        canvas.addEventListener('pointercancel',()=>{active=null;repaint();});
+        undo.addEventListener('click',()=>{try{const value=patch(region.id);value.strokes?.pop();save(region.id,value);repaint();}catch(error){status(node,{state:'error',message:error.message});}});
+        reset.addEventListener('click',()=>{try{save(region.id,{});select.value='auto';repaint();}catch(error){status(node,{state:'error',message:error.message});}});
+    }
+    if(snapshot.warnings?.length)status(node,{state:'needs_review',message:snapshot.warnings.join(' ')});
+}
 app.registerExtension({
     name:"manga-translator.node-ui",
     async beforeRegisterNodeDef(Node, data) {
@@ -89,7 +199,7 @@ app.registerExtension({
                 this.mangaPanelStatus=document.createElement("div");this.mangaPanelStatus.textContent="Run하면 현재 상태가 표시됩니다.";
                 this.mangaPanelStatus.style.cssText="flex:0 0 auto;min-width:0;overflow-wrap:anywhere;max-height:48px;overflow:auto";
                 this.mangaPanelBody=document.createElement("div");this.mangaPanelBody.style.cssText="flex:1 1 auto;min-height:0;min-width:0;overflow:auto;overflow-wrap:anywhere";panel.append(title,this.mangaPanelStatus,this.mangaPanelBody);
-                const height=data.name === "MangaReviewDocument" ? 300 : 104;
+                const height=data.name === "MangaReviewDocument" ? 300 : data.name === "MangaPageEditPlan" ? 420 : 104;
                 const view=this.addDOMWidget("manga_node_panel","manga_node_panel",panel,{serialize:false,getMinHeight:()=>height,getMaxHeight:()=>height,getHeight:()=>height});
                 view.computeSize=()=>[0,height];view.serialize=false;view.options ||= {};view.options.serialize=false;
             }return result;
@@ -107,6 +217,7 @@ app.registerExtension({
             if(output?.manga_status?.[0])status(this,output.manga_status[0]);
             else if(data.name !== "MangaWorkflowInput")status(this,{state:"completed"});
             if(output?.manga_document?.[0])review(this,output.manga_document[0]);
+            if(output?.manga_edit_review?.[0])editReview(this,output.manga_edit_review[0]);
             return result;
         };
     },

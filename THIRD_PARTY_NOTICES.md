@@ -21,6 +21,8 @@ ComfyUI의 표준 및 Qwen 노드를 워크플로우에서 참조하지만 Comfy
 
 ## 설계 참고만 한 프로젝트
 
+v0.7.11의 `edit_review.py`와 `web/node_ui.js` 영역 검수·마스크 브러시는 Koharu commit `07dc00867c63004d3f3d081b638a542f4d6bf304`, BallonsTranslator commit `fa3e1374b4ca7c040a1a04effb96c95aac2a5e5c`, manga-image-translator commit `d6de6ab62a7be6afc0d07a3184149cdefbcd32f2`의 공개 기능 흐름을 참고해 독립 작성했습니다. 해당 프로젝트의 Rust/Qt/Python 구현·프롬프트·모델·폰트를 복사하지 않았습니다. 제한된 ComfyUI 편집 소유권과 페이지 해시 검증은 이 저장소의 계약을 따릅니다.
+
 [보존된 초기 조사](https://github.com/ytoaa/ComfyUI-Manga-Translator/blob/main/docs/history/research.md)에 나열한 `manga-translator-ui`, `comic-translate`, `BallonsTranslator`, `manga-image-translator`, `MangaTranslator`, `ComfyUI-QwenVL`, `ComfyUI-Florence2`, `comfyui-ollama`의 코드·기본 프롬프트·모델·폰트는 가져오지 않았다. 특히 AI renderer의 **구조**를 참고했으며 GPL 코드나 프롬프트를 새 패키지에 복사하지 않았다.
 
 추가 조사한 `ComfyUI-text-replace`, `ComfyUI_LayerStyle_Advance`, `manga-editor-desu`, `ComfyUI-Manga-Autopilot`도 참고 사례이며 그 코드나 포함 폰트를 도입하지 않았다.

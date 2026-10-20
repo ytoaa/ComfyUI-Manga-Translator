@@ -28,7 +28,7 @@ class RegionEdit:
 
 
 def _digest(data):
-    observed = {key: data.get(key) for key in ('image_width', 'image_height', 'regions', 'boundary_review', 'source_review_policy')}
+    observed = {key: data.get(key) for key in ('image_width', 'image_height', 'regions', 'boundary_review', 'source_review_policy', 'page_edit_review')}
     return hashlib.sha256(json.dumps(observed, ensure_ascii=False, sort_keys=True,
                                     allow_nan=False, separators=(',', ':')).encode()).hexdigest()
 
@@ -208,12 +208,15 @@ class MangaPageEditPlan:
                 'optional': {'region_actions_json': ('STRING', {'default': '{}', 'multiline': True,
                     'tooltip': '영역별 원본 보존/교체. 예: {"r1":"preserve"}. 검수 후 replace로 명시하면 문자성 검수만 해제하며 보호 교차는 유지합니다. 폴더에서는 매 페이지의 같은 ID에 적용합니다.'}),
                     'source_review_policy': (['conservative','legacy'], {'default':'conservative',
-                    'tooltip':'conservative: 검증된 말풍선 밖 짧은 독립 문자·큰 제목은 원본 보존·검수. 실제 문자 판별 보증은 아닙니다. legacy는 기존 교체 정책입니다.'})}}
+                    'tooltip':'conservative: 검증된 말풍선 밖 짧은 독립 문자·큰 제목은 원본 보존·검수. 실제 문자 판별 보증은 아닙니다. legacy는 기존 교체 정책입니다.'}),
+                    'review_edits_json': ('STRING', {'default':'{}','multiline':True,
+                    'tooltip':'아래 영역 검수·브러시가 페이지/입력 revision별로 저장됩니다. 수정 후 Run합니다. 같은 ID의 다른 페이지에 적용하지 않습니다.'}),
+                    'page_context_json': ('STRING', {'forceInput':True})}}
     RETURN_TYPES = ('STRING', 'MASK', 'MASK', 'IMAGE', 'STRING')
     RETURN_NAMES = ('편집_명세_JSON', '교체할_원문_마스크', '교체할_제거_마스크', '편집_검수', '편집_보고서')
     FUNCTION = 'plan'
 
-    def plan(self, original, translated_json, source_mask, cleanup_mask, region_actions_json='{}', source_review_policy='conservative'):
+    def plan(self, original, translated_json, source_mask, cleanup_mask, region_actions_json='{}', source_review_policy='conservative', review_edits_json='{}', page_context_json='{}'):
         import numpy as np
         from .nodes import layout, decode, encode
         from .lettering.nodes import image, mask, tensor
@@ -223,9 +226,23 @@ class MangaPageEditPlan:
         source, cleanup = mask(source_mask), mask(cleanup_mask)
         document=layout(translated_json)
         from .source_recovery import recover_masks
-        source,cleanup=recover_masks(Image.fromarray((pixels*255).round().astype('uint8')),document,source,cleanup)
-        data = build(document, width, height, decode(region_actions_json), source, source_review_policy=source_review_policy)
-        source, cleanup = masks(data, source, cleanup)
+        original_image=Image.fromarray((pixels*255).round().astype('uint8'))
+        source,cleanup=recover_masks(original_image,document,source,cleanup)
+        from . import edit_review
+        actions=decode(region_actions_json)
+        if not isinstance(actions,dict):raise ValueError('Region actions need an object')
+        review=edit_review.select(document,original_image,source,cleanup,review_edits_json,page_context_json,source_review_policy,actions,
+                                  hashlib.sha256(pixels.tobytes()).hexdigest())
+        for ident,patch in review['selected_edits'].items():
+            if patch.get('action','auto')!='auto':actions[ident]=patch['action']
+        document={**document,'page_edit_review':review}
+        if review['warnings']:
+            document.update(needs_review=True,review_reason='stale_page_edit_review')
+        data = build(document, width, height, actions, source, source_review_policy=source_review_policy)
+        # Cards retain original detector ink and the unmodified brush base.
+        # Rendering pending edits in the browser then exactly mirrors the run.
+        cards=edit_review.cards(original_image,data,source,cleanup)
+        source,cleanup,brush_report=edit_review.paint(data,source,cleanup,review['selected_edits'])
         plan = data['page_edit_plan']
         preview = Image.fromarray((pixels*255).round().astype('uint8'))
         draw = ImageDraw.Draw(preview)
@@ -237,5 +254,10 @@ class MangaPageEditPlan:
             draw.rectangle((a, b, c-1, d-1), outline=(255, 80, 80), width=2)
         report = {**plan, 'replace_regions': sum(row['action'] == 'replace' for row in plan['regions']),
                   'preserve_regions': sum(row['action'] == 'preserve' for row in plan['regions']),
-                  'legend': 'green=replace; red=preserve', 'quality_scope': 'edit_permission_not_recognition_accuracy'}
-        return encode(data), tensor(source), tensor(cleanup), tensor(np.asarray(preview)/255), encode(report)
+                  'legend': 'green=replace; red=preserve', 'quality_scope': 'edit_permission_not_recognition_accuracy',
+                  'brush_edits':brush_report,'review_revision':review['input_revision'],'warnings':review['warnings']}
+        snapshot={**review,'regions':cards}
+        return {'ui':{'manga_edit_review':[snapshot],
+                      'manga_status':[{'state':'needs_review' if plan['needs_review'] or review['warnings'] else 'completed',
+                                       'message':f"교체 {report['replace_regions']} · 원본 보존 {report['preserve_regions']} · 브러시 {len(brush_report)}영역"}]},
+                'result':(encode(data), tensor(source), tensor(cleanup), tensor(np.asarray(preview)/255), encode(report))}

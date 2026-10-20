@@ -8,7 +8,7 @@ import os
 import uuid
 import numpy as np
 
-VERSION='0.7.10'
+VERSION='0.7.11'
 MAX_BYTES=256*1024*1024
 
 def root():

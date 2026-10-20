@@ -152,7 +152,7 @@ def test_punctuation_is_excluded_before_cleanup_and_not_reported_as_an_empty_pag
     monkeypatch.setattr(N,'api_json',lambda *a,**k:pytest.fail('Unexpected punctuation translation'))
     translated=N.MangaTranslate().translate(source,'unused','','Korean','',4096,300)[0]
     raw=torch.from_numpy((np.asarray(picture).mean(axis=2)<128).astype(np.float32))[None]
-    doc,source_mask,cleanup_mask,_,_=MangaPageEditPlan().plan(tensor(picture),translated,raw,raw)
+    doc,source_mask,cleanup_mask,_,_=MangaPageEditPlan().plan(tensor(picture),translated,raw,raw)['result']
     assert not source_mask.any() and not cleanup_mask.any()
     original=tensor(picture).numpy()[0]
     plan=make_plan(original,source_mask[0].numpy(),cleanup_mask[0].numpy(),regions_json=doc,recover_uniform_ink=True)

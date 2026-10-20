@@ -13,7 +13,7 @@ const code=name=>fs.readFileSync(path.join(root,'web',name),'utf8').replace(/^im
   window.api={addEventListener(){}};
   (0,eval)(`(()=>{${nodeCode}\n})();`);(0,eval)(`(()=>{${flowCode}\n})();`);
   const checks=[];
-  for(const order of [extensions,[...extensions].reverse()])for(const kind of ['MangaWorkflowInput','MangaReviewDocument','MangaLetterPlan','MangaOCRModel','MangaCleanupCheckpoint'])for(const width of [240,420,600]) {
+  for(const order of [extensions,[...extensions].reverse()])for(const kind of ['MangaWorkflowInput','MangaReviewDocument','MangaPageEditPlan','MangaLetterPlan','MangaOCRModel','MangaCleanupCheckpoint'])for(const width of [240,420,600]) {
    class Node {
     constructor(){this.widgets=[];this.properties={};this.size=[width,300];this.id=1;this.type=this.comfyClass=kind;this.host=document.createElement('section');this.host.style.cssText=`box-sizing:border-box;width:${width}px;padding:15px;background:#152333;color:white`;document.body.append(this.host);}
     addWidget(type,name,value,callback,options){const w={type,name,value,callback,options};this.widgets.push(w);return w;}
@@ -28,6 +28,10 @@ const code=name=>fs.readFileSync(path.join(root,'web',name),'utf8').replace(/^im
     node.widgets.push({name:'edits_json',value:'{}'});
     node.onExecuted({manga_document:[{stage:'target',input_revision:'A',identity_verified:true,page_identity:'page/A',document:{regions:Array.from({length:20},(_,i)=>({id:'r'+i,target:'긴 번역문 '.repeat(200)}))}}]});
    }
+   if(kind==='MangaPageEditPlan') {
+    node.widgets.push({name:'review_edits_json',value:'{}'});
+    node.onExecuted({manga_edit_review:[{input_revision:'maskA',page_identity:'page/A',regions:Array.from({length:20},(_,i)=>({id:'r'+i,source:'긴 원문 '.repeat(200),target:'본문',action:'replace',reason:'translated_region',bbox_pixels:[10,20,110,70],preview_size:[100,50]}))}]});
+   }
    const dom=node.widgets.filter(w=>w.element);
    if(dom.length!==1)throw Error(`${kind}: duplicate panels (${dom.length})`);
    for(const widget of dom){
@@ -36,11 +40,11 @@ const code=name=>fs.readFileSync(path.join(root,'web',name),'utf8').replace(/^im
     if(widget.element.scrollWidth>widget.element.clientWidth+1)throw Error(`${kind}/${width}: horizontal overflow`);
     if(widget.computeSize?.(width)[0]!==0)throw Error('Widget forces node width');
    }
-   if(node.mangaPanelBody && kind==='MangaReviewDocument' && node.mangaPanelBody.scrollHeight<=node.mangaPanelBody.clientHeight)throw Error('Review must scroll internally');
+   if(node.mangaPanelBody && ['MangaReviewDocument','MangaPageEditPlan'].includes(kind) && node.mangaPanelBody.scrollHeight<=node.mangaPanelBody.clientHeight)throw Error('Review must scroll internally');
    checks.push({kind,width,domWidgets:dom.length});node.host.remove();
   }
   return checks;
  },{nodeCode:code('node_ui.js'),flowCode:code('workflow_execution.js')});
- assert.equal(result.length,30);console.log('PASS: Chromium layout, 30 node/width/extension-order cases; no duplicate panel or slot overflow');
+ assert.equal(result.length,36);console.log('PASS: Chromium layout, 36 node/width/extension-order cases; no duplicate panel or slot overflow');
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

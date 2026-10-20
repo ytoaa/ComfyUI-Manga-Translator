@@ -290,6 +290,9 @@ def debug_observers(graph):
     return ignored
 
 
+REVIEW_EDIT_FIELDS = {'MangaReviewDocument':'edits_json', 'MangaPageEditPlan':'review_edits_json'}
+
+
 def workflow_fingerprint(graph, bind=None, *, legacy=False):
     """Hash semantic page-processing settings, not folder-control/location widgets."""
     bind = bind or workflow_bindings(graph)
@@ -306,8 +309,8 @@ def workflow_fingerprint(graph, bind=None, *, legacy=False):
     # Omitted optional input on existing 08 canvases has this same runtime
     # default. Adding its visible widget must not invalidate old project IDs.
     for node in canonical.values():
-        if node['class_type']=='MangaReviewDocument':
-            node['inputs'].pop('edits_json',None)
+        if node['class_type'] in REVIEW_EDIT_FIELDS:
+            node['inputs'].pop(REVIEW_EDIT_FIELDS[node['class_type']],None)
         if node['class_type']=='MangaDetectorDetail' and node['inputs'].get('boundary_policy')=='preserve_review':
             node['inputs'].pop('boundary_policy')
         if node['class_type']=='MangaLetterPlan' and node['inputs'].get('bubble_failure_policy')=='preserve_review':
@@ -467,8 +470,9 @@ class Project:
         owner=f'project/{self.project_id}/page/{page["id"]}'
         selected={}
         for key,node in self.graph.items():
-            if node['class_type']!='MangaReviewDocument':continue
-            edits=json.loads(node['inputs'].get('edits_json','{}'))
+            field=REVIEW_EDIT_FIELDS.get(node['class_type'])
+            if field is None:continue
+            edits=json.loads(node['inputs'].get(field,'{}'))
             if not isinstance(edits,dict):raise ProjectError('Invalid review edits')
             identities=edits.get('identities',{});pages=edits.get('pages',{})
             if not isinstance(identities,dict) or not isinstance(pages,dict):raise ProjectError('Invalid review edit identity')

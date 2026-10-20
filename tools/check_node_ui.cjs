@@ -3,12 +3,23 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 class Element {
  constructor(tag){this.tag=tag;this.children=[];this.style={};this.events={};this.textContent='';this.value='';}
  append(...els){this.children.push(...els);}replaceChildren(){this.children=[];}
- addEventListener(name,fn){this.events[name]=fn;}fire(name){this.events[name]?.();}
+ addEventListener(name,fn){this.events[name]=fn;}fire(name,event={}){this.events[name]?.(event);}
 }
-const document={createElement:tag=>new Element(tag)},listeners=new Map(),nodes=new Map();
+const rasterCalls=[];
+const context2d=new Proxy({}, {get:(_,name)=>(...args)=>rasterCalls.push([name,...args])});
+Element.prototype.getContext=undefined;
+const makeElement=tag=>{
+ const e=new Element(tag);
+ if(tag==='canvas'){
+  e.getContext=()=>context2d;e.setPointerCapture=()=>{};
+  e.getBoundingClientRect=()=>({left:10,top:20,width:200,height:100});
+ }return e;
+};
+class PreviewImage {set src(value){this.onload?.();}}
+const document={createElement:makeElement},listeners=new Map(),nodes=new Map();
 const app={graph:{getNodeById:id=>nodes.get(String(id))},registerExtension:e=>app.extension=e};
 const api={addEventListener:(name,fn)=>listeners.set(name,fn)};
-vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../web/node_ui.js'),'utf8').replace(/^import .*;$/gm,''),{app,api,document,console});
+vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname,'../web/node_ui.js'),'utf8').replace(/^import .*;$/gm,''),{app,api,document,console,TextEncoder,Image:PreviewImage});
 class Node {
  constructor(id){this.id=id;this.widgets=[{name:'edits_json',value:'{}'}];nodes.set(String(id),this);}
  addDOMWidget(name,type,element,options){const w={name,type,element,options};this.widgets.push(w);return w;}
@@ -40,7 +51,27 @@ class Node {
  node.mangaPanelBody.children.find(e=>e.tag==='textarea').value='Other';node.mangaPanelBody.children.find(e=>e.tag==='textarea').fire('input');
  assert.ok(JSON.parse(node.widgets[0].value).pages.pageA);assert.ok(JSON.parse(node.widgets[0].value).pages.pageB);
  for(const w of node.widgets.filter(w=>w.type==='manga_node_panel')){assert.equal(w.serialize,false);assert.equal(w.options.serialize,false);}
- for(const kind of ['MangaWorkflowInput','MangaReviewDocument','MangaOCRAdaptive','MangaLetterPlan','MangaLetterApply']) {
+ class EditNode extends Node {}
+ await app.extension.beforeRegisterNodeDef(EditNode,{name:'MangaPageEditPlan'});
+ const editNode=new EditNode(3);editNode.widgets=[{name:'review_edits_json',value:'{}'}];editNode.onNodeCreated();
+ const editSnapshot={input_revision:'maskA',page_identity:'project/a/page/1',regions:[{id:'r1',action:'replace',reason:'translated_region',source:'<img src=x>',target:'본문',bbox_pixels:[10,10,110,60],preview_size:[100,50]}]};
+ editNode.onExecuted({manga_edit_review:[editSnapshot]});
+ const card=editNode.mangaPanelBody.children.find(e=>e.children.some(q=>q.tag==='select'));
+ const select=card.children.find(e=>e.tag==='select');select.value='preserve';select.fire('change');
+ const owned=JSON.parse(editNode.widgets[0].value);assert.equal(owned.pages.maskA.r1.action,'preserve');assert.equal(owned.identities.maskA,'project/a/page/1');
+ const canvas=card.children.find(e=>e.tag==='canvas');
+ canvas.fire('pointerdown',{clientX:110,clientY:70,pointerId:1,button:0});
+ canvas.fire('pointermove',{clientX:400,clientY:200});canvas.fire('pointerup');
+ const brush=JSON.parse(editNode.widgets[0].value).pages.maskA.r1.strokes[0];
+ assert.deepEqual(brush,{mode:'add',radius:8,points:[[60,35],[109,59]]});
+ assert.ok(rasterCalls.some(c=>c[0]==='scale'&&c[1]===1&&c[2]===1));
+ const buttons=card.children.find(e=>e.children.some(q=>q.tag==='button')).children.filter(e=>e.tag==='button');
+ buttons[0].fire('click');assert.equal(JSON.parse(editNode.widgets[0].value).pages.maskA.r1.strokes.length,0);
+ buttons[1].fire('click');assert.deepEqual(JSON.parse(editNode.widgets[0].value).pages.maskA.r1,{});
+ editNode.onExecuted({manga_edit_review:[{...editSnapshot,input_revision:'maskB',page_identity:'project/a/page/2'}]});
+ assert.ok(JSON.parse(editNode.widgets[0].value).pages.maskA);assert.ok(!JSON.parse(editNode.widgets[0].value).pages.maskB);
+ assert.ok(!card.children.some(e=>e.tag==='img'));
+ for(const kind of ['MangaWorkflowInput','MangaReviewDocument','MangaPageEditPlan','MangaOCRAdaptive','MangaLetterPlan','MangaLetterApply']) {
   class SizingNode {
    constructor(){this.widgets=[];this.size=[420,600];}
    addDOMWidget(name,type,element,options){const w={name,type,element,options};this.widgets.push(w);return w;}
@@ -52,7 +83,7 @@ class Node {
   assert.equal(views.length,kind==='MangaWorkflowInput'?0:1);
   assert.deepEqual(Array.from(sizing.size),[420,600]);
   for(const view of views){
-   const h=kind==='MangaReviewDocument'?300:104;
+   const h=kind==='MangaReviewDocument'?300:kind==='MangaPageEditPlan'?420:104;
    assert.equal(view.options.getHeight(),h);assert.equal(view.options.getMinHeight(),h);assert.equal(view.options.getMaxHeight(),h);
    assert.equal(view.computeSize(240)[0],0);assert.equal(view.computeSize(240)[1],h);
    assert.match(view.element.style.cssText,/max-width:100%/);assert.match(sizing.mangaPanelBody.style.cssText,/overflow:auto/);

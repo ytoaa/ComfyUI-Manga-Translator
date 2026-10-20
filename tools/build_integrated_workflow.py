@@ -38,11 +38,12 @@ def build():
     g.connect(collect, 0, source_save, 'translated_json')
     translate = g.add('MangaTranslate', pos=(2940, 50), title='⑥ 번역 · 영역 ID 유지')
     g.connect(source_save, 0, translate, 'ocr_json')
-    edits = g.add('MangaPageEditPlan', {'source_review_policy':'conservative'}, pos=(3360, 50), title='⑥-2 삭제 전 원문 검수 · 교체 / 원본 보존')
+    edits = g.add('MangaPageEditPlan', {'source_review_policy':'conservative'}, pos=(3360, -2100), title='⑥-2 삭제 전 원문 검수 · 교체 / 원본 보존 / 마스크 브러시')
     g.connect(original, 0, edits, 'original')
     g.connect(translate, 0, edits, 'translated_json')
     g.connect(raw_mask, mask_slot, edits, 'source_mask')
     g.connect(grown, 0, edits, 'cleanup_mask')
+    g.nodes[edits-1]['size']=[420,1200]
     target_save = g.add('MangaSaveReview', {'filename_prefix': 'manga_translator/translation'}, (3780, 50), '번역·편집 계획 JSON 저장')
     g.connect(edits, 0, target_save, 'translated_json')
     plan = g.add('MangaInpaintPlan', {'recover_uniform_ink': True}, pos=(1680, 650), title='⑦ 단색 잔상 보완 · 제거 타일 계획')
@@ -108,11 +109,11 @@ def build():
         g.nodes[preview - 1]['size'] = [400, 260]
         g.nodes[preview - 1]['properties']['cnr_id'] = 'comfy-core'
         g.connect(source, 0, preview, 'source')
-    edit_preview = g.add('PreviewImage', pos=(3360, -550), title='검수 · 초록 교체 / 빨강 원본 보존')
+    edit_preview = g.add('PreviewImage', pos=(2940, -2100), title='검수 · 초록 교체 / 빨강 원본 보존')
     g.connect(edits, 3, edit_preview, 'images')
-    edit_report = g.add('PreviewAny', pos=(3780, 250), title='교체·보존 이유 · 미리보기 아무거나')
+    edit_report = g.add('PreviewAny', pos=(3780, -1700), title='교체·보존 이유 · 미리보기 아무거나')
     g.connect(edits, 4, edit_report, 'source')
-    g.note('입력 옆의 번역문 방향 노드: 가로 통일 / 세로 통일(오른쪽·왼쪽 열부터) / 원문 따라 자동.\n통일 설정은 모든 페이지와 영역별 direction보다 우선하며 OCR 읽기 방향은 바꾸지 않습니다.\n방향은 식자에만 연결되어 앞 단계의 캐시를 유지합니다.\n검증된 말풍선 밖 짧은 독립 문자·큰 제목은 삭제 전에 원본 보존·검수합니다. 실제 오탐 판별 보증은 아닙니다.\n페이지 편집 계획의 region_actions_json 예: {"r1":"preserve"}.\n확인한 영역은 replace로 명시할 수 있습니다. 원본 보존·미배정 획과 겹치는 이웃은 함께 보존·검수합니다.\n제거와 식자는 저장된 같은 편집 명세를 사용합니다. 계획 뒤에 원문/번역/좌표를 수정하면 계획부터 다시 실행하세요.', (3780, -350))
+    g.note('입력 옆 번역문 방향: 가로 / 세로 통일 / 원문 따라 자동. OCR 읽기 방향은 바꾸지 않습니다.\n삭제 전 원문 검수 노드에서 영역별 보존·교체를 선택하고 제거 마스크를 브러시로 보정합니다.\n주황은 제거 범위, 파랑은 원문 획입니다. 지우기는 파란 획을 제외할 수 없습니다.\n수정 뒤 Run하면 제거·식자가 같은 편집 계획을 사용합니다. 원본 보존·미배정 획과 겹친 이웃은 함께 보존합니다.\n편집은 페이지/원본/원문/번역/마스크에 묶이며 변경된 입력에는 자동 적용하지 않습니다.\n폴더에서는 이 페이지 편집만 다시 처리합니다. region_actions_json은 기존 공통 설정이므로 모든 페이지의 같은 ID에 적용됩니다.\n브러시는 지정 편집 사각형 안에서만 동작합니다. 미검출 글자 추가·좌표 수정·자동 효과음 완성은 아닙니다.', (3780, -2100))
     scope = g.add('PrimitiveBoolean', {'value': False}, pos=(0, 950), title='효과음·표지 큰 글자 포함 · 공통 스위치')
     g.nodes[scope - 1]['properties']['cnr_id'] = 'comfy-core'
     for node in (detector, regions, raw_mask):
@@ -184,6 +185,7 @@ def build():
     for node in (detection_cache,source_review,context,translation_cache,target_review,cleanup_cache,ocr_model):
         g.nodes[node-1]['size']=[420,520 if node in (source_review,target_review) else 380 if node==context else 270]
     g.note('원문/번역 검수 노드에서 텍스트를 고친 뒤 Run합니다. 수정은 페이지 revision별로 워크플로우에 저장됩니다.\n번역 확정은 사람이 확인한 페이지에만 사용하세요. 용어집과 확정된 이전 페이지를 번역 문맥으로 보냅니다.\n재사용 노드의 reuse=검증된 저장 결과, refresh=다시 계산, off=저장 없이 계산. 폰트/방향 수정은 검출/OCR/번역을 유지합니다.\n파란 다각형은 회전한 식자 프레임입니다. 제목/본문은 검증된 글줄 높이 차이가 있을 때 분리됩니다.\nOCR 엔진 선택은 정확도를 보장하지 않습니다. Manga OCR은 일본어용이며 자동 설치는 모델 파일에 한정합니다.',(0,3550))
+    g.connect(original,2,edits,'page_context_json')
     g.save(name)
     for suffix in ('.json', '.api.json'):
         path = ROOT / 'lettering/example_workflows' / (name + suffix)
