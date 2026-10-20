@@ -27,6 +27,53 @@ _MAX_RECOVERY_CALLS = 16
 _EDGE_TOLERANCE = 3
 
 
+def _compact_complete_sources(items, width, height):
+    """Share the budget only for same-frame, same-label, ink-backed aliases.
+
+    Clipped detections retain every window needed for endpoint certification.
+    This is deliberately narrower than the later logical-region resolver.
+    """
+    from .source_ownership import mask_overlap
+    from .limits import MAX_REGION_PIXELS
+    output, frames = [], {}
+    for item in items:
+        if (item.get('label') not in _TEXT_LABELS or not item.get('mask') or
+                item.get('tile_provenance', {}).get('clipped_edges')):
+            output.append(item)
+            continue
+        key = (item['label'], tuple(item['bbox']))
+        for index in frames.get(key, []):
+            other = output[index]
+            overlap = mask_overlap(other['mask'], item['mask'])
+            if not overlap or overlap['smaller_coverage'] < .98 or overlap['larger_coverage'] < .70:
+                continue
+            a, ab = _decode_mask(other['mask'], width, height)
+            b, bb = _decode_mask(item['mask'], width, height)
+            x, y = min(ab[0], bb[0]), min(ab[1], bb[1])
+            right, bottom = max(ab[0]+ab[2], bb[0]+bb[2]), max(ab[1]+ab[3], bb[1]+bb[3])
+            if (right-x)*(bottom-y) > MAX_REGION_PIXELS:
+                continue
+            pixels = np.zeros((bottom-y, right-x), dtype=bool)
+            for mask, (mx, my, mw, mh) in ((a, ab), (b, bb)):
+                pixels[my-y:my-y+mh, mx-x:mx-x+mw] |= mask > .5
+            runs = rle(pixels)
+            if len(runs) > 4_000_000:
+                continue
+            origins = []
+            for source in (other, item):
+                for origin in source.get('source_provenance', [source.get('tile_provenance', {'stage':'full'})]):
+                    if origin not in origins:
+                        origins.append(origin)
+            output[index] = {**other, 'score':max(other['score'], item['score']),
+                'mask':{'x':x, 'y':y, 'width':right-x, 'height':bottom-y, 'runs':runs},
+                'source_provenance':origins}
+            break
+        else:
+            frames.setdefault(key, []).append(len(output))
+            output.append(item)
+    return output
+
+
 def _window_detections(result, window, width, height, stage):
     x0, y0, x1, y1 = window
     if (result.get('image_width'), result.get('image_height')) != (x1-x0, y1-y0):
@@ -498,14 +545,22 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
                 break
     if len(windows) > 64:
         raise ValueError(f'Detail detection requires {len(windows)} windows; split the page (limit=64)')
-    recovered = []
+    candidates = list(full.get('detections', []))
+    full_count = len(candidates)
+    detail_count = compacted_count = 0
     for x0, x1, y0, y1 in windows:
         result = selected(model.detect(image.crop((x0, y0, x1, y1)), thresholds),'detail',(x0,y0))
-        recovered.extend(_window_detections(result, (x0, y0, x1, y1), width, height, 'detail'))
-        if len(full.get('detections', [])) + len(recovered) > 512:
+        items = _window_detections(result, (x0, y0, x1, y1), width, height, 'detail')
+        detail_count += len(items)
+        candidates.extend(items)
+        if len(candidates) > _MAX_REGIONS:
+            before = len(candidates)
+            candidates = _compact_complete_sources(candidates, width, height)
+            compacted_count += before-len(candidates)
+        if len(candidates) > _MAX_REGIONS:
             raise ValueError('Detail detector produced too many regions; lower detail mode or raise confidence thresholds')
 
-    if len(full.get('detections', [])) + len(recovered) > 512:
+    if len(candidates) > _MAX_REGIONS:
         raise ValueError('Detail detector produced too many regions; lower detail mode or raise confidence thresholds')
     # Recovery can itself discover excluded effects; apply the same selection
     # to every recovery response rather than only the initial detail pass.
@@ -514,7 +569,7 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
             return selected(model.detect(crop, options),'recovery')
         def detect_window(self,crop,options,window):
             return selected(model.detect(crop,options),'recovery',(window[0],window[1]))
-    complete, recovery = _recover_boundaries(image, RecoveryModel(), thresholds, list(full.get('detections', [])) + recovered, boundary_policy)
+    complete, recovery = _recover_boundaries(image, RecoveryModel(), thresholds, candidates, boundary_policy)
     recovery['include_sfx'] = include_sfx
     recovery['ignored_sfx_detections'] = ignored_sfx
     review = recovery.get('boundary_review')
@@ -524,8 +579,8 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
             'detections': complete,
             # Do not send fragment geometry to OCR, but retain its segmentation
             # pixels for cleanup even if a complete detection has a sparser mask.
-            'mask_fragments': [item for item in recovered
-                               if item['tile_provenance']['clipped_edges'] and
+            'mask_fragments': [item for item in candidates
+                               if item.get('tile_provenance', {}).get('clipped_edges') and
                                not any(boundary_review.intersects(item['bbox'],box) for box in protected)],
             'detail_detection': {
                 'mode': detail_mode,
@@ -533,7 +588,9 @@ def detail_detect(image, model, thresholds, detail_mode='auto', detail_overlap=6
                 'tile_size': tile,
                 'windows': windows,
                 'tiles': len(windows),
-                'detail_regions': len(recovered),
+                'detail_regions': detail_count,
+                'candidate_budget': {'limit':_MAX_REGIONS, 'raw_candidates':full_count+detail_count,
+                    'retained_candidates':len(candidates), 'consolidated_sources':compacted_count},
                 'zero_selected_compact_retry':retry_small,
                 'boundary_recovery': recovery,
             }})
