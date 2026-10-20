@@ -11,7 +11,7 @@ import re
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME_ROOT = {'README.md','CHANGELOG.md','VALIDATION.md','requirements.txt','LICENSE',
+RUNTIME_ROOT = {'README.md','CHANGELOG.md','VALIDATION.md','requirements.txt','requirements-alternatives.txt','LICENSE',
                 'LICENSE-THIRD-PARTY-APACHE','LICENSE-THIRD-PARTY-MIT',
                 'THIRD_PARTY_NOTICES.md','provenance.json'}
 WORKFLOW = '08-integrated-tiled-cleanup-lettering'

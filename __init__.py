@@ -62,3 +62,7 @@ NODE_DISPLAY_NAME_MAPPINGS.update({'MangaReviewDocument':'문서 검수 · 원�
     'MangaTextCheckpoint':'문서 단계 재사용','MangaDetectionCheckpoint':'검출 단계 재사용',
     'MangaCleanupCheckpoint':'지운 배경 재사용','MangaTranslationContext':'책 용어집 · 확정 번역 문맥',
     'MangaOCRModel':'OCR 엔진 · 모델 자동 준비'})
+
+from .alternative_models import NODE_CLASS_MAPPINGS as ALTERNATIVE_NODES, NODE_DISPLAY_NAME_MAPPINGS as ALTERNATIVE_NAMES
+NODE_CLASS_MAPPINGS.update(ALTERNATIVE_NODES)
+NODE_DISPLAY_NAME_MAPPINGS.update(ALTERNATIVE_NAMES)

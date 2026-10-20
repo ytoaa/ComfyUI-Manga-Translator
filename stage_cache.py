@@ -8,7 +8,7 @@ import os
 import uuid
 import numpy as np
 
-VERSION='0.7.7'
+VERSION='0.7.8'
 MAX_BYTES=256*1024*1024
 
 def root():
@@ -32,6 +32,11 @@ def model_identity(kind,inputs):
     """Local weight contents, not just mutable filenames. Hash once per file stat."""
     try:
         import folder_paths
+        if kind in ('MangaAlternativeDetectorModel','MangaLocalInpaintModel'):
+            from .alternative_models import DETECTORS,INPAINTERS
+            from .adapters.alternative_files import SPECS
+            key=(DETECTORS if kind=='MangaAlternativeDetectorModel' else INPAINTERS)[inputs['engine']]
+            return {k:{n:SPECS[k][n] for n in ('repository','revision','files')} for k in ([key,'ctd'] if key=='pp-det' else [key])}
         if kind=='MangaOCRModel':
             from .ocr_engines import spec
             repo,revision,files,_,_=spec(inputs.get('engine','Hayai v2'))

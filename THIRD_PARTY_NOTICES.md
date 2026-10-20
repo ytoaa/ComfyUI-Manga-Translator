@@ -49,3 +49,12 @@ SIL Open Font License 1.1 전문과 Reserved Font Name 'Source' 고지는
 ## Optional Manga OCR model
 
 The optional Japanese OCR engine loads [kha-white/manga-ocr-base](https://huggingface.co/kha-white/manga-ocr-base), revision `aa6573bd10b0d446cbf622e29c3e084914df9741`, distributed under Apache-2.0. Weights are not included in this repository or ZIP. The downloader verifies the fixed file SHA256 values in ocr_engines.py. The adapter uses Transformers locally; it does not vendor the manga-ocr application.
+
+## Optional CPU alternatives (v0.7.8)
+
+No alternative weights or inference outputs are distributed in Git or ZIP. `adapters/alternative_files.py` records every pinned source revision/URL and SHA256. The new adapter implements the model interfaces without vendoring CTD/PaddleOCR/IOPaint application code.
+
+- [mayocream/comic-text-detector-onnx](https://huggingface.co/mayocream/comic-text-detector-onnx), revision `a5d67ec772adef819ef5b0e7aa701fcf4c8bf74a`. The export model card declares Apache-2.0; the [dmMaze/comic-text-detector](https://github.com/dmMaze/comic-text-detector) application is GPL-3.0. Do not treat the exporter declaration as relicensing upstream application code. The application is not copied; raw-block results are not the full upstream pipeline.
+- [PaddlePaddle/PP-OCRv6_medium_det_safetensors](https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_safetensors) and [medium recognition](https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_safetensors), Apache-2.0 model cards. Safetensors are loaded locally through Transformers without remote code.
+- LaMa [advimman/lama](https://github.com/advimman/lama) and [Sanster/IOPaint](https://github.com/Sanster/IOPaint) references (Apache-2.0 projects). Big LaMa and AnimeMangaInpainting TorchScript artifacts come from the exact Sanster/models release URLs used by IOPaint; SHA256 is pinned. No training dataset or model files are included.
+- OpenCV, Transformers, PyTorch, PyYAML and pyclipper remain external dependencies with their own licenses.

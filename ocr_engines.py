@@ -9,7 +9,7 @@ from urllib.request import urlopen
 import uuid
 from .adapters import hayai_files
 
-ENGINES=('Hayai v2','Manga OCR · Japanese')
+ENGINES=('Hayai v2','Manga OCR · Japanese','PP-OCRv6 · multilingual (CPU)')
 MANGA_REPO='kha-white/manga-ocr-base'
 MANGA_REV='aa6573bd10b0d446cbf622e29c3e084914df9741'
 MANGA_FILES={
@@ -23,6 +23,9 @@ _LOCK=threading.RLock();_RESIDENT={}
 
 
 def spec(engine):
+    if engine==ENGINES[2]:
+        from .adapters.alternative_files import SPECS
+        s=SPECS['pp-rec'];return s['repository'],s['revision'],s['files'],s['urls'],'pp-ocrv6-medium-rec'
     if engine==ENGINES[0]:return hayai_files.REPO,hayai_files.REV,hayai_files.FILES,hayai_files.URLS,'hayai-ocr-v2'
     if engine==ENGINES[1]:return MANGA_REPO,MANGA_REV,MANGA_FILES,{n:f'https://huggingface.co/{MANGA_REPO}/resolve/{MANGA_REV}/{n}' for n in MANGA_FILES},'manga-ocr-base'
     raise ValueError('Unknown OCR engine')
@@ -36,6 +39,9 @@ def sha(path):
 
 
 def ensure(engine,download=True,progress=lambda *a:None):
+    if engine==ENGINES[2]:
+        from .alternative_models import ensure as ensure_alternative
+        return ensure_alternative('pp-rec',download,progress)
     import folder_paths
     repo,rev,files,urls,name=spec(engine)
     destination=Path(folder_paths.models_dir)/'manga_translator'/'ocr'/name
@@ -133,6 +139,9 @@ class MangaOCRModel:
     def load(self,engine=ENGINES[0],download_missing=True,device='auto',unique_id=None):
         import torch
         if device not in ('auto','cuda','cpu'):raise ValueError('Invalid OCR device')
+        if engine==ENGINES[2]:
+            if device=='cuda':raise ValueError('PP-OCRv6 adapter is CPU only; select cpu or auto')
+            device='cpu'
         if device=='auto':device='cuda' if torch.cuda.is_available() else 'cpu'
         if device=='cuda' and not torch.cuda.is_available():raise ValueError('CUDA is unavailable; select cpu or auto')
         def progress(i,total,name,count):
@@ -142,5 +151,9 @@ class MangaOCRModel:
             except ImportError:pass
         folder=ensure(engine,download_missing,progress)
         status={'state':'ready','engine':engine,'device':device,'folder':str(folder),'revision':spec(engine)[1],
-                'language_scope':'Japanese' if engine==ENGINES[1] else 'model-supported scripts; verify recognition'}
-        return {'ui':{'manga_status':[status]},'result':(LazyOCR(engine,folder,device),json.dumps(status,ensure_ascii=False))}
+                'language_scope':'Japanese' if engine==ENGINES[1] else 'Japanese/Chinese/English/declared Latin scripts; verify recognition' if engine==ENGINES[2] else 'model-supported scripts; verify recognition'}
+        if engine==ENGINES[2]:
+            from .alternative_models import Model
+            backend=Model('pp-rec',folder)
+        else:backend=LazyOCR(engine,folder,device)
+        return {'ui':{'manga_status':[status]},'result':(backend,json.dumps(status,ensure_ascii=False))}

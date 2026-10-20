@@ -1,3 +1,9 @@
+## v0.7.8
+
+- CTD OpenCV DNN / PP-OCRv6+CTD 획 검출, PP-OCRv6 CPU OCR을 선택형 노드/엔진으로 추가합니다. 고정 revision·SHA 다운로드, 모델 세대와 checkpoint 의존성 검사를 적용합니다. 기존 RF/Hayai 기본값은 유지합니다.
+- LaMa / Anime LaMa로 남은 제거 타일을 실제 처리하고 기존 보호·마스크 assembly에 연결합니다. 빈 계획은 lazy 모델을 생략하며 무변화 후보는 strict 검사로 거부합니다.
+- 같은 만화 입력의 CPU 모델 비교와 36조건 연결 검사를 분리합니다. 그림 무늬 손상·OCR 퇴행·검출 누락·작은 후리가나 거부는 해결 완료로 세지 않습니다. [적용과 제한](docs/validation/alternative-models.md). 이미지·응답·가중치는 Git에 포함하지 않습니다.
+
 # 주요 변경 이력
 
 세부 관측은 검증 문서, 사용 방법은 현재 가이드에서 관리합니다. 이 파일은 버전별 설치 매뉴얼이 아닙니다.
