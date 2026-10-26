@@ -568,7 +568,7 @@ class MangaTranslate:
                   'Return one complete JSON object only, with no Markdown fences or commentary: '
                   '{"translations":[{"id":"r1","target":"translated text"}]}. '
                   'Preserve names and meaning; use natural comic dialogue. Preserve paragraph breaks where useful. '
-                  'Targets are plain text, never HTML or Markdown. Encode line breaks as JSON \\n escapes, never <br> tags, ^n, {n}, or literal double-escaped newline tokens. Do not invent formatting markers.')
+                  'Targets are plain text, never HTML or Markdown. Encode line breaks as JSON \\n escapes, never <br> tags, ^n, {n}, or literal double-escaped newline tokens. Do not invent formatting markers. Never insert a bare Latin n between translated phrases as a line break.')
         messages = [{'role':'system','content':system},{'role':'user','content':encode({'regions':[{'id':r['id'],'source':r['source']} for r in requested]})}]
         if context_json:
             if len(context_json.encode())>512*1024:raise ValueError('Translation context exceeds 512 KiB')
@@ -632,7 +632,7 @@ class MangaTranslate:
                     if attempt==0:
                         logging.getLogger(__name__).warning('Translation response rejected (%s; %s); retrying this batch once',detail,metadata)
                         group_messages=group_messages[:2]+[{'role':'user','content':
-                            'The previous answer did not satisfy the required JSON/region contract. Translate every original region in this batch again and return ONLY one complete JSON object with a translations array containing each original id exactly once and a nonempty target. Targets must be plain text with JSON \\n escapes for line breaks and no unresolved OCR markers. Do not use literal ^n, {n}, double-escaped newline tokens, Markdown fences, reasoning, commentary, partial JSON, or change the original IDs.'}]
+                            'The previous answer did not satisfy the required JSON/region contract. Translate every original region in this batch again and return ONLY one complete JSON object with a translations array containing each original id exactly once and a nonempty target. Targets must be plain text with JSON \\n escapes for line breaks and no unresolved OCR markers. Do not use literal ^n, {n}, a bare Latin n between translated phrases, double-escaped newline tokens, Markdown fences, reasoning, commentary, partial JSON, or change the original IDs.'}]
                         continue
                     fail('Translation response rejected after one retry ('+detail+'; '+metadata+'); no partial translation was accepted','invalid_translation')
                 return result['regions']
