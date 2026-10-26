@@ -61,6 +61,14 @@ def profile(reference, cleaned, support, font_name, foreground=None):
     significant = [(a,b) for a,b in runs if b-a >= max(3,max(lengths,default=3)*.45)]
     lengths = [b-a for a,b in significant]
     visible = float(np.median(lengths)) if lengths else float(min(width,height))
+    # Projection bands can collapse many staggered glyphs into one huge row.
+    # Do not silently treat that connected extent as one font size.
+    labels,count=ndimage.label(ink)
+    extents=[max(sl[0].stop-sl[0].start,sl[1].stop-sl[1].start)
+             for sl in ndimage.find_objects(labels,max_label=min(count,8192)) if sl is not None and
+             min(sl[0].stop-sl[0].start,sl[1].stop-sl[1].start)>=3]
+    component_extent=float(np.percentile(extents,90)) if len(extents)>=8 else None
+    measurement_warning=('inconsistent_source_typography' if component_extent and visible>4*component_extent else None)
     path=core.font_path(font_name,'')
     from pathlib import Path
     stat=Path(path).stat();coverage=core._font_coverage(path,stat.st_mtime_ns,stat.st_size)
@@ -82,7 +90,7 @@ def profile(reference, cleaned, support, font_name, foreground=None):
                 starts.append(xx.min());ends.append(xx.max());centers.append((xx.min()+xx.max())/2)
         variation = [float(np.std(v)) for v in (starts,centers,ends)]
         alignment = ('left','center','right')[int(np.argmin(variation))]
-    return {'font_cap':em,'visible_height':round(visible,2),'direction':direction,
+    return {'measurement_warning':measurement_warning,'component_extent_p90':component_extent,'font_cap':em,'visible_height':round(visible,2),'direction':direction,
             'alignment':alignment,'line_count':max(1,len(significant)),
             'confidence':'heuristic; override ambiguous or rotated source',
             'ink_bbox':[int(xs.min()),int(ys.min()),width,height]}, ink
@@ -313,6 +321,12 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
                 preserve_item(item,{'code':'insufficient_rectified_style_pixels'},'insufficient_source_style_pixels')
                 continue
             measured=rectified
+        if measured.get('measurement_warning') and 'font_cap' not in opts and 'max_font' not in item.get('layout',{}):
+            if fit_failure_policy=='stop' or selected_mode=='strict':
+                raise ValueError(f'{ident}: inconsistent source typography; review crop and mask')
+            preserve_item(item,{'code':'inconsistent_source_typography','measured_font_cap':measured['font_cap'],
+                'component_extent_p90':measured['component_extent_p90']},'inconsistent_source_typography')
+            continue
         style=core.adjust_style(style,**item.get('style',{}))
         layout=dict(item.get('layout',{}))
         # Old JSON controls remain usable; all values are validated by the renderer.
@@ -589,14 +603,14 @@ def _render_plan_once(plan):
                         'source_ratio_relaxed':render['font_size']<region['floor'],
                         'bubble_containment':region.get('bubble_containment',{'status':'disabled'}),
                         'original_text':region['original_text'],'line_breaks':region['line_breaks'],
-                        'outline_width':style['outline_width'],'bend':region['bend'],'warning':region['warning']})
+                        'outline_width':style['outline_width'],'bend':region['bend'],'warning':('source_ratio_relaxed' if render['font_size']<region['floor'] else region['warning'])})
     # All source ownership and actual glyph alpha checks finish before the
     # first composite. A rejected attempt cannot leak partially placed layers.
     for layer,alpha,place in staged:
         result,changed=core.composite(result,layer,alpha,place)
         page_alpha=changed+page_alpha*(1-changed)
     return result,page_alpha,json.dumps({'schema':1,'regions':reports,
-        'protected_boxes_pixels':protected,'needs_review':plan.get('boundary_review_required',bool(protected)) or plan.get('needs_review',False),
+        'protected_boxes_pixels':protected,'needs_review':plan.get('boundary_review_required',bool(protected)) or plan.get('needs_review',False) or any(r['source_ratio_relaxed'] for r in reports),
         'page_direction':plan.get('page_direction'),
         'preserved_punctuation':plan.get('preserved_punctuation',[]),
         'source_preservation':plan.get('source_preservation',[]),

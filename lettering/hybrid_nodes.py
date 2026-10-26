@@ -86,7 +86,7 @@ class MangaLetterApply:
         diagnostic=json.loads(report)
         count=len(diagnostic.get('regions',[]))
         preserved=len(diagnostic.get('lettering_review',[]))+len(diagnostic.get('source_preservation',[]))
-        message=(f"{'부분 처리' if count else '원본 보존'} · 처리 {count}개 · 보존 {preserved}개 · 검수 필요"
+        message=(f"{'부분 처리' if count and preserved else '처리 완료' if count else '원본 보존'} · 처리 {count}개 · 보존 {preserved}개 · 검수 필요"
                  if diagnostic['needs_review'] else '검출 영역 없음 · 원본 유지' if not count else '식자 완료')
         return {'ui':{'manga_lettering_report':[diagnostic],
                       'manga_status':[{'state':'needs_review' if diagnostic['needs_review'] else 'completed',

@@ -69,7 +69,13 @@ def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CON
         for left in range(len(items)):
             for right in range(left + 1, len(items)):
                 a, b = items[left], items[right]
-                if barriers and not compatible(a,b,barriers):continue
+                if barriers and not compatible(a,b,barriers):
+                    # A separator may cut across a duplicate observation's bbox.
+                    # Shared original ink is stronger evidence than bbox sides.
+                    from .source_ownership import mask_overlap
+                    overlap=mask_overlap(a.get('mask'),b.get('mask'))
+                    if not (a['label']==b['label'] and containment_overlap(a['bbox'],b['bbox'])>=.9
+                            and overlap and overlap['smaller_coverage']>=.92):continue
                 alias = alias_phase and _identical_cross_label_source(a, b)
                 if a['label'] != b['label'] and not alias:
                     continue
@@ -236,12 +242,18 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
         from .source_ownership import bubble_verified
         from .source_ownership import mask_overlap
         ambiguous = {}
+        ambiguity_reasons = {}
         for i, a in enumerate(selected):
             for j, b in enumerate(selected[i+1:], i+1):
-                if a['label'] == b['label'] or iou(a['bbox'], b['bbox']) < .5:
+                if _intersection(a['bbox'], b['bbox']) <= 0:
                     continue
                 support = mask_overlap(a.get('mask'), b.get('mask'))
-                if support and support['smaller_coverage'] >= .85 and support['larger_coverage'] >= .65:
+                same_label=a['label']==b['label']
+                if support and ((same_label and support['smaller_coverage']>=.25) or
+                        (not same_label and iou(a['bbox'],b['bbox'])>=.5 and
+                         support['smaller_coverage']>=.85 and support['larger_coverage']>=.65)):
+                    reason='ambiguous_source_overlap' if same_label else 'ambiguous_cross_label_source'
+                    ambiguity_reasons[i]=reason;ambiguity_reasons[j]=reason
                     ambiguous.setdefault(i, []).append(f'r{j+1}')
                     ambiguous.setdefault(j, []).append(f'r{i+1}')
         rows = [{'id': f'r{i+1}',
@@ -254,11 +266,11 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
                      'labels': item.get('source_labels', [item['label']]), 'cross_label_alias': item.get('cross_label_alias', False),
                      'bubble_verified': bubble_verified(item, bubbles),
                      **({'boundary_partition':item['boundary_partition']} if item.get('boundary_partition') else {}),
-                     **({'review_reason':'ambiguous_cross_label_source','related_region_ids':ambiguous[i]} if i in ambiguous else {})},
+                     **({'review_reason':ambiguity_reasons[i],'related_region_ids':ambiguous[i]} if i in ambiguous else {})},
                  **({'line_bboxes_pixels': item['line_bboxes']} if 'line_bboxes' in item else {})}
                 for i, item in enumerate(selected)]
         value = encode({'regions': rows, 'origin': 'rfdetr',
-                        **({'needs_review':True,'review_reason':'ambiguous_cross_label_source'} if ambiguous else {}),
+                        **({'needs_review':True,'review_reason':('ambiguous_source_overlap' if 'ambiguous_source_overlap' in ambiguity_reasons.values() else 'ambiguous_cross_label_source')} if ambiguous else {}),
                         **({'needs_review':True,'review_reason':'unresolved_detection_boundary',
                             'boundary_review':{**result.get('boundary_review', {}), 'schema':1,
                                 'protected_boxes_pixels':protected}} if protected else {}),

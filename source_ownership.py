@@ -62,8 +62,8 @@ def review_reason(row, width, height):
     evidence = row.get('source_ownership')
     if not isinstance(evidence, dict) or evidence.get('schema') != 1:
         return None
-    if evidence.get('review_reason') == 'ambiguous_cross_label_source':
-        return 'ambiguous_cross_label_source'
+    if evidence.get('review_reason') in ('ambiguous_cross_label_source','ambiguous_source_overlap'):
+        return evidence['review_reason']
     if evidence.get('bubble_verified') is True:
         return None
     source = ''.join(c for c in row.get('source', '') if not c.isspace())
