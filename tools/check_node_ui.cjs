@@ -71,6 +71,12 @@ class Node {
  editNode.onExecuted({manga_edit_review:[{...editSnapshot,input_revision:'maskB',page_identity:'project/a/page/2'}]});
  assert.ok(JSON.parse(editNode.widgets[0].value).pages.maskA);assert.ok(!JSON.parse(editNode.widgets[0].value).pages.maskB);
  assert.ok(!card.children.some(e=>e.tag==='img'));
+ const failedReport={regions:[],lettering_review:[{id:'r7',reason:'unsupported_translation_glyphs',diagnostic:{missing_characters:['ل','<img src=x>']}}]};
+ editNode.onExecuted({manga_lettering_report:[failedReport]});
+ assert.match(editNode.mangaPanelBody.children[0].textContent,/r7.*폰트.*ل.*<img src=x>/);
+ assert.ok(!editNode.mangaPanelBody.children.some(e=>e.tag==='img'));
+ editNode.onExecuted({manga_lettering_report:[{regions:[{id:'r1'}]}]});
+ assert.equal(editNode.mangaPanelBody.children[0].textContent,'식자 1영역');
  for(const kind of ['MangaWorkflowInput','MangaReviewDocument','MangaPageEditPlan','MangaOCRAdaptive','MangaLetterPlan','MangaLetterApply']) {
   class SizingNode {
    constructor(){this.widgets=[];this.size=[420,600];}

@@ -216,8 +216,9 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         plan['needs_review']=True
         plan['lettering_review'].append({'id':item['id'],'parent_id':item.get('parent_id',item['id']),
             'bbox_pixels':box,'reason':reason,'diagnostic':diagnostic})
-    # Prepare masks once, rather than decoding every detection for every text.
-    bubble_items=(bubble_constraints.candidates(bubble_mask,detection_result,original.shape)
+    # Validate the page index once; decode only candidate interiors belonging
+    # to active text owners. Unrelated tiled bubbles do not spend a fit budget.
+    bubble_index=(bubble_constraints.RegionCandidates(bubble_mask,detection_result,original.shape)
                   if respect_bubbles or any(v.get('respect_bubbles') or v.get('require_bubble')
                                             for v in overrides.values() if isinstance(v,dict)) else [])
     reports=[]
@@ -229,7 +230,13 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         allowed={'font','mode','direction','font_cap','min_font','min_scale','alignment','rotation','shear','bend','padding','max_lines','line_spacing','tracking','line_breaks','fit_policy','respect_bubbles','require_bubble'}
         if not isinstance(opts,dict) or set(opts)-allowed: raise ValueError(f'{ident}: unknown typography override')
         font=opts.get('font',item.get('font',default_font))
-        font,font_fallback=core.resolve_font(font,item['text'])
+        try:
+            font,font_fallback=core.resolve_font(font,item['text'])
+        except core.FontCoverageError as exc:
+            if fit_failure_policy=='stop' or opts.get('mode',mode)=='strict':
+                raise ValueError(f'{ident}: {exc}') from None
+            preserve_item(item,exc.diagnostic,'unsupported_translation_glyphs')
+            continue
         ref,clean,mask,_=core.crop_region(original,cleaned,support,item['bbox'])
         if item.get('frame_quad'):
             owned=Image.new('L',(ref.shape[1],ref.shape[0]));x,y,_,_=item['bbox']
@@ -300,6 +307,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         guard=None;guard_report={'status':'disabled'}
         if respect or require:
             try:
+                bubble_items=bubble_index.for_region(source,ink)
                 guard,guard_report=bubble_constraints.constrain(ink,source,bubble_items,original.shape,pad,
                                                                selected_mode=='bubble')
             except bubble_constraints.BubbleContainmentError as exc:
@@ -308,9 +316,11 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
                 continue
             if require and guard is None:raise ValueError(f'{ident}: no verified enclosing bubble; require_bubble is enabled')
         bubble=None
-        if selected_mode=='bubble' and bubble_mask is not None:
+        if selected_mode=='bubble' and guard is not None:
+            bubble=guard['rectangle']
+        elif selected_mode=='bubble' and bubble_mask is not None:
             bubble=bubble_rect(bubble_mask,source,original.shape,pad)
-        if selected_mode=='bubble' and bubble_mask is None and detection_result is not None:
+        elif selected_mode=='bubble' and bubble_mask is None and detection_result is not None:
             bubble=detected_bubble_rect(detection_result,source,original.shape,pad)
         warning=None
         if selected_mode=='bubble' and bubble is None: warning='No enclosing bubble mask; source frame retained'
@@ -378,7 +388,10 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         for region in list(plan['regions']):
             x,y,w,h=region['source'];box=[x,y,x+w,y+h]
             if any(boundary_review.intersects(box,r['bbox_pixels']) for r in plan['lettering_review']):
-                preserve_item(region,{'code':'overlaps_preserved_bubble_region'})
+                nonbubble=any(r['reason']!='unverified_bubble_ownership' and boundary_review.intersects(box,r['bbox_pixels'])
+                              for r in plan['lettering_review'])
+                preserve_item(region,{'code':'overlaps_preserved_lettering_region' if nonbubble else 'overlaps_preserved_bubble_region'},
+                              'overlaps_preserved_lettering_region' if nonbubble else 'unverified_bubble_ownership')
                 plan['regions'].remove(region);reports=[r for r in reports if r['id']!=region['id']];pending=True
     for item in plan['lettering_review']:
         a,b,c,d=item['bbox_pixels'];draw.rectangle((a,b,c-1,d-1),outline=(255,60,80),width=3)

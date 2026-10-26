@@ -3,7 +3,7 @@ import numpy as np
 from . import boundary_review
 
 
-def _decode_mask(raw,page_width,page_height):
+def _mask_metadata(raw,page_width,page_height):
     if not isinstance(raw,dict):
         raise ValueError('Detection does not contain a segmentation mask')
     x,y,width,height=(raw.get(key) for key in ('x','y','width','height'))
@@ -16,6 +16,11 @@ def _decode_mask(raw,page_width,page_height):
         raise ValueError('Invalid detector mask RLE')
     if sum(runs) != width*height:
         raise ValueError('Detector mask RLE length mismatch')
+    return (x,y,width,height),runs
+
+
+def _decode_mask(raw,page_width,page_height):
+    (x,y,width,height),runs=_mask_metadata(raw,page_width,page_height)
     values=np.repeat(np.arange(len(runs),dtype=np.uint32)%2,runs).astype(np.float32)
     return values.reshape(height,width),(x,y,width,height)
 

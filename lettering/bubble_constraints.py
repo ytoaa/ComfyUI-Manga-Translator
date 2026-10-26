@@ -11,6 +11,70 @@ class BubbleContainmentError(ValueError):
         self.diagnostic={'code':code,**(evidence or {})}
 
 
+def _merge(found,current):
+    """Deduplicate only strongly corroborated interiors, never by box alone."""
+    for previous in found:
+        left,top,right,bottom=overlap(previous['bounds'],current['bounds'])
+        if left>=right or top>=bottom:continue
+        a,b,_,_=previous['bounds'];x,y,_,_=current['bounds']
+        common=(previous['mask'][top-b:bottom-b,left-a:right-a] &
+                current['mask'][top-y:bottom-y,left-x:right-x])
+        count=int(common.sum());largest=max(int(previous['mask'].sum()),int(current['mask'].sum()))
+        if largest and count/largest>=.95:
+            exact=(previous['bounds']==current['bounds'] and np.array_equal(previous['mask'],current['mask']))
+            previous.update(mask=common,bounds=[left,top,right-left,bottom-top],
+                            source=previous['source'] if exact else 'detector_intersection')
+            return
+    found.append(current)
+
+
+class RegionCandidates:
+    """Index page observations, decode only masks relevant to a source region.
+
+    The 64-interior fitting budget is per text owner, not a count of every
+    bubble observation on a tiled page. RLE metadata is validated even outside
+    the selected regions. Each decoded working set keeps the existing pixel
+    ceiling; near-duplicate observations are intersected before being retained.
+    """
+    def __init__(self,provided,detection,shape):
+        from ..mask_nodes import _mask_metadata
+        self.shape=shape;self.records=[]
+        self.provided=candidates(provided,None,shape) if provided is not None else None
+        if self.provided is not None or detection is None:return
+        seen=set();observations=0
+        for item in detection['detections']:
+            if item.get('label')!='bubble' or not isinstance(item.get('mask'),dict):continue
+            observations+=1
+            if observations>512:raise ValueError('Bubble observations exceed the 512-candidate detector budget')
+            bounds,runs=_mask_metadata(item['mask'],shape[1],shape[0])
+            if not any(runs[1::2]):continue
+            signature=(bounds,tuple(runs))
+            if signature in seen:continue
+            seen.add(signature)
+            self.records.append({'raw':item['mask'],'bounds':list(bounds)})
+
+    def for_region(self,source,ink=None):
+        from ..mask_nodes import _decode_mask
+        if self.provided is not None:return self.provided
+        found=[]
+        for record in self.records:
+            left,top,right,bottom=overlap(source,record['bounds'])
+            if left>=right or top>=bottom:continue
+            local,_=_decode_mask(record['raw'],self.shape[1],self.shape[0])
+            x,y,_,_=source;a,b,_,_=record['bounds']
+            covered=local[top-b:bottom-b,left-a:right-a]>.5
+            if ink is not None:covered &= ink[top-y:bottom-y,left-x:right-x]
+            if not covered.any():continue
+            _merge(found,{'mask':local>.5,'bounds':record['bounds'], 'source':'detector'})
+            if len(found)>64:
+                raise BubbleContainmentError('Too many detected bubble masks for this text region',
+                    'bubble_candidate_limit',{'candidate_count':len(found),'limit':64,'source_bounds_xywh':list(source)})
+            if sum(row['mask'].size for row in found)>core.MAX_SOURCE_PIXELS:
+                raise ValueError('Bubble mask analysis exceeds the 64 Mi-pixel source-page ceiling')
+        for index,row in enumerate(found):row.update(index=index,pixels=int(row['mask'].sum()),safe={})
+        return found
+
+
 def candidates(provided, detection, shape):
     from ..mask_nodes import _decode_mask
     found=[]
@@ -29,19 +93,7 @@ def candidates(provided, detection, shape):
             current={'mask':local>.5,'bounds':list(bounds),'source':'detector'}
             # Full/detail passes may report one bubble dozens of times. Keep
             # their common interior, never a union or the most permissive mask.
-            for previous in found:
-                left,top,right,bottom=overlap(previous['bounds'],current['bounds'])
-                if left>=right or top>=bottom:continue
-                a,b,_,_=previous['bounds'];x,y,_,_=current['bounds']
-                common=(previous['mask'][top-b:bottom-b,left-a:right-a] &
-                        current['mask'][top-y:bottom-y,left-x:right-x])
-                count=int(common.sum());largest=max(int(previous['mask'].sum()),int(current['mask'].sum()))
-                if largest and count/largest>=.95:
-                    exact=(previous['bounds']==current['bounds'] and np.array_equal(previous['mask'],current['mask']))
-                    previous.update(mask=common,bounds=[left,top,right-left,bottom-top],
-                                    source=previous['source'] if exact else 'detector_intersection')
-                    break
-            else:found.append(current)
+            _merge(found,current)
             if len(found)>64:raise ValueError('Too many detected bubble masks')
             if sum(row['mask'].size for row in found)>core.MAX_SOURCE_PIXELS:
                 raise ValueError('Bubble mask analysis exceeds the 64 Mi-pixel source-page ceiling')

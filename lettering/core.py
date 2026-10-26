@@ -222,6 +222,16 @@ def _font_coverage(path, mtime_ns, size):
         font.close()
 
 
+class FontCoverageError(ValueError):
+    """The requested text cannot be represented; never discard its characters."""
+    def __init__(self,selection,missing):
+        super().__init__('Font lacks requested characters: '+''.join(missing[:24])+'; choose a font covering the translation')
+        self.diagnostic={'code':'font_missing_glyphs','requested_font':selection,
+                         'missing_characters':missing[:24],
+                         'missing_codepoints':[f'U+{ord(c):04X}' for c in missing[:24]],
+                         'missing_count':len(missing),'text_preserved':True}
+
+
 def font_path(selection, text):
     candidates = fonts()
     if selection not in candidates:
@@ -231,7 +241,7 @@ def font_path(selection, text):
     coverage = _font_coverage(path, stat.st_mtime_ns, stat.st_size)
     missing = sorted({c for c in text if not c.isspace() and ord(c) not in coverage})
     if missing:
-        raise ValueError('Font lacks requested characters: ' + ''.join(missing[:24]) + '; choose a font covering the translation')
+        raise FontCoverageError(selection,missing)
     return path
 
 
@@ -243,13 +253,13 @@ def resolve_font(selection, text):
     try:
         font_path(selection,text)
         return selection, None
-    except ValueError as primary_error:
+    except FontCoverageError as primary_error:
         preferred=['MangaSansKR-Fallback.ttf']
         alternatives=preferred+[name for name in available if name not in preferred and name!=selection]
         for name in alternatives:
             if name not in available or name==selection: continue
             try: font_path(name,text)
-            except ValueError: continue
+            except FontCoverageError: continue
             return name, {'requested_font':selection,'selected_font':name,
                           'reason':'requested_font_missing_glyphs','text_preserved':True}
         raise primary_error
