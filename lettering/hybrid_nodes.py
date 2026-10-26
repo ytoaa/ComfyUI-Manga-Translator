@@ -43,7 +43,7 @@ class MangaLetterPlan:
             'default_font':field(list(core.fonts()) or ['NanumGothic-Bold.ttf'],'한글을 지원하는 폰트 선택',default='NanumGothic-Bold.ttf'),
             'mode':field(list(hybrid.MODES),'source=원래 영역에서 축소·재배치, bubble=실제 내부 마스크 안에서 확장, strict=원문 행/열 수 제한',default='source'),
             'direction':field(list(hybrid.DIRECTIONS),'auto는 원문 픽셀의 방향 추정. 영역별 JSON으로 덮어쓸 수 있습니다.',default='auto'),
-            'min_font':field('INT','가독성 최소 크기. 맞지 않으면 저장 전에 중단',default=10,min=4,max=128),
+            'min_font':field('INT','가독성 최소 크기. 기본 정책은 원문 상한·배치와 충돌하면 원본 보존·검수하며 stop/strict는 중단합니다.',default=10,min=4,max=128),
             'min_scale':field('FLOAT','원문 기준 최소 축소 비율',default=.55,min=.2,max=1.,step=.05),
             'padding':field('INT','글자·외곽선 여백(px)',default=2,min=0,max=32),
             'region_options_json':field('STRING','영역 ID별 설정. 예: {"r1":{"direction":"vertical_rtl","font_cap":28},"r2":{"rotation":8,"bend":12}}. bend는 수동 곡선(px).',default='{}',multiline=True)},
@@ -54,7 +54,7 @@ class MangaLetterPlan:
                         'respect_bubbles':field('BOOLEAN','확인된 말풍선의 실제 픽셀 마스크 밖에 글자 알파가 생기면 거부합니다. 단순 사각형 경계와 다릅니다.',default=False),
                         'page_direction':field('STRING','번역문 방향 노드 출력. 가로/세로 통일은 모든 영역의 방향 설정보다 우선합니다.',forceInput=True),
                         'bubble_failure_policy':field(['preserve_review','stop'],'말풍선 소유권이 불확실하면 해당 영역과 겹친 이웃만 원본 복원·검수합니다. stop은 페이지를 중단합니다. require_bubble은 항상 중단합니다.',default='preserve_review'),
-                        'fit_failure_policy':field(['preserve_review','stop'],'최소 크기에서도 배치 불가하면 연결된 원문 편집 영역을 복원·검수하고 독립 영역은 계속 식자합니다. strict는 계속 중단합니다.',default='preserve_review')}}
+                        'fit_failure_policy':field(['preserve_review','stop'],'원문 상한이 최소 크기보다 작거나 지원 글리프·스타일 근거·배치가 부족하면 연결된 원문 편집 영역을 복원·검수합니다. 독립 영역은 계속 식자하며 잘못된 설정·자원 한도·strict는 중단합니다.',default='preserve_review')}}
     RETURN_TYPES=('MANGA_LETTER_PLAN','IMAGE','STRING')
     RETURN_NAMES=('식자_계획','배치_검수','계획_보고서')
     FUNCTION='plan'

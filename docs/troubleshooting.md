@@ -26,6 +26,7 @@
 | finish_reason=length | 기본 split이 ID 묶음을 나눠 전체 원문 문맥으로 재요청합니다. 요청 예산·각 그룹 응답·실제 종료 사유를 translation_failures에서 봅니다. 짧은 원문도 모델의 과도한 출력으로 한도에 걸릴 수 있습니다. |
 | unverified_bubble_ownership / Source ink crosses a known bubble mask | 원문 획과 말풍선 마스크의 소유권 근거 부족. 기본 정책은 해당/겹친 영역을 원본 복원·검수하며, stop/require_bubble은 중단합니다. 최종 lettering_review의 지지율·후보·보호 좌표를 봅니다. |
 | Font lacks requested characters | 선택 폰트·동봉 대체 폰트의 실제 글리프 범위를 확인합니다. 누락 문자를 삭제하지 않습니다. |
+| source size 6px is below readability minimum 10px | 원문 획으로 추정한 상한이 최소 크기보다 작습니다. v0.7.13의 fit_failure_policy=preserve_review는 해당 부모 편집 범위와 겹친 이웃을 원본 복원·검수합니다. stop/strict는 중단합니다. 추정값은 실제 원본 폰트 크기의 보증이 아닙니다. 확인한 영역만 region_options_json의 font_cap으로 조정할 수 있으며 전역 min_font를 일괄 낮출 필요는 없습니다. |
 | no safe lettering fit / collision | 0.7.4는 이웃 원문 프레임을 예약하고 허용된 빈 사각형에서 재조판합니다. 계속 실패하면 conflicting_region_ids와 계획/번역을 확인합니다. 프레임만 무작정 늘리면 그림/이웃 침범이 생길 수 있습니다. |
 | Checkpoint exceeds cache budget | 단일 캐시 값이 256MiB를 초과해 저장을 생략했다는 경고입니다. 계산 결과는 계속 전달됩니다. RGB float32 기준 4200×6030은 약 289.8MiB이며, 같은 실행의 뒤쪽 식자 충돌은 별도 원인입니다. |
 | Project model/workflow settings changed | 같은 프로젝트의 처리 설정이 달라짐. 이전 결과를 보존하고 새 project_name으로 실행합니다. |

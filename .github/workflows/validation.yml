@@ -22,7 +22,7 @@ jobs:
       - name: Install CPU verification dependencies
         run: |
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install pytest numpy Pillow scipy fonttools psutil 'pydantic>=2,<3'
+          python -m pip install pytest numpy Pillow scipy fonttools psutil opencv-python-headless 'pydantic>=2,<3'
       - name: Verify registered source, docs and provenance
         run: python tools/check_repository.py
       - name: Compile Python sources
@@ -36,7 +36,7 @@ jobs:
           python tools/build_integrated_workflow.py
           git diff --exit-code -- lettering/example_workflows
       - name: Run regression tests
-        run: python -m pytest tests -q --confcutdir=tests --tb=short
+        run: python -m pytest tests -q --confcutdir=tests --rootdir=tests --tb=short
       - name: Execute integrated graph simulation
         run: python tools/simulate_integrated.py --destination validation/simulation
       - name: Render hybrid typography examples

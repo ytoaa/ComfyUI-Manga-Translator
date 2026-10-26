@@ -16,6 +16,7 @@ function letteringReview(node,report) {
     const body=node.mangaPanelBody;if(!body)return;
     body.replaceChildren();
     const reasons={unsupported_translation_glyphs:'번역문에 폰트가 지원하지 않는 문자',
+        source_below_readability_minimum:'원문 크기 추정값이 최소 식자 크기보다 작음',
         unverified_bubble_ownership:'말풍선 소유권 확인 필요',
         overlaps_preserved_lettering_region:'보존한 이웃 영역과 겹침',
         unfit_lettering_preserved:'최소 크기에서도 식자 불가',
@@ -30,6 +31,7 @@ function letteringReview(node,report) {
         const line=document.createElement('div');
         const detail=row.diagnostic || {};
         const note=detail.code==='bubble_candidate_limit'?'관련 말풍선 후보 64개 초과':
+            detail.code==='source_below_readability_minimum' ? `${detail.source_cap}px < 최소 ${detail.minimum_font}px` :
             detail.missing_characters?.length ? `지원 불가 문자: ${detail.missing_characters.join(' ')}` : '';
         line.textContent=[row.id,reasons[row.reason] || row.reason,note].filter(Boolean).join(' · ');
         line.style.cssText='padding:5px 0;overflow-wrap:anywhere;color:#ffb7b7';body.append(line);

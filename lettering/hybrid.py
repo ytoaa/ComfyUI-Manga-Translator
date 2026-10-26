@@ -16,6 +16,11 @@ LINE_BREAKS = ('preserve','reflow')
 FIT_POLICIES = ('source_ratio','readable')
 
 
+def review_skip_reason(rows):
+    return ('bubble_regions_preserved' if all(r['reason']=='unverified_bubble_ownership' for r in rows)
+            else 'lettering_regions_preserved')
+
+
 def reflow_text(text):
     """Treat single newlines as physical wraps; retain blank-line paragraphs."""
     def separator(match):
@@ -56,8 +61,17 @@ def profile(reference, cleaned, support, font_name, foreground=None):
     significant = [(a,b) for a,b in runs if b-a >= max(3,max(lengths,default=3)*.45)]
     lengths = [b-a for a,b in significant]
     visible = float(np.median(lengths)) if lengths else float(min(width,height))
-    sample = ImageFont.truetype(core.font_path(font_name,'가'),100)
-    box = sample.getbbox('가')
+    path=core.font_path(font_name,'')
+    from pathlib import Path
+    stat=Path(path).stat();coverage=core._font_coverage(path,stat.st_mtime_ns,stat.st_size)
+    # A font covering Latin/other target text need not contain Korean. Keep
+    # the old Korean probe where supported, otherwise use a real covered glyph.
+    probe=next((c for c in ('가','M','国') if ord(c) in coverage),None)
+    if probe is None:
+        probe=next((chr(c) for c in sorted(coverage) if chr(c).isprintable() and not chr(c).isspace()),None)
+    if probe is None:raise ValueError('Selected font has no measurable glyph')
+    sample = ImageFont.truetype(path,100)
+    box = sample.getbbox(probe)
     em = max(4,min(512,round(visible*100/max(1,box[3]-box[1]))))
     alignment = 'center'
     if not vertical and len(rows)>1:
@@ -80,6 +94,28 @@ def scaled_style(style, scale, size):
     for key in ('outline_width','weight_px','shadow_x','shadow_y','shadow_blur'):
         result[key]=style[key]*scale
     return result
+
+
+def validate_options(item,opts):
+    """Invalid authored settings stay errors even if source quality is poor."""
+    layout=item.get('layout',{})
+    allowed={'direction','alignment','min_font','max_font','padding','line_spacing','tracking',
+             'rotation','shear','supersample','max_lines','vertical_policy','wrap_policy'}
+    if set(layout)-allowed:raise ValueError(f"{item['id']}: unknown layout option")
+    values={**layout,**opts}
+    choices={'mode':MODES,'direction':DIRECTIONS,'fit_policy':FIT_POLICIES,'line_breaks':LINE_BREAKS,
+             'alignment':('left','center','right'),'vertical_policy':('simple','typographic'),
+             'wrap_policy':('greedy','balanced')}
+    for key,valid in choices.items():
+        if key in values and values[key] not in valid:raise ValueError(f"{item['id']}: invalid {key}")
+    for key,lo,hi in [('font_cap',4,512),('max_font',4,512),('min_font',4,512),
+                      ('padding',0,32),('max_lines',0,64),('supersample',1,4)]:
+        if key in values:core.integer(values[key],lo,hi,key)
+    for key,lo,hi in [('min_scale',.2,1),('rotation',-180,180),('shear',-.6,.6),
+                      ('bend',-256,256),('line_spacing',.5,3),('tracking',-4,32)]:
+        if key in values:core.finite(values[key],lo,hi,key)
+    for key in ('respect_bubbles','require_bubble'):
+        if key in values and type(values[key]) is not bool:raise ValueError(f"{item['id']}: invalid {key}")
 
 
 def bubble_rect(mask, source, shape, padding):
@@ -219,7 +255,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
     # Validate the page index once; decode only candidate interiors belonging
     # to active text owners. Unrelated tiled bubbles do not spend a fit budget.
     bubble_index=(bubble_constraints.RegionCandidates(bubble_mask,detection_result,original.shape)
-                  if respect_bubbles or any(v.get('respect_bubbles') or v.get('require_bubble')
+                  if respect_bubbles or mode=='bubble' or any(v.get('respect_bubbles') or v.get('require_bubble') or v.get('mode')=='bubble'
                                             for v in overrides.values() if isinstance(v,dict)) else [])
     reports=[]
     preview=Image.fromarray((original*255).round().astype('uint8'))
@@ -229,6 +265,9 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         ident=item['id'];opts=overrides.get(ident,{})
         allowed={'font','mode','direction','font_cap','min_font','min_scale','alignment','rotation','shear','bend','padding','max_lines','line_spacing','tracking','line_breaks','fit_policy','respect_bubbles','require_bubble'}
         if not isinstance(opts,dict) or set(opts)-allowed: raise ValueError(f'{ident}: unknown typography override')
+        validate_options(item,opts)
+        selected_mode=opts.get('mode',mode)
+        if selected_mode not in MODES:raise ValueError(f'{ident}: invalid mode')
         font=opts.get('font',item.get('font',default_font))
         try:
             font,font_fallback=core.resolve_font(font,item['text'])
@@ -266,7 +305,13 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
                 raster=Image.fromarray((value*255).round().astype('uint8'),mode)
                 return np.asarray(raster.rotate(-source_angle,Image.Resampling.NEAREST if mode=='L' else Image.Resampling.BICUBIC,
                                                expand=True),np.float32)/255
-            rectified,_=profile(rotated(ref,'RGB'),rotated(clean,'RGB'),rotated(mask,'L'),font,style['foreground'])
+            try:
+                rectified,_=profile(rotated(ref,'RGB'),rotated(clean,'RGB'),rotated(mask,'L'),font,style['foreground'])
+            except ValueError as exc:
+                if (fit_failure_policy!='preserve_review' or selected_mode=='strict' or
+                        not str(exc).startswith(('Too few text pixels','Too few source ink pixels'))):raise
+                preserve_item(item,{'code':'insufficient_rectified_style_pixels'},'insufficient_source_style_pixels')
+                continue
             measured=rectified
         style=core.adjust_style(style,**item.get('style',{}))
         layout=dict(item.get('layout',{}))
@@ -283,9 +328,14 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         floor=opts.get('min_font',layout.pop('min_font',min_font));core.integer(floor,4,512,'min_font')
         absolute_floor=floor
         floor=max(floor,math.ceil(cap*ratio))
-        if floor>cap: raise ValueError(f'{ident}: source size {cap}px is below readability minimum {floor}px; review typography')
-        selected_mode=opts.get('mode',mode)
-        if selected_mode not in MODES: raise ValueError(f'{ident}: invalid mode')
+        if floor>cap:
+            if fit_failure_policy=='stop' or selected_mode=='strict':
+                raise ValueError(f'{ident}: source size {cap}px is below readability minimum {floor}px; review typography')
+            preserve_item(item,{'code':'source_below_readability_minimum','source_cap':cap,
+                'minimum_font':floor,'measured_font_cap':measured['font_cap'],
+                'cap_origin':'override' if 'font_cap' in opts or 'max_font' in item.get('layout',{}) else 'source_measurement',
+                'text_preserved':True},'source_below_readability_minimum')
+            continue
         policy=opts.get('fit_policy',fit_policy)
         if policy not in FIT_POLICIES: raise ValueError(f'{ident}: invalid fit policy')
         # Explicit per-region scaling constraints and strict layouts stay hard.
@@ -305,7 +355,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         require=opts.get('require_bubble',False)
         if type(respect) is not bool or type(require) is not bool:raise ValueError(f'{ident}: invalid bubble controls')
         guard=None;guard_report={'status':'disabled'}
-        if respect or require:
+        if respect or require or selected_mode=='bubble':
             try:
                 bubble_items=bubble_index.for_region(source,ink)
                 guard,guard_report=bubble_constraints.constrain(ink,source,bubble_items,original.shape,pad,
@@ -318,10 +368,6 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         bubble=None
         if selected_mode=='bubble' and guard is not None:
             bubble=guard['rectangle']
-        elif selected_mode=='bubble' and bubble_mask is not None:
-            bubble=bubble_rect(bubble_mask,source,original.shape,pad)
-        elif selected_mode=='bubble' and bubble_mask is None and detection_result is not None:
-            bubble=detected_bubble_rect(detection_result,source,original.shape,pad)
         warning=None
         if selected_mode=='bubble' and bubble is None: warning='No enclosing bubble mask; source frame retained'
         curve=opts.get('bend',0.);core.finite(curve,-256,256,'bend')
@@ -386,10 +432,12 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
     while pending and plan['lettering_review']:
         pending=False
         for region in list(plan['regions']):
-            x,y,w,h=region['source'];box=[x,y,x+w,y+h]
+            x,y,w,h=region['restore_bounds'];box=[x,y,x+w,y+h]
             if any(boundary_review.intersects(box,r['bbox_pixels']) for r in plan['lettering_review']):
                 nonbubble=any(r['reason']!='unverified_bubble_ownership' and boundary_review.intersects(box,r['bbox_pixels'])
                               for r in plan['lettering_review'])
+                if nonbubble and region['mode']=='strict':
+                    raise ValueError(f"{region['id']}: strict lettering overlaps a preserved edit frame")
                 preserve_item(region,{'code':'overlaps_preserved_lettering_region' if nonbubble else 'overlaps_preserved_bubble_region'},
                               'overlaps_preserved_lettering_region' if nonbubble else 'unverified_bubble_ownership')
                 plan['regions'].remove(region);reports=[r for r in reports if r['id']!=region['id']];pending=True
@@ -406,7 +454,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
             'preserved_punctuation':plan['preserved_punctuation'],
             'source_preservation':plan['source_preservation'],
             **({'page_status':'no_text_detected','lettering_skipped':True} if not reports and not preserved and not plan['lettering_review'] else {}),
-            **({'lettering_skipped':True,'skip_reason':'bubble_regions_preserved'} if not reports and plan['lettering_review'] else {}),
+            **({'lettering_skipped':True,'skip_reason':review_skip_reason(plan['lettering_review'])} if not reports and plan['lettering_review'] else {}),
             **({'lettering_skipped':True,'skip_reason':'source_preserved'} if not reports and preserved else {}),
             'font_identity':'selected font; source size/direction/alignment are measured estimates',
             'curves':'manual bend only; no automatic curve reconstruction'}
@@ -486,7 +534,8 @@ def _render_plan_once(plan):
                                 min_font=size,max_font=size,max_lines=lines,**options)
                             render=json.loads(render)
                     except ValueError as exc:
-                        if any(s in str(exc) for s in ('does not fit','leave no space','glyph leaves page boundary')):
+                        if any(s in str(exc) for s in ('does not fit','leave no space','glyph leaves page boundary',
+                                                       'Weight erosion removed all glyphs','Empty oriented glyph')):
                             reason=str(exc);continue
                         raise
                     x,y,w,h=core.bbox(actual_bounds,result.shape)
@@ -553,7 +602,7 @@ def _render_plan_once(plan):
         'source_preservation':plan.get('source_preservation',[]),
         'lettering_review':plan.get('lettering_review',[]),
         **({'page_status':'no_text_detected','lettering_skipped':True} if not reports and not (plan.get('source_preservation') or plan.get('preserved_punctuation') or plan.get('lettering_review')) else {}),
-        **({'lettering_skipped':True,'skip_reason':'bubble_regions_preserved'} if not reports and plan.get('lettering_review') else {}),
+        **({'lettering_skipped':True,'skip_reason':review_skip_reason(plan['lettering_review'])} if not reports and plan.get('lettering_review') else {}),
         **({'lettering_skipped':True,'skip_reason':'source_preserved'} if not reports and (plan.get('source_preservation') or plan.get('preserved_punctuation')) else {}),
         'quality_scope':'geometry/style approximation; OCR, translation and GPU cleanup require separate review'},
         ensure_ascii=False,indent=2)

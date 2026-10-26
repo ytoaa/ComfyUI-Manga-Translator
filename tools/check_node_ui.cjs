@@ -77,6 +77,8 @@ class Node {
  assert.ok(!editNode.mangaPanelBody.children.some(e=>e.tag==='img'));
  editNode.onExecuted({manga_lettering_report:[{regions:[{id:'r1'}]}]});
  assert.equal(editNode.mangaPanelBody.children[0].textContent,'식자 1영역');
+ editNode.onExecuted({manga_lettering_report:[{regions:[],lettering_review:[{id:'r1',reason:'source_below_readability_minimum',diagnostic:{code:'source_below_readability_minimum',source_cap:6,minimum_font:10}}]}]});
+ assert.match(editNode.mangaPanelBody.children[0].textContent,/r1.*6px < 최소 10px/);
  for(const kind of ['MangaWorkflowInput','MangaReviewDocument','MangaPageEditPlan','MangaOCRAdaptive','MangaLetterPlan','MangaLetterApply']) {
   class SizingNode {
    constructor(){this.widgets=[];this.size=[420,600];}
