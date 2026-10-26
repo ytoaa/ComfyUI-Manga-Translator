@@ -1,4 +1,4 @@
-"""Read-only stage inspection; no model calls, pixel replacement or quality verdicts."""
+"""Stage inspection and opt-in local reproduction export; no model calls."""
 import json
 import math
 import numpy as np
@@ -59,24 +59,37 @@ def detection_report(result,regions,original):
 
 class MangaDebugInspect:
     CATEGORY='Manga Translator/디버깅'
-    DESCRIPTION='읽기 전용 단계 보고서와 검수 이미지. 보고서→미리보기 아무거나, 검수 이미지→이미지 미리보기. 성공 판정이나 처리 설정을 바꾸지 않습니다.'
+    DESCRIPTION='단계 보고서와 검수 이미지. 보고서→미리보기 아무거나, 검수 이미지→이미지 미리보기. 선택한 경우 원본·검출 마스크 재현 ZIP을 로컬에 저장합니다. 처리 결과는 바꾸지 않습니다.'
     @classmethod
     def INPUT_TYPES(cls):
         return {'required':{'stage':(STAGES,{'default':'detection'})},'optional':{
             'report_json':('STRING',{'forceInput':True,'tooltip':'단계의 보고서 STRING 출력. detection에서는 정리된 영역 JSON.'}),
             'preview_image':('IMAGE',{'tooltip':'원본 또는 단계 이미지. detection은 원본 페이지를 연결.'}),
             'preview_mask':('MASK',{'tooltip':'선택: 원문 스타일 마스크 또는 새 글자 알파. 이미지보다 우선하여 흑백으로 표시.'}),
-            'detection_result':('MANGA_DETECTION',{'tooltip':'detection 단계에만 필요한 검출 결과.'})}}
+            'detection_result':('MANGA_DETECTION',{'tooltip':'detection 단계에만 필요한 검출 결과.'}),
+            'save_reproduction':('BOOLEAN',{'default':False,'tooltip':'detection에서 원본 페이지·실제 검출 마스크·영역 JSON을 output/manga_translator/reproduction ZIP으로 저장합니다. 자동 업로드 없음.'})}}
     RETURN_TYPES=('STRING','IMAGE')
     RETURN_NAMES=('단계_디버그_JSON','단계_검수_이미지')
     FUNCTION='inspect'
 
-    def inspect(self,stage,report_json=None,preview_image=None,preview_mask=None,detection_result=None):
+    @classmethod
+    def IS_CHANGED(cls,save_reproduction=False,**kwargs):
+        # Explicit export requests create fresh evidence even if a previous
+        # archive was moved or deleted; normal inspection remains cacheable.
+        return float('nan') if save_reproduction else None
+
+    def inspect(self,stage,report_json=None,preview_image=None,preview_mask=None,detection_result=None,save_reproduction=False):
         if stage not in STAGES:raise ValueError('Invalid debug stage')
+        if type(save_reproduction) is not bool:raise ValueError('Invalid reproduction export switch')
+        if save_reproduction and stage!='detection':raise ValueError('Reproduction export requires the detection stage and original page')
         if stage=='detection':
             if preview_image is None:raise ValueError('Connect original page to detection debug')
             report,preview=detection_report(detection_result,report_json,image(preview_image))
             output=tensor(preview)
+            if save_reproduction:
+                import folder_paths
+                from .reproduction import save
+                report['reproduction']=save(image(preview_image),detection_result,report_json,folder_paths.get_output_directory())
         else:
             report=document(report_json)
             if preview_mask is not None:

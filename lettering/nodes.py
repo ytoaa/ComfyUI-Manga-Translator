@@ -238,6 +238,7 @@ class MangaLetterPrepare:
         edits = page_edit.validate(data,width,height)
         rows = []
         orientation={}
+        source_owners={}
         preserved=[]
         support = np.zeros((height, width), np.float32)
         for row, decision in zip(data['regions'],edits['regions']):
@@ -254,6 +255,9 @@ class MangaLetterPrepare:
             if not isinstance(opts, dict) or set(opts)-{'font', 'layout', 'style'}:
                 raise ValueError('Region options may contain only font, layout and style')
             rows.append({'id': row['id'], 'bbox': bounds, 'source_text': row.get('source', ''), 'text': row['target'], **opts})
+            ownership=row.get('source_ownership',{})
+            owner=ownership.get('style_ink_mask') or ownership.get('ocr_owner_mask')
+            if owner is not None:source_owners[row['id']]=owner
             geometry=row.get('ocr_region_plan',{})
             if geometry.get('strategy')=='mask_supported_deskew_rows':
                 angle=geometry.get('source_angle')
@@ -277,7 +281,9 @@ class MangaLetterPrepare:
                            'bbox':[int(left),int(top),int(right-left),int(bottom-top)],**block.get('presentation',{})}
                     rows.append(child)
                     if row['id'] in orientation:orientation[child_id]=orientation[row['id']]
+                    if owner is not None:source_owners[child_id]=owner
                 orientation.pop(row['id'],None)
+                source_owners.pop(row['id'],None)
             x, y, w, h = bounds
             support[y:y+h, x:x+w] = 1
         if text_pixel_mask is not None:
@@ -289,6 +295,7 @@ class MangaLetterPrepare:
             preserved.append({'id':ident,'bbox':[x0,y0,x1-x0,y1-y0],'reason':'unassigned_source_ink'})
         output = json.dumps({'schema': 1, 'coordinate_format': 'xywh', 'page_size': [width, height], 'regions': rows,
                             **({'source_orientation':orientation} if orientation else {}),
+                            **({'source_owners':source_owners} if source_owners else {}),
                             **({'source_preservation':preserved} if preserved else {}),
                             'edit_summary':{'replace_regions':len(rows),'preserve_regions':len(preserved)},
                             **({'needs_review':True} if data.get('needs_review') else {}),

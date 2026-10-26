@@ -1896,7 +1896,7 @@
       },
       "widgets_values": [
         "NanumGothic-Bold.ttf",
-        "source",
+        "bubble",
         "auto",
         10,
         0.55,
@@ -1911,7 +1911,7 @@
       ],
       "widgets_values_named": {
         "default_font": "NanumGothic-Bold.ttf",
-        "mode": "source",
+        "mode": "bubble",
         "direction": "auto",
         "min_font": 10,
         "min_scale": 0.55,
@@ -2482,7 +2482,7 @@
       ],
       "size": [
         330,
-        100
+        120
       ],
       "flags": {},
       "order": 48,
@@ -2529,10 +2529,12 @@
         "Node name for S&R": "MangaDebugInspect"
       },
       "widgets_values": [
-        "detection"
+        "detection",
+        false
       ],
       "widgets_values_named": {
-        "stage": "detection"
+        "stage": "detection",
+        "save_reproduction": false
       },
       "title": "디버그 · 검출 · 초록 선택 / 주황 제외"
     },
@@ -2610,7 +2612,7 @@
       ],
       "size": [
         330,
-        100
+        120
       ],
       "flags": {},
       "order": 51,
@@ -2655,10 +2657,12 @@
         "Node name for S&R": "MangaDebugInspect"
       },
       "widgets_values": [
-        "ocr"
+        "ocr",
+        false
       ],
       "widgets_values_named": {
-        "stage": "ocr"
+        "stage": "ocr",
+        "save_reproduction": false
       },
       "title": "디버그 · OCR · 입력 크기 / 분할 / 품질 검사"
     },
@@ -2707,7 +2711,7 @@
       ],
       "size": [
         330,
-        100
+        120
       ],
       "flags": {},
       "order": 53,
@@ -2752,10 +2756,12 @@
         "Node name for S&R": "MangaDebugInspect"
       },
       "widgets_values": [
-        "cleanup_plan"
+        "cleanup_plan",
+        false
       ],
       "widgets_values_named": {
-        "stage": "cleanup_plan"
+        "stage": "cleanup_plan",
+        "save_reproduction": false
       },
       "title": "디버그 · 제거 계획 · 단색 보완 / 타일 / 마스크"
     },
@@ -2804,7 +2810,7 @@
       ],
       "size": [
         330,
-        100
+        120
       ],
       "flags": {},
       "order": 55,
@@ -2849,10 +2855,12 @@
         "Node name for S&R": "MangaDebugInspect"
       },
       "widgets_values": [
-        "cleanup"
+        "cleanup",
+        false
       ],
       "widgets_values_named": {
-        "stage": "cleanup"
+        "stage": "cleanup",
+        "save_reproduction": false
       },
       "title": "디버그 · 제거 결과 · 잔존 원문 검사"
     },
@@ -2901,7 +2909,7 @@
       ],
       "size": [
         330,
-        100
+        120
       ],
       "flags": {},
       "order": 57,
@@ -2948,10 +2956,12 @@
         "Node name for S&R": "MangaDebugInspect"
       },
       "widgets_values": [
-        "letter_plan"
+        "letter_plan",
+        false
       ],
       "widgets_values_named": {
-        "stage": "letter_plan"
+        "stage": "letter_plan",
+        "save_reproduction": false
       },
       "title": "디버그 · 식자 계획 · 원문 크기 / 색 / 외곽선"
     },
@@ -3029,7 +3039,7 @@
       ],
       "size": [
         330,
-        100
+        120
       ],
       "flags": {},
       "order": 60,
@@ -3076,10 +3086,12 @@
         "Node name for S&R": "MangaDebugInspect"
       },
       "widgets_values": [
-        "letter_render"
+        "letter_render",
+        false
       ],
       "widgets_values_named": {
-        "stage": "letter_render"
+        "stage": "letter_render",
+        "save_reproduction": false
       },
       "title": "디버그 · 식자 결과 · 최종 크기 / 줄바꿈 / 알파"
     },

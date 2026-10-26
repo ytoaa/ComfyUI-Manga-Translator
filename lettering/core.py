@@ -549,6 +549,12 @@ def parse_regions(document, shape):
             raise ValueError('layout and style must be objects')
     if sum(r['bbox'][2]*r['bbox'][3] for r in regions) > MAX_TYPOGRAPHY_PIXELS:
         raise ValueError('Total region area exceeds 32 Mi pixels')
+    owners=data.get('source_owners',{})
+    if not isinstance(owners,dict) or set(owners)-ids:raise ValueError('Invalid source owner IDs')
+    from ..mask_nodes import _mask_metadata
+    for raw in owners.values():
+        (_,_,w,h),_=_mask_metadata(raw,shape[1],shape[0])
+        if w*h>MAX_REGION_PIXELS:raise ValueError('Source owner mask exceeds 16 Mi pixels')
     return data
 
 
@@ -609,6 +615,9 @@ def render_page(original, cleaned, source_mask, document, default_font='NanumGot
     # All references come from original/cleaned snapshots, never the cumulative result.
     for item in data['regions']:
         ref, clean, mask, place = crop_region(original, cleaned, source_mask, item['bbox'])
+        if item['id'] in data.get('source_owners',{}):
+            from ..source_partition import _local
+            mask=mask*_local(data['source_owners'][item['id']],item['bbox'],original.shape[1],original.shape[0])
         style, measured = analyze_style(ref, clean, mask)
         style = adjust_style(style, texture_strength=texture_strength, **item.get('style', {})) if 'texture_strength' not in item.get('style', {}) else adjust_style(style, **item['style'])
         layer, alpha, report = render_text(item['text'], style,

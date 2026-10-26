@@ -66,4 +66,5 @@ def translate(text, base_url='http://127.0.0.1:8000/v1', model='', source_langua
     content = choices[0].get('message', {}).get('content')
     if not isinstance(content, str) or '<think' in content.lower() or '</think>' in content.lower():
         raise ValueError('Translation contains reasoning or has no text content; check model settings')
-    return clean_text(content.strip())
+    from ..text_contract import translation_text
+    return clean_text(translation_text(text,content.strip())[0])

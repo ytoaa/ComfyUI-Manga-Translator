@@ -76,7 +76,7 @@ def build():
     g.connect(original, 0, prepare, 'original')
     g.connect(target_save, 0, prepare, 'translated_json')
     g.connect(plan, 9, prepare, 'text_pixel_mask')
-    typography_values = {'line_breaks': 'reflow', 'fit_policy': 'readable', 'respect_bubbles': True,'oriented_fit':True,'bubble_failure_policy':'preserve_review','fit_failure_policy':'preserve_review'}
+    typography_values = {'mode':'bubble','line_breaks': 'reflow', 'fit_policy': 'readable', 'respect_bubbles': True,'oriented_fit':True,'bubble_failure_policy':'preserve_review','fit_failure_policy':'preserve_review'}
     typography = g.add('MangaLetterPlan', typography_values, pos=(5040, 50), title='⑪ 실제 말풍선 경계 검사 · 가독 크기 맞춤')
     g.connect(original, 0, typography, 'original')
     g.connect(assemble, 0, typography, 'cleaned')

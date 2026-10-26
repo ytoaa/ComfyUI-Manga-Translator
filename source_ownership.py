@@ -33,7 +33,8 @@ def mask_overlap(left, right):
 def cross_label_alias(a, b):
     # Matching rectangles alone can contain separate caption/effect layers.
     # Keep the exact original frame requirement as well as mutual ink support.
-    if {a['label'], b['label']} != {'text', 'onomatopoeia'} or a['bbox'] != b['bbox']:
+    if ({a['label'], b['label']} != {'text', 'onomatopoeia'} or
+            a.get('_identity_bbox',a['bbox']) != b.get('_identity_bbox',b['bbox'])):
         return False
     overlap = mask_overlap(a.get('mask'), b.get('mask'))
     return bool(overlap and overlap['smaller_coverage'] >= .92 and overlap['larger_coverage'] >= .70)

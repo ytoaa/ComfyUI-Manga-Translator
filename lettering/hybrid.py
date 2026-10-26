@@ -41,6 +41,47 @@ def bands(values):
             for i in range(1,count+1)]
 
 
+def component_size(ink):
+    """Recover collapsed projections only from repeated, glyph-like components.
+
+    Filled boxes, rules, isolated dots and widely mixed font sizes provide no
+    certificate. This estimates geometry, not the identity of any character.
+    """
+    labels,count=ndimage.label(ink,np.ones((3,3),bool))
+    if not 8<=count<=8192:return None
+    areas=np.bincount(labels.ravel(),minlength=count+1)
+    rows=[]
+    for index,sl in enumerate(ndimage.find_objects(labels),1):
+        if sl is None:continue
+        h,w=sl[0].stop-sl[0].start,sl[1].stop-sl[1].start
+        if min(h,w)>=5 and .4<=w/h<=2.5 and .08<=areas[index]/(h*w)<=.85:
+            rows.append((max(h,w),int(areas[index])))
+    if len(rows)<8:return None
+    median=float(np.median([v[0] for v in rows]))
+    cohort=[v for v in rows if .65*median<=v[0]<=1.5*median]
+    if len(cohort)<8 or sum(v[1] for v in cohort)<.7*int(ink.sum()):return None
+    sizes=[v[0] for v in cohort]
+    if np.percentile(sizes,90)>np.percentile(sizes,25)*1.6:return None
+    return {'visible_height':float(np.percentile(sizes,80)), 'components':len(cohort),
+            'ink_coverage':round(sum(v[1] for v in cohort)/int(ink.sum()),4)}
+
+
+def column_size(ink,cols,extent):
+    if extent is None or ink.shape[0]<4*extent:return None
+    widths=[b-a for a,b in cols if b-a>=max(5,extent*.5)]
+    if not 1<=len(widths)<=8 or max(widths)>2*extent or max(widths)>1.8*min(widths):return None
+    labels,count=ndimage.label(ink,np.ones((3,3),bool))
+    if not 8<=count<=8192:return None
+    areas=np.bincount(labels.ravel(),minlength=count+1);eligible=[]
+    for i,sl in enumerate(ndimage.find_objects(labels),1):
+        if sl is None:continue
+        h,w=sl[0].stop-sl[0].start,sl[1].stop-sl[1].start
+        if min(h,w)>=3 and .08<=areas[i]/(h*w)<=.85:eligible.append(int(areas[i]))
+    if len(eligible)<8 or sum(eligible)<.6*int(ink.sum()):return None
+    return {'visible_height':extent,'columns':len(widths),
+            'ink_coverage':round(sum(eligible)/int(ink.sum()),4)}
+
+
 def profile(reference, cleaned, support, font_name, foreground=None):
     ink = (support>.1) & (np.max(np.abs(reference-cleaned),axis=2) >= .07)
     if foreground is not None:
@@ -69,6 +110,12 @@ def profile(reference, cleaned, support, font_name, foreground=None):
              min(sl[0].stop-sl[0].start,sl[1].stop-sl[1].start)>=3]
     component_extent=float(np.percentile(extents,90)) if len(extents)>=8 else None
     measurement_warning=('inconsistent_source_typography' if component_extent and visible>4*component_extent else None)
+    columns=column_size(ink,cols,component_extent) if measurement_warning else None
+    recovery=columns or (component_size(ink) if measurement_warning else None)
+    if recovery:
+        visible=recovery['visible_height'];measurement_warning=None
+        if columns:
+            direction='vertical_rtl';significant=cols
     path=core.font_path(font_name,'')
     from pathlib import Path
     stat=Path(path).stat();coverage=core._font_coverage(path,stat.st_mtime_ns,stat.st_size)
@@ -90,7 +137,9 @@ def profile(reference, cleaned, support, font_name, foreground=None):
                 starts.append(xx.min());ends.append(xx.max());centers.append((xx.min()+xx.max())/2)
         variation = [float(np.std(v)) for v in (starts,centers,ends)]
         alignment = ('left','center','right')[int(np.argmin(variation))]
-    return {'measurement_warning':measurement_warning,'component_extent_p90':component_extent,'font_cap':em,'visible_height':round(visible,2),'direction':direction,
+    return {'measurement_warning':measurement_warning,'measurement_method':'vertical_columns' if columns else 'component_consensus' if recovery else 'projection_bands',
+            **({'component_recovery':recovery} if recovery else {}),
+            'component_extent_p90':component_extent,'font_cap':em,'visible_height':round(visible,2),'direction':direction,
             'alignment':alignment,'line_count':max(1,len(significant)),
             'confidence':'heuristic; override ambiguous or rotated source',
             'ink_bbox':[int(xs.min()),int(ys.min()),width,height]}, ink
@@ -285,6 +334,9 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
             preserve_item(item,exc.diagnostic,'unsupported_translation_glyphs')
             continue
         ref,clean,mask,_=core.crop_region(original,cleaned,support,item['bbox'])
+        if ident in data.get('source_owners',{}):
+            from ..source_partition import _local
+            mask=mask*_local(data['source_owners'][ident],item['bbox'],original.shape[1],original.shape[0])
         if item.get('frame_quad'):
             owned=Image.new('L',(ref.shape[1],ref.shape[0]));x,y,_,_=item['bbox']
             ImageDraw.Draw(owned).polygon([(a-x,b-y) for a,b in item['frame_quad']],fill=255)
@@ -400,6 +452,11 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         if guard and guard['rectangle']!=source:
             phases.append((guard['rectangle'],forced_lines or (original_lines if selected_mode=='strict' else 0),
                            'bubble-interior'))
+        if (selected_mode=='bubble' and flow and bubble and bubble[2]>=source[2]*1.5
+                and source[3]>source[2]*1.8 and not forced_lines):
+            # Explicit bubble mode plus horizontal reflow: use verified width
+            # before accepting a stack of one-character lines in a source column.
+            phases.sort(key=lambda phase:0 if phase[2]=='bubble' else 1)
         prepared={'id':ident,'parent_id':item.get('parent_id',ident),
                   'restore_bounds':list(core.bbox(item.get('source_edit_bbox',source), original.shape)),
                   'text':rendered_text,'original_text':item['text'],'line_breaks':breaks,

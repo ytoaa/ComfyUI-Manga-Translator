@@ -114,7 +114,7 @@ def build(data, width, height, actions=None, source_mask=None, padding=12, sourc
                 decisions[index] = RegionEdit(row.id, row.bbox_pixels, 'preserve', 'protected_region_overlap')
                 protected.append(list(row.bbox_pixels))
                 changed = True
-    edit_review = bool(unassigned) or any(row.reason in ('protected_region_overlap', 'ambiguous_isolated_source', 'unverified_display_text', 'coincident_edit_frames', 'ambiguous_cross_label_source') for row in decisions)
+    edit_review = bool(unassigned) or any(row.reason in ('protected_region_overlap', 'ambiguous_isolated_source', 'unverified_display_text', 'coincident_edit_frames', 'ambiguous_cross_label_source', 'ambiguous_source_overlap') for row in decisions)
     review = bool(data.get('needs_review')) or edit_review
     plan = {'schema': 1, 'coordinate_format': 'xyxy_pixels', 'page_size': [width, height], 'region_padding':padding,
             'input_sha256': _digest(data), 'regions': [row.json() for row in decisions],

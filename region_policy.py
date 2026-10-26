@@ -69,6 +69,17 @@ def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CON
         for left in range(len(items)):
             for right in range(left + 1, len(items)):
                 a, b = items[left], items[right]
+                if a.get('bubble_owner') and b.get('bubble_owner') and a['bubble_owner'] != b['bubble_owner']:
+                    continue
+                certified = None
+                if bool(a.get('bubble_owner')) != bool(b.get('bubble_owner')):
+                    from .source_ownership import mask_overlap
+                    certified,other=(a,b) if a.get('bubble_owner') else (b,a)
+                    covered=mask_overlap(other.get('mask'),certified['ocr_owner_mask'])
+                    if not covered or covered['intersection']!=covered['left_pixels']:
+                        # An unresolved spanning observation must not become a
+                        # transitive bridge joining two established owners.
+                        continue
                 if barriers and not compatible(a,b,barriers):
                     # A separator may cut across a duplicate observation's bbox.
                     # Shared original ink is stronger evidence than bbox sides.
@@ -79,7 +90,12 @@ def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CON
                 alias = alias_phase and _identical_cross_label_source(a, b)
                 if a['label'] != b['label'] and not alias:
                     continue
-                same = (alias or iou(a['bbox'], b['bbox']) >= iou_threshold or
+                from .source_ownership import mask_overlap
+                owned_overlap = (mask_overlap(a.get('mask'), b.get('mask'))
+                                 if a.get('bubble_owner') and a.get('bubble_owner') == b.get('bubble_owner') else None)
+                if owned_overlap and not owned_overlap['intersection']:
+                    continue
+                same = (alias or bool(owned_overlap and owned_overlap['intersection']) or iou(a['bbox'], b['bbox']) >= iou_threshold or
                         containment_overlap(a['bbox'], b['bbox']) >= containment_threshold or
                         _same_line_fragments(a['bbox'], b['bbox']))
                 if not same:
@@ -94,6 +110,13 @@ def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CON
                     'source_detector_ids': sorted(set(a.get('source_detector_ids', [])) | set(b.get('source_detector_ids', []))),
                     'source_labels': sorted(set(a.get('source_labels', [a['label']])) | set(b.get('source_labels', [b['label']]))),
                     'cross_label_alias': bool(alias or a.get('cross_label_alias') or b.get('cross_label_alias'))}
+                if certified:
+                    items[left].update(bubble_owner=certified['bubble_owner'],ocr_owner_mask=certified['ocr_owner_mask'])
+                if items[left].get('bubble_owner') and (a.get('_owned_frame') or b.get('_owned_frame')):
+                    items[left].update(_owned_frame=True,bbox=[max(0,ink_box[0]-2),max(0,ink_box[1]-2),
+                        min(width,ink_box[2]+2),min(height,ink_box[3]+2)])
+                identities=[r.get('_identity_bbox',r['bbox']) for r in (a,b)]
+                items[left]['_identity_bbox']=[min(q[k] for q in identities) if k<2 else max(q[k] for q in identities) for k in range(4)]
                 items.pop(right)
                 merged = True
                 break
@@ -148,6 +171,7 @@ def group_adjacent_lines(items, bubbles, panels=()):
         for index, group in enumerate(groups):
             last = group[-1]; b = last['bbox']; bw, bh = b[2]-b[0], b[3]-b[1]
             if (row['label'] != 'text' or last['label'] != 'text' or not single[id(row)] or not single[id(last)] or
+                    row.get('bubble_owner') != last.get('bubble_owner') or
                     min(aw/ah, bw/bh) < 3 or min(ah,bh)/max(ah,bh) < .65 or
                     not 0 <= a[1]-b[3] <= .55*min(ah,bh) or
                     abs(a[0]-b[0]) > .6*min(ah,bh) or
@@ -163,7 +187,13 @@ def group_adjacent_lines(items, bubbles, panels=()):
     for group in groups:
         box = [min(row['bbox'][k] for row in group) if k < 2 else
                max(row['bbox'][k] for row in group) for k in range(4)]
-        output.append({**group[0], 'bbox': box,
+        combined=group[0].get('mask')
+        if len(group)>1:
+            from .region_boundaries import union_masks
+            import math
+            width,height=math.ceil(box[2]),math.ceil(box[3])
+            for row in group[1:]:combined=union_masks({'mask':combined},row,width,height)
+        output.append({**group[0], 'bbox': box,'mask':combined,
                        'source_detector_ids': sorted({v for row in group for v in row.get('source_detector_ids', [])}),
                        'source_labels': sorted({v for row in group for v in row.get('source_labels', [row['label']])}),
                        'cross_label_alias': any(row.get('cross_label_alias', False) for row in group),
@@ -211,6 +241,8 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
         from .region_boundaries import separators,partition
         barriers=separators(panels+bubbles)
         input_count=len(candidates)
+        from .source_partition import partition_by_bubbles
+        candidates,owner_partitions=partition_by_bubbles(candidates,bubbles,width,height)
         candidates,partitions=partition(candidates,barriers,width,height)
         selected = merge_detector_regions(candidates, dedupe_iou,barriers=barriers,width=width,height=height)
         before_grouping = len(selected)
@@ -264,7 +296,10 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
                           item['bbox'][3] / height * 1000],
                  'source_ownership': {'schema': 1, 'detector_ids': item.get('source_detector_ids', []),
                      'labels': item.get('source_labels', [item['label']]), 'cross_label_alias': item.get('cross_label_alias', False),
-                     'bubble_verified': bubble_verified(item, bubbles),
+                     'bubble_verified': bool(item.get('bubble_owner')) or bubble_verified(item, bubbles),
+                     **({'bubble_owner':item['bubble_owner'],'ocr_owner_mask':item['ocr_owner_mask'],
+                         'style_ink_mask':item.get('mask')}
+                        if item.get('bubble_owner') else {}),
                      **({'boundary_partition':item['boundary_partition']} if item.get('boundary_partition') else {}),
                      **({'review_reason':ambiguity_reasons[i],'related_region_ids':ambiguous[i]} if i in ambiguous else {})},
                  **({'line_bboxes_pixels': item['line_bboxes']} if 'line_bboxes' in item else {})}
@@ -283,6 +318,8 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
                         'region_resolution': {
                             'input_regions': input_count,
                             'partitioned_candidates':len(candidates),
+                            'source_owner_partition':{'schema':1,'observations':owner_partitions,
+                                'scope':'whole_source_components_in_verified_bubble_interiors'},
                             'boundary_partition':{'schema':1,'split_observations':len(partitions),'observations':partitions,
                                 'separator_count':len(barriers),'scope':'detector_frames_and_empty_mask_strips_not_semantic_ownership'},
                             'resolved_regions': len(selected),

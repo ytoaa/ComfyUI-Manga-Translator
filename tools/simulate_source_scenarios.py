@@ -40,8 +40,9 @@ def simulate(destination):
             _,output,alpha,report,_,_=run((original,cleaned,ink.astype(np.float32),raw),
                 fit_policy='readable',fit_failure_policy='preserve_review')
             if name=='rotated-nested':
-                assert not report['regions'] and report['lettering_review'][0]['reason']=='inconsistent_source_typography'
-                assert np.array_equal(output,original)
+                assert len(report['regions'])==len(prepared)
+                assert all(r['source_profile']['measurement_method'] in ('vertical_columns','component_consensus')
+                           and r['source_profile']['font_cap']<=48 for r in report['regions'])
             else:assert len(report['regions'])==len(prepared),name
             assert all(r['render']['text']=='완전한 시험 번역문.' for r in report['regions'])
         else:output=original.copy();report={'regions':[],'simulation_preserved':True}

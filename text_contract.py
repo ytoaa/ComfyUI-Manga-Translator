@@ -6,7 +6,7 @@ _UNKNOWN = re.compile(r'<unk(?:_span)?>|\[unk\]', re.IGNORECASE)
 _BREAK_MARKER = re.compile(r'(?<![A-Za-z0-9_\\/:])(?:\^n|\{n\}|\\r\\n|\\n)')
 
 
-_BARE_BREAK = re.compile(r'(?<=[가-힣ぁ-ゟァ-ヿ一-鿿.!?…。，！？])n(?=[가-힣ぁ-ゟァ-ヿ一-鿿])')
+_BARE_BREAK = re.compile(r'(?<=[가-힣ぁ-ゟァ-ヿ一-鿿.!?…。，！？])[ \t\u00a0\u2000-\u200b\u202f]*n[ \t\u00a0\u2000-\u200b\u202f]*(?=[가-힣ぁ-ゟァ-ヿ一-鿿])')
 _SOURCE_N = re.compile(r'(?<![A-Za-z])n(?![A-Za-z])')
 
 def ocr_problem(text):

@@ -488,7 +488,7 @@
     "class_type": "MangaLetterPlan",
     "inputs": {
       "default_font": "NanumGothic-Bold.ttf",
-      "mode": "source",
+      "mode": "bubble",
       "direction": "auto",
       "min_font": 10,
       "min_scale": 0.55,
@@ -657,6 +657,7 @@
     "class_type": "MangaDebugInspect",
     "inputs": {
       "stage": "detection",
+      "save_reproduction": false,
       "report_json": [
         "5",
         0
@@ -693,6 +694,7 @@
     "class_type": "MangaDebugInspect",
     "inputs": {
       "stage": "ocr",
+      "save_reproduction": false,
       "report_json": [
         "10",
         1
@@ -712,6 +714,7 @@
     "class_type": "MangaDebugInspect",
     "inputs": {
       "stage": "cleanup_plan",
+      "save_reproduction": false,
       "report_json": [
         "16",
         7
@@ -731,6 +734,7 @@
     "class_type": "MangaDebugInspect",
     "inputs": {
       "stage": "cleanup",
+      "save_reproduction": false,
       "report_json": [
         "70",
         1
@@ -750,6 +754,7 @@
     "class_type": "MangaDebugInspect",
     "inputs": {
       "stage": "letter_plan",
+      "save_reproduction": false,
       "report_json": [
         "31",
         2
@@ -782,6 +787,7 @@
     "class_type": "MangaDebugInspect",
     "inputs": {
       "stage": "letter_render",
+      "save_reproduction": false,
       "report_json": [
         "32",
         2
