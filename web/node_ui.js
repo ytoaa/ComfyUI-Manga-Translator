@@ -24,7 +24,7 @@ function letteringReview(node,report) {
         manual_source_preservation:'원본 보존으로 선택한 영역',
         protected_region_overlap:'보호한 원문과 겹침',
         coincident_edit_frames:'서로 다른 원문이 같은 편집 범위를 사용',
-        unverified_display_text:'큰 제목·장식 글자 확인 필요',
+        unverified_display_text:'큰 원문 영역·컷·말풍선 경계 확인 필요',
         ambiguous_isolated_source:'독립 문자 확인 필요',
         ambiguous_cross_label_source:'글자 분류·소유권 확인 필요'};
     for(const row of [...(report.lettering_review || []),...(report.source_preservation || [])]) {
@@ -38,7 +38,7 @@ function letteringReview(node,report) {
     }
     if(!body.children.length){const line=document.createElement('div');line.textContent=`식자 ${report.regions?.length || 0}영역`;body.append(line);}
     if(report.needs_review && !(report.lettering_review?.length || report.source_preservation?.length)) {
-        const line=document.createElement('div');line.textContent='검출·OCR에서 보존한 영역이 있습니다. 원문 검수와 크롭 보고서를 확인하세요.';
+        const line=document.createElement('div');line.textContent='상위 단계에 검수 표시가 있습니다. 검출·원문 검수와 크롭 보고서에서 사유를 확인하세요.';
         line.style.color='#ffb7b7';body.append(line);
     }
 }

@@ -31,7 +31,7 @@ def _same_line_fragments(a, b):
     """Overlapping sliding windows may return complementary halves of one row."""
     ah, bh = a[3]-a[1], b[3]-b[1]
     aw, bw = a[2]-a[0], b[2]-b[0]
-    if min(aw, bw, ah, bh) <= 0 or min(ah, bh)/max(ah, bh) < .65:
+    if min(aw, bw, ah, bh) <= 0 or min(aw/ah,bw/bh)<3 or min(ah, bh)/max(ah, bh) < .65:
         return False
     vertical = max(0., min(a[3], b[3])-max(a[1], b[1]))/min(ah, bh)
     horizontal = max(0., min(a[2], b[2])-max(a[0], b[0]))/min(aw, bw)
@@ -49,7 +49,7 @@ def _identical_cross_label_source(a, b):
     return cross_label_alias(a, b)
 
 
-def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CONTAINMENT_OVERLAP):
+def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CONTAINMENT_OVERLAP, barriers=(),width=None,height=None):
     """Merge duplicates transitively without dropping detected extent.
 
     A pair is considered the same logical region when either ordinary IoU is
@@ -59,12 +59,17 @@ def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CON
     right-half into one logical text region.
     """
     items = [dict(item) for item in sorted(candidates, key=lambda row: row['score'], reverse=True)]
+    from .region_boundaries import compatible,union_masks
+    import math
+    width=width or math.ceil(max((r['bbox'][2] for r in items),default=1))
+    height=height or math.ceil(max((r['bbox'][3] for r in items),default=1))
     alias_phase = False
     while True:
         merged = False
         for left in range(len(items)):
             for right in range(left + 1, len(items)):
                 a, b = items[left], items[right]
+                if barriers and not compatible(a,b,barriers):continue
                 alias = alias_phase and _identical_cross_label_source(a, b)
                 if a['label'] != b['label'] and not alias:
                     continue
@@ -76,7 +81,10 @@ def merge_detector_regions(candidates, iou_threshold, containment_threshold=_CON
                 winner = a if a['score'] >= b['score'] else b
                 union = [min(a['bbox'][0], b['bbox'][0]), min(a['bbox'][1], b['bbox'][1]),
                          max(a['bbox'][2], b['bbox'][2]), max(a['bbox'][3], b['bbox'][3])]
-                items[left] = {**winner, 'bbox': union,
+                combined=union_masks(a,b,width,height)
+                ink_box=([combined['x'],combined['y'],combined['x']+combined['width'],combined['y']+combined['height']]
+                         if combined is not None else union)
+                items[left] = {**winner, 'bbox': union,'mask':combined,'_ink_bbox':ink_box,
                     'source_detector_ids': sorted(set(a.get('source_detector_ids', [])) | set(b.get('source_detector_ids', []))),
                     'source_labels': sorted(set(a.get('source_labels', [a['label']])) | set(b.get('source_labels', [b['label']]))),
                     'cross_label_alias': bool(alias or a.get('cross_label_alias') or b.get('cross_label_alias'))}
@@ -192,11 +200,15 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
         candidates = [{**_detector_region(item, width, height), 'source_detector_ids': [f'd{i+1}'],
                        'source_labels': [item['label']]}
                       for i, item in enumerate(result['detections']) if item.get('label') in labels]
-        selected = merge_detector_regions(candidates, dedupe_iou)
-        before_grouping = len(selected)
         bubbles = [_detector_region(item, width, height) for item in result['detections'] if item.get('label') == 'bubble']
+        panels = [_detector_region(item, width, height) for item in result['detections'] if item.get('label') == 'panel']
+        from .region_boundaries import separators,partition
+        barriers=separators(panels+bubbles)
+        input_count=len(candidates)
+        candidates,partitions=partition(candidates,barriers,width,height)
+        selected = merge_detector_regions(candidates, dedupe_iou,barriers=barriers,width=width,height=height)
+        before_grouping = len(selected)
         if merge_adjacent_lines:
-            panels = [_detector_region(item, width, height) for item in result['detections'] if item.get('label') == 'panel']
             selected = group_adjacent_lines(selected, bubbles, panels)
         protected = boundary_review.boxes(result,width,height)
         overlaps = any(boundary_review.intersects(item['bbox'],box) for item in selected for box in protected)
@@ -241,6 +253,7 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
                  'source_ownership': {'schema': 1, 'detector_ids': item.get('source_detector_ids', []),
                      'labels': item.get('source_labels', [item['label']]), 'cross_label_alias': item.get('cross_label_alias', False),
                      'bubble_verified': bubble_verified(item, bubbles),
+                     **({'boundary_partition':item['boundary_partition']} if item.get('boundary_partition') else {}),
                      **({'review_reason':'ambiguous_cross_label_source','related_region_ids':ambiguous[i]} if i in ambiguous else {})},
                  **({'line_bboxes_pixels': item['line_bboxes']} if 'line_bboxes' in item else {})}
                 for i, item in enumerate(selected)]
@@ -256,7 +269,10 @@ class MangaDetectionRegionsResolved(_BaseDetectionRegions):
                         **({'no_text_reason':'unresolved_detection_boundary'} if protected and not rows else {}),
                         'image_width': width, 'image_height': height,
                         'region_resolution': {
-                            'input_regions': len(candidates),
+                            'input_regions': input_count,
+                            'partitioned_candidates':len(candidates),
+                            'boundary_partition':{'schema':1,'split_observations':len(partitions),'observations':partitions,
+                                'separator_count':len(barriers),'scope':'detector_frames_and_empty_mask_strips_not_semantic_ownership'},
                             'resolved_regions': len(selected),
                             'grouped_lines': before_grouping-len(selected),
                             'dedupe_iou': dedupe_iou,
