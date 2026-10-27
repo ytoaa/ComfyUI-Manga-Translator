@@ -1,3 +1,10 @@
+## v0.7.18
+
+- Keep OCR reference pixels inside the exact verified bubble interior; remove dilation that admitted adjacent ink and filled excluded holes.
+- Add 143 adversarial edge, hole, randomized ownership and clipped-interior checks.
+- Correct invalid parent geometry in the paragraph-ID transition audit; retain the production containment guard.
+- Document explicit stress-test gaps rather than treating guarded stops or generated background errors as translation success. See [adversarial audit](docs/validation/adversarial-ownership.md).
+
 ## v0.7.17
 
 - 말풍선 내부 마스크로 모든 원문 연결 성분의 소유권이 확인될 때, 여러 말풍선을 가로지른 관측을 분리하고 같은 소유자의 겹친 관측을 통합합니다. 양성 원문 픽셀을 보존하고 경계를 가로지르는 글자·모호한 내부·근거 없는 관측은 강제로 자르지 않습니다.

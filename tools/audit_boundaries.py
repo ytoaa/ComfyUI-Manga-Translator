@@ -391,7 +391,10 @@ def transition_cases(a):
         require(bool(out['regions'][0]['source'].strip()),'Empty source blocks create an invalid recognized source without an explicit deletion action',{'source':out['regions'][0]['source']})
     a.case('source-review-empty-block-list','review_transition','Reject empty paragraph replacement or represent explicit region deletion',empty_blocks)
     def same_block_id():
-        one=row();two=deepcopy(one);two['id']='r2';two['bbox']=[600,100,950,800];two['crop_bbox_pixels']=[230,20,430,180]
+        one=row();one['bbox']=[20,40,450,800]
+        two=deepcopy(one);two['id']='r2';two['bbox']=[440,40,900,800];two['crop_bbox_pixels']=[230,20,430,180]
+        # Normalized parent boxes must enclose their pixel-space child frames.
+        # Otherwise this checks invalid geometry, never repeated paragraph IDs.
         data={'regions':[one,two]};D.translation_units(data)
         try:prepared=MangaLetterPrepare().prepare(torch.ones(1,240,500,3),json.dumps(data))[0]
         except ValueError as exc:raise Failed('Locally valid paragraph IDs collide at the lettering boundary',{'exception':str(exc),'parent_ids':['r1','r2'],'block_ids':['b1','b2']})

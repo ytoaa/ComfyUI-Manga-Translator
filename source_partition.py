@@ -122,9 +122,9 @@ def isolate_crop(crop, raw, bounds, width, height):
     """Neutralize pixels outside the verified owner in an OCR copy only."""
     x, y, right, bottom = bounds
     allowed = _local(raw, (x, y, right-x, bottom-y), width, height)
-    # Antialias fringes are retained. Whole source components were verified
-    # before this step; no detected glyph is cut by this reference-only mask.
-    allowed = ndimage.binary_dilation(allowed, iterations=2)
+    # Whole source components were certified inside this exact interior.
+    # Expanding it admits neighboring ink at touching edges and fills small
+    # holes, invalidating that certificate. Keep the OCR copy strictly bounded.
     if not allowed.any(): raise ValueError('OCR owner does not intersect its crop')
     pixels = crop.detach().cpu().numpy()[0]
     rim = allowed & ~ndimage.binary_erosion(allowed, iterations=2)
