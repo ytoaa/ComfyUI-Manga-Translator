@@ -716,7 +716,10 @@ class Project:
                 except ProtocolError: pass
             self._save(state)
             explanation = (state['reason']+' '+state['failure_message']).lower()
-            if any(word in explanation for word in ('outofmemory','out of memory','cuda error',
+            service_failure=(re.search(r'\bhttp(?:\s+error)?\s+(?:401|403|429|5\d\d)\b',explanation)
+                or 'translation api is unreachable or timed out' in explanation
+                or 'translation server unavailable' in explanation)
+            if service_failure or any(word in explanation for word in ('outofmemory','out of memory','cuda error',
                     'no space left','disk full','errno 28','permission denied','connection refused',
                     'http error 401','http error 403','http error 429','rate limit')):
                 raise Paused('Server resource/storage/service failure; check the server before continuing the project')

@@ -41,7 +41,10 @@ def translate(text, base_url='http://127.0.0.1:8000/v1', model='', source_langua
                 data = response.read(1024*1024+1)
             if len(data) > 1024*1024:
                 raise ValueError('Translation response exceeds 1 MiB')
-            return json.loads(data)
+            result = json.loads(data)
+            if not isinstance(result,dict):
+                raise ValueError('Translation server response must be a JSON object')
+            return result
         except HTTPError as exc:
             # Do not echo server bodies/headers; they may contain credentials or user text.
             raise RuntimeError(f'Translation server HTTP {exc.code}') from None
@@ -50,7 +53,8 @@ def translate(text, base_url='http://127.0.0.1:8000/v1', model='', source_langua
 
     if not model:
         models = call('/models').get('data', [])
-        if len(models) != 1 or not isinstance(models[0].get('id'), str):
+        if (not isinstance(models,list) or len(models) != 1 or not isinstance(models[0],dict)
+                or not isinstance(models[0].get('id'), str) or not models[0]['id'].strip()):
             raise ValueError('Set an explicit model when the server exposes zero or multiple models')
         model = models[0]['id']
     response = call('/chat/completions', {
@@ -61,9 +65,11 @@ def translate(text, base_url='http://127.0.0.1:8000/v1', model='', source_langua
              'Do not include explanations, quotation wrappers, reasoning or XML tags.'},
             {'role': 'user', 'content': text}]})
     choices = response.get('choices', [])
-    if len(choices) != 1 or choices[0].get('finish_reason') != 'stop':
+    if (not isinstance(choices,list) or len(choices) != 1 or not isinstance(choices[0],dict)
+            or choices[0].get('finish_reason') != 'stop'):
         raise ValueError('Translation did not finish normally; increase token budget or check server output')
-    content = choices[0].get('message', {}).get('content')
+    message = choices[0].get('message')
+    content = message.get('content') if isinstance(message,dict) else None
     if not isinstance(content, str) or '<think' in content.lower() or '</think>' in content.lower():
         raise ValueError('Translation contains reasoning or has no text content; check model settings')
     from ..text_contract import translation_text

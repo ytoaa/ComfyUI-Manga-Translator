@@ -1,0 +1,680 @@
+{
+  "scope": "syntax and callable inventory, not proof of manual review",
+  "files": [
+    {
+      "path": "__init__.py",
+      "functions": 0,
+      "classes": 0
+    },
+    {
+      "path": "adapters/__init__.py",
+      "functions": 0,
+      "classes": 0
+    },
+    {
+      "path": "adapters/alternative_files.py",
+      "functions": 0,
+      "classes": 0
+    },
+    {
+      "path": "adapters/alternative_runtime.py",
+      "functions": 16,
+      "classes": 4
+    },
+    {
+      "path": "adapters/hayai.py",
+      "functions": 11,
+      "classes": 3
+    },
+    {
+      "path": "adapters/hayai_files.py",
+      "functions": 1,
+      "classes": 0
+    },
+    {
+      "path": "adapters/model.py",
+      "functions": 6,
+      "classes": 1
+    },
+    {
+      "path": "adapters/model_bundle.py",
+      "functions": 2,
+      "classes": 0
+    },
+    {
+      "path": "adapters/model_files.py",
+      "functions": 0,
+      "classes": 0
+    },
+    {
+      "path": "adapters/options.py",
+      "functions": 0,
+      "classes": 1
+    },
+    {
+      "path": "alternative_models.py",
+      "functions": 19,
+      "classes": 4
+    },
+    {
+      "path": "boundary_review.py",
+      "functions": 5,
+      "classes": 0
+    },
+    {
+      "path": "debug_nodes.py",
+      "functions": 5,
+      "classes": 1
+    },
+    {
+      "path": "detection_policy.py",
+      "functions": 21,
+      "classes": 2
+    },
+    {
+      "path": "document.py",
+      "functions": 13,
+      "classes": 1
+    },
+    {
+      "path": "edit_review.py",
+      "functions": 5,
+      "classes": 0
+    },
+    {
+      "path": "inpaint_tiles.py",
+      "functions": 14,
+      "classes": 2
+    },
+    {
+      "path": "layout_refinement.py",
+      "functions": 10,
+      "classes": 0
+    },
+    {
+      "path": "lettering/__init__.py",
+      "functions": 0,
+      "classes": 0
+    },
+    {
+      "path": "lettering/bubble_constraints.py",
+      "functions": 9,
+      "classes": 2
+    },
+    {
+      "path": "lettering/core.py",
+      "functions": 31,
+      "classes": 1
+    },
+    {
+      "path": "lettering/direction.py",
+      "functions": 3,
+      "classes": 1
+    },
+    {
+      "path": "lettering/frame.py",
+      "functions": 5,
+      "classes": 0
+    },
+    {
+      "path": "lettering/hybrid.py",
+      "functions": 19,
+      "classes": 1
+    },
+    {
+      "path": "lettering/hybrid_nodes.py",
+      "functions": 5,
+      "classes": 2
+    },
+    {
+      "path": "lettering/linebreak.py",
+      "functions": 1,
+      "classes": 0
+    },
+    {
+      "path": "lettering/nodes.py",
+      "functions": 27,
+      "classes": 11
+    },
+    {
+      "path": "lettering/placement.py",
+      "functions": 5,
+      "classes": 0
+    },
+    {
+      "path": "lettering/translate.py",
+      "functions": 2,
+      "classes": 0
+    },
+    {
+      "path": "lettering/vertical.py",
+      "functions": 4,
+      "classes": 0
+    },
+    {
+      "path": "limits.py",
+      "functions": 1,
+      "classes": 0
+    },
+    {
+      "path": "mask_nodes.py",
+      "functions": 4,
+      "classes": 1
+    },
+    {
+      "path": "models.py",
+      "functions": 43,
+      "classes": 8
+    },
+    {
+      "path": "nodes.py",
+      "functions": 28,
+      "classes": 6
+    },
+    {
+      "path": "ocr_engines.py",
+      "functions": 12,
+      "classes": 3
+    },
+    {
+      "path": "ocr_policy.py",
+      "functions": 9,
+      "classes": 0
+    },
+    {
+      "path": "page_edit.py",
+      "functions": 9,
+      "classes": 2
+    },
+    {
+      "path": "recognition_cache.py",
+      "functions": 4,
+      "classes": 1
+    },
+    {
+      "path": "region_boundaries.py",
+      "functions": 9,
+      "classes": 0
+    },
+    {
+      "path": "region_policy.py",
+      "functions": 12,
+      "classes": 1
+    },
+    {
+      "path": "reproduction.py",
+      "functions": 1,
+      "classes": 0
+    },
+    {
+      "path": "source_ownership.py",
+      "functions": 4,
+      "classes": 0
+    },
+    {
+      "path": "source_partition.py",
+      "functions": 4,
+      "classes": 0
+    },
+    {
+      "path": "source_recovery.py",
+      "functions": 9,
+      "classes": 0
+    },
+    {
+      "path": "stage_cache.py",
+      "functions": 17,
+      "classes": 4
+    },
+    {
+      "path": "tests/ocr_fixture.py",
+      "functions": 1,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_adversarial_ownership.py",
+      "functions": 4,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_alternative_models.py",
+      "functions": 14,
+      "classes": 2
+    },
+    {
+      "path": "tests/test_bare_break_v0716.py",
+      "functions": 4,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_boundary_acceptance.py",
+      "functions": 10,
+      "classes": 1
+    },
+    {
+      "path": "tests/test_boundary_matrix.py",
+      "functions": 5,
+      "classes": 2
+    },
+    {
+      "path": "tests/test_boundary_recovery.py",
+      "functions": 61,
+      "classes": 20
+    },
+    {
+      "path": "tests/test_boundary_review.py",
+      "functions": 22,
+      "classes": 2
+    },
+    {
+      "path": "tests/test_bubble_containment.py",
+      "functions": 12,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_cache_report_integrity.py",
+      "functions": 6,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_canvas_execution.py",
+      "functions": 29,
+      "classes": 3
+    },
+    {
+      "path": "tests/test_canvas_frontend.py",
+      "functions": 1,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_contracts.py",
+      "functions": 32,
+      "classes": 3
+    },
+    {
+      "path": "tests/test_debug_nodes.py",
+      "functions": 11,
+      "classes": 2
+    },
+    {
+      "path": "tests/test_detail_pipeline.py",
+      "functions": 7,
+      "classes": 2
+    },
+    {
+      "path": "tests/test_detection_policy.py",
+      "functions": 17,
+      "classes": 7
+    },
+    {
+      "path": "tests/test_detection_regions.py",
+      "functions": 3,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_detection_source_budget.py",
+      "functions": 6,
+      "classes": 1
+    },
+    {
+      "path": "tests/test_document_stages.py",
+      "functions": 29,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_dot_punctuation.py",
+      "functions": 16,
+      "classes": 2
+    },
+    {
+      "path": "tests/test_edit_review.py",
+      "functions": 12,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_empty_pages.py",
+      "functions": 10,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_expanded_image_scenarios.py",
+      "functions": 11,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_fit_preservation.py",
+      "functions": 8,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_hard_image_scenarios.py",
+      "functions": 10,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_highres_contract_v0317.py",
+      "functions": 8,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_hybrid_lettering.py",
+      "functions": 33,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_image_scenarios.py",
+      "functions": 11,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_inpaint_tiles.py",
+      "functions": 13,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_integrated_simulation.py",
+      "functions": 15,
+      "classes": 3
+    },
+    {
+      "path": "tests/test_lettering.py",
+      "functions": 33,
+      "classes": 2
+    },
+    {
+      "path": "tests/test_lettering_failures_v0712.py",
+      "functions": 15,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_lettering_placement.py",
+      "functions": 12,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_manga_image_scenarios.py",
+      "functions": 8,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_native_failure_history.py",
+      "functions": 10,
+      "classes": 1
+    },
+    {
+      "path": "tests/test_ocr_layout_recovery.py",
+      "functions": 28,
+      "classes": 9
+    },
+    {
+      "path": "tests/test_ocr_lines.py",
+      "functions": 3,
+      "classes": 1
+    },
+    {
+      "path": "tests/test_ocr_preserve_review.py",
+      "functions": 9,
+      "classes": 3
+    },
+    {
+      "path": "tests/test_ocr_quality_policy.py",
+      "functions": 35,
+      "classes": 8
+    },
+    {
+      "path": "tests/test_packaging.py",
+      "functions": 1,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_page_columns.py",
+      "functions": 12,
+      "classes": 2
+    },
+    {
+      "path": "tests/test_page_edit.py",
+      "functions": 16,
+      "classes": 1
+    },
+    {
+      "path": "tests/test_page_failures_v073.py",
+      "functions": 23,
+      "classes": 3
+    },
+    {
+      "path": "tests/test_page_scenarios_v0715.py",
+      "functions": 11,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_planning_review_v0713.py",
+      "functions": 12,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_project_control_v0316.py",
+      "functions": 17,
+      "classes": 2
+    },
+    {
+      "path": "tests/test_project_runner.py",
+      "functions": 45,
+      "classes": 3
+    },
+    {
+      "path": "tests/test_project_simulation.py",
+      "functions": 1,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_region_boundaries_v0714.py",
+      "functions": 10,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_region_policy.py",
+      "functions": 12,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_restart_recovery.py",
+      "functions": 18,
+      "classes": 1
+    },
+    {
+      "path": "tests/test_single_workflow.py",
+      "functions": 4,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_source_ownership.py",
+      "functions": 17,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_source_partition_v0717.py",
+      "functions": 19,
+      "classes": 1
+    },
+    {
+      "path": "tests/test_system_faults.py",
+      "functions": 20,
+      "classes": 4
+    },
+    {
+      "path": "tests/test_text_geometry.py",
+      "functions": 22,
+      "classes": 2
+    },
+    {
+      "path": "tests/test_transition_v072.py",
+      "functions": 22,
+      "classes": 1
+    },
+    {
+      "path": "tests/test_translation_response.py",
+      "functions": 31,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_workflow_context.py",
+      "functions": 10,
+      "classes": 2
+    },
+    {
+      "path": "tests/test_workflow_projects.py",
+      "functions": 34,
+      "classes": 6
+    },
+    {
+      "path": "tests/test_workflow_widgets.py",
+      "functions": 4,
+      "classes": 0
+    },
+    {
+      "path": "text_contract.py",
+      "functions": 2,
+      "classes": 0
+    },
+    {
+      "path": "text_geometry.py",
+      "functions": 6,
+      "classes": 0
+    },
+    {
+      "path": "tools/audit_boundaries.py",
+      "functions": 71,
+      "classes": 4
+    },
+    {
+      "path": "tools/build_fallback_font.py",
+      "functions": 1,
+      "classes": 0
+    },
+    {
+      "path": "tools/build_integrated_workflow.py",
+      "functions": 2,
+      "classes": 0
+    },
+    {
+      "path": "tools/build_lettering_fixture.py",
+      "functions": 2,
+      "classes": 0
+    },
+    {
+      "path": "tools/check_repository.py",
+      "functions": 2,
+      "classes": 0
+    },
+    {
+      "path": "tools/demo_hybrid_lettering.py",
+      "functions": 1,
+      "classes": 0
+    },
+    {
+      "path": "tools/expanded_image_scenarios.py",
+      "functions": 4,
+      "classes": 1
+    },
+    {
+      "path": "tools/hard_image_scenarios.py",
+      "functions": 9,
+      "classes": 1
+    },
+    {
+      "path": "tools/image_scenarios.py",
+      "functions": 16,
+      "classes": 1
+    },
+    {
+      "path": "tools/manga_image_scenarios.py",
+      "functions": 9,
+      "classes": 1
+    },
+    {
+      "path": "tools/package_style_lettering.py",
+      "functions": 4,
+      "classes": 0
+    },
+    {
+      "path": "tools/run_project.py",
+      "functions": 48,
+      "classes": 8
+    },
+    {
+      "path": "tools/simulate_integrated.py",
+      "functions": 17,
+      "classes": 3
+    },
+    {
+      "path": "tools/simulate_ownership_scenarios.py",
+      "functions": 6,
+      "classes": 0
+    },
+    {
+      "path": "tools/simulate_page_failures.py",
+      "functions": 29,
+      "classes": 6
+    },
+    {
+      "path": "tools/simulate_project.py",
+      "functions": 11,
+      "classes": 2
+    },
+    {
+      "path": "tools/simulate_source_scenarios.py",
+      "functions": 2,
+      "classes": 0
+    },
+    {
+      "path": "tools/stress_ambiguous_pages.py",
+      "functions": 15,
+      "classes": 2
+    },
+    {
+      "path": "tools/stress_image_processing.py",
+      "functions": 17,
+      "classes": 1
+    },
+    {
+      "path": "tools/stress_manga_pages.py",
+      "functions": 5,
+      "classes": 1
+    },
+    {
+      "path": "tools/validate_cpu_models.py",
+      "functions": 3,
+      "classes": 0
+    },
+    {
+      "path": "tools/workflow_graph.py",
+      "functions": 7,
+      "classes": 1
+    },
+    {
+      "path": "tools/workflow_widgets.py",
+      "functions": 2,
+      "classes": 0
+    },
+    {
+      "path": "translation_context.py",
+      "functions": 4,
+      "classes": 1
+    },
+    {
+      "path": "translation_protocol.py",
+      "functions": 4,
+      "classes": 0
+    },
+    {
+      "path": "workflow_native.py",
+      "functions": 19,
+      "classes": 1
+    },
+    {
+      "path": "workflow_project.py",
+      "functions": 31,
+      "classes": 3
+    }
+  ]
+}

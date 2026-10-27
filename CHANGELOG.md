@@ -1,3 +1,12 @@
+## v0.7.19
+
+- Pause folder projects on actual translation authentication, rate-limit, server and timeout messages before submitting another page.
+- Keep cached images and review diagnostics together; skip invalid/oversized reports, invalidate stale refresh manifests, and preserve UTF-8 report budgets.
+- Recompute OCR when nested cache payloads or previews are invalid.
+- Reject malformed translation-server/model-list response shapes explicitly.
+- Reject review output symlink escapes and remove partial JSON after write failure.
+- Add service, disk, model acquisition, cache and all-node schema fault checks; retain an explicit whole-system coverage inventory.
+
 ## v0.7.18
 
 - Keep OCR reference pixels inside the exact verified bubble interior; remove dilation that admitted adjacent ink and filled excluded holes.

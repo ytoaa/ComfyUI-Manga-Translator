@@ -8,7 +8,7 @@ import os
 import uuid
 import numpy as np
 
-VERSION='0.7.18'
+VERSION='0.7.19'
 MAX_BYTES=256*1024*1024
 
 def root():
@@ -114,6 +114,16 @@ def read(key,kind):
 
 
 def write(key,kind,value,report_json=None):
+    if report_json is not None:
+        try:
+            valid=(isinstance(report_json,str) and len(report_json.encode())<=2_000_000
+                   and isinstance(json.loads(report_json),dict))
+        except (ValueError,TypeError):valid=False
+        if not valid:
+            # Never persist pixels while silently dropping their review state.
+            (root()/key[:2]/key/'manifest.json').unlink(missing_ok=True)
+            logging.warning('Checkpoint report unavailable or oversized; skipping persistence')
+            return
     if kind=='image':
         buf=io.BytesIO();np.save(buf,value.detach().cpu().numpy().astype(np.float32),allow_pickle=False);raw=buf.getvalue()
     else:raw=json.dumps(value,ensure_ascii=False,allow_nan=False).encode()
@@ -129,7 +139,7 @@ def write(key,kind,value,report_json=None):
     meta={'key':key,'kind':kind,'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw)}
     if isinstance(report_json,str) and len(report_json.encode())<=2_000_000:
         meta.update(report_json=report_json,report_sha256=hashlib.sha256(report_json.encode()).hexdigest())
-    atomic(folder/'manifest.json',json.dumps(meta).encode())
+    atomic(folder/'manifest.json',json.dumps(meta,ensure_ascii=False).encode())
 
 
 

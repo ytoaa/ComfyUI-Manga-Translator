@@ -6,6 +6,25 @@ import numpy as np
 from PIL import Image
 from .models import MangaOCRAdaptive
 from . import stage_cache
+from .limits import MAX_SOURCE_PIXELS
+
+
+def restore(value):
+    """Validate the nested OCR payload as well as its outer cache checksum."""
+    import torch
+    data=json.loads(value)
+    if (not isinstance(data,dict) or not isinstance(data.get('text'),str)
+            or not isinstance(data.get('report'),str) or not isinstance(json.loads(data['report']),dict)
+            or not isinstance(data.get('previews'),list) or not data['previews']):
+        raise ValueError('Invalid OCR cache payload')
+    previews=[];pixels=0
+    for encoded in data['previews']:
+        if not isinstance(encoded,str):raise ValueError('Invalid OCR preview')
+        with Image.open(io.BytesIO(base64.b64decode(encoded,validate=True))) as image:
+            pixels+=image.width*image.height
+            if pixels>MAX_SOURCE_PIXELS:raise ValueError('OCR preview cache exceeds pixel budget')
+            previews.append(torch.from_numpy(np.asarray(image.convert('RGB'),dtype=np.float32)/255)[None])
+    return data['text'],data['report'],previews
 
 class MangaOCRAdaptiveCached(MangaOCRAdaptive):
     @classmethod
@@ -18,10 +37,9 @@ class MangaOCRAdaptiveCached(MangaOCRAdaptive):
         key=stage_cache.identity(images,None,None,'ocr-region',json.dumps([ident,options],sort_keys=True)) if ident else None
         cached=stage_cache.read(key,'text') if key and cache_policy=='reuse' else None
         if cached:
-            import torch
-            data=json.loads(cached)
-            result=(data['text'],data['report'],[torch.from_numpy(np.asarray(Image.open(io.BytesIO(base64.b64decode(p))).convert('RGB'),dtype=np.float32)/255)[None] for p in data['previews']])
-        else:
+            try:result=restore(cached)
+            except (ValueError,TypeError,KeyError,OSError,Image.DecompressionBombError):cached=None
+        if not cached:
             result=super().read(images,model,**options)
             if key and cache_policy!='off':
                 previews=[]

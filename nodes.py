@@ -712,12 +712,17 @@ class MangaSaveReview:
         parts = filename_prefix.split('/')
         if not parts or any(not re.fullmatch(r'[A-Za-z0-9_-]{1,100}',part) for part in parts):
             raise ValueError('Review prefix must contain only simple relative folder/file names')
-        directory = Path(folder_paths.get_output_directory()).resolve().joinpath(*parts[:-1])
+        root = Path(folder_paths.get_output_directory()).resolve()
+        directory = root.joinpath(*parts[:-1]).resolve()
+        if not directory.is_relative_to(root):
+            raise ValueError('Review output directory leaves the output folder')
         directory.mkdir(parents=True,exist_ok=True)
         for counter in range(1,100_000):
             path = directory / f'{parts[-1]}_{counter:05d}.json'
+            created = False
             try:
                 with path.open('x',encoding='utf-8') as handle:
+                    created = True
                     json.dump(data,handle,ensure_ascii=False,indent=2,allow_nan=False)
                 value = encode(data)
                 # Expose the already-saved review immediately. A later render
@@ -726,7 +731,13 @@ class MangaSaveReview:
                     {'filename':path.name,'subfolder':'/'.join(parts[:-1]),'type':'output'}]},
                         'result':(value,)}
             except FileExistsError:
+                if created:
+                    path.unlink(missing_ok=True)
+                    raise
                 continue
+            except BaseException:
+                if created:path.unlink(missing_ok=True)
+                raise
         raise RuntimeError('Review filename sequence is exhausted')
 
 
