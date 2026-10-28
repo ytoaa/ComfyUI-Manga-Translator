@@ -2,6 +2,8 @@
 
 현재 검증 범위와 실제 모델 관측은 [검증 목차](docs/validation/README.md)에 모았습니다.
 
+- [전체 코드·사용 시나리오 감사: 확인 범위와 미완료 항목](docs/validation/full-system-audit.md)
+
 - [실제 RF-DETR/Hayai/Manga OCR CPU 조건·결과](docs/validation/cpu-models.md)
 - [원본 문맥 복구·적응형 OCR](docs/validation/source-context.md)
 - [페이지 실패 상황별 시뮬레이션·독립 정답 평가](docs/validation/image-scenarios.md)

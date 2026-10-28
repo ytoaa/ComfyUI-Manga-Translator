@@ -114,6 +114,24 @@ def test_project_names_are_not_paths(tmp_path,name):
     with pytest.raises(P.ProjectError):W.WorkflowProjects.destination(tmp_path,name)
 
 
+@pytest.mark.parametrize('ancestor', ['manga_translator', 'manga_translator/workflow_projects'])
+def test_project_output_ancestor_cannot_redirect_outside_output_root(tmp_path, ancestor):
+    root, outside = tmp_path/'output', tmp_path/'outside'
+    outside.mkdir()
+    link = root/ancestor
+    link.parent.mkdir(parents=True)
+    link.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(P.ProjectError, match='출력 경로'):
+        W.WorkflowProjects.destination(root, 'book')
+    assert not list(outside.iterdir())
+
+
+def test_configured_output_root_itself_may_be_a_symlink(tmp_path):
+    actual, alias = tmp_path/'actual', tmp_path/'output'
+    actual.mkdir(); alias.symlink_to(actual, target_is_directory=True)
+    assert W.WorkflowProjects.destination(alias, 'book') == actual/'manga_translator/workflow_projects/book'
+
+
 def test_only_one_project_worker_and_repeated_start_does_not_duplicate(tmp_path):
     _,inputs,folder=book(tmp_path);c=W.WorkflowProjects();entered,release=threading.Event(),threading.Event()
     class Slow(FakeComfy):

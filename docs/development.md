@@ -18,8 +18,10 @@
 ```bash
 python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 python -m pip install pytest numpy Pillow scipy fonttools psutil 'pydantic>=2,<3'
-python -m pytest tests -q --confcutdir=tests --tb=short
+python -m pytest tests -q --rootdir=tests --confcutdir=tests --tb=short
 node tools/check_canvas_frontend.cjs
+node tools/check_canvas_faults.cjs
+node tools/check_folder_upload.cjs
 node tools/check_node_ui.cjs
 ```
 

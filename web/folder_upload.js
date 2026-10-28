@@ -26,16 +26,37 @@ async function uploadOne(file, subfolder) {
     form.append("type", "input");
     form.append("subfolder", subfolder);
     form.append("overwrite", "false");
-    const response = await api.fetchApi("/upload/image", { method: "POST", body: form });
-    let data = {};
-    try { data = await response.json(); } catch (_) {}
-    if (!response.ok || data.type !== "input") {
-        throw new Error(data.error || data.message || `이미지 업로드 실패 (HTTP ${response.status})`);
+    const controller = new AbortController();
+    let timer;
+    const deadline = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+            reject(new Error("이미지 업로드 시간이 초과됐습니다. 폴더를 다시 선택하세요."));
+            controller.abort();
+        }, 120000);
+    });
+    try {
+        return await Promise.race([deadline, (async () => {
+            const response = await api.fetchApi("/upload/image", { method: "POST", body: form, signal: controller.signal });
+            let data = {};
+            try { data = await response.json(); } catch (_) {}
+            if (!response.ok || data?.type !== "input") {
+                throw new Error(data?.error || data?.message || `이미지 업로드 실패 (HTTP ${response.status})`);
+            }
+            if (data.name !== file.name || data.subfolder !== subfolder) {
+                throw new Error("이미지 업로드 응답의 저장 경로가 요청과 다릅니다.");
+            }
+            return data;
+        })()]);
+    } finally {
+        clearTimeout(timer);
     }
-    return data;
 }
 
 async function chooseAndUpload(node, button) {
+    const settings = ["input_mode", "input_folder", "project_name"].map(name => {
+        const widget = findWidget(node, name);
+        return {name, widget, value:widget?.value};
+    });
     const picker = document.createElement("input");
     picker.type = "file";
     picker.multiple = true;
@@ -79,6 +100,9 @@ async function chooseAndUpload(node, button) {
         const folder = findWidget(node, "input_folder");
         const project = findWidget(node, "project_name");
         if (!mode || !folder) throw new Error("워크플로우 입력 위젯을 찾을 수 없습니다.");
+        if (settings.some(({name, widget, value}) => findWidget(node, name) !== widget || widget?.value !== value)) {
+            throw new Error(`업로드 중 입력 설정이 바뀌어 자동 적용하지 않았습니다. 업로드 폴더: ${targetRoot}`);
+        }
         mode.value = "폴더 프로젝트";
         folder.value = targetRoot;
         if (project && (!String(project.value || "").trim() || project.value === "book_01")) {
@@ -107,11 +131,17 @@ app.registerExtension({
         nodeType.prototype.onNodeCreated = function () {
             const result = created?.apply(this, arguments);
             const button = this.addWidget("button", "PC 폴더 업로드", null, async () => {
+                // LiteGraph buttons are not native disabled HTML buttons. Guard
+                // the picker as well as the transfer against repeated callbacks.
+                if (this.mangaFolderUploadBusy) return;
+                this.mangaFolderUploadBusy = true;
                 try {
                     await chooseAndUpload(this, button);
                 } catch (error) {
                     console.error("Manga folder upload failed", error);
                     window.alert(`폴더 업로드 실패: ${error.message || error}`);
+                } finally {
+                    this.mangaFolderUploadBusy = false;
                 }
             }, { serialize: false });
             // ComfyUI has separate workflow and prompt serialization flags.

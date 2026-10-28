@@ -30,7 +30,7 @@ async function fixture(options = {}) {
                 : {pending:false, continue:options.continues !== false, report:{status:'awaiting_canvas',message:'다음 페이지',counts:{completed:1}}}; } };
         },
     };
-    vm.runInNewContext(code, {app, api, console, setTimeout, document:{createElement(){return {style:{},value:''};}}});
+    vm.runInNewContext(code, {app, api, console, AbortController, setTimeout, clearTimeout, document:{createElement(){return {style:{},value:''};}}});
     class Node {
         constructor() {
             this.id=1; this.type=this.comfyClass='MangaWorkflowInput'; this.properties={};

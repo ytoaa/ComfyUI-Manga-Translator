@@ -71,6 +71,25 @@ class Node {
  editNode.onExecuted({manga_edit_review:[{...editSnapshot,input_revision:'maskB',page_identity:'project/a/page/2'}]});
  assert.ok(JSON.parse(editNode.widgets[0].value).pages.maskA);assert.ok(!JSON.parse(editNode.widgets[0].value).pages.maskB);
  assert.ok(!card.children.some(e=>e.tag==='img'));
+ // Valid JSON with array containers used to say "saved" while JSON.stringify
+ // silently discarded named revision properties. Keep the raw input unchanged.
+ for(const invalid of ['[]','{"pages":[]}','{"pages":true}','{"pages":{"pageA":[]}}','{"identities":[]}']) {
+  node.widgets[0].value=invalid;
+  node.onExecuted({manga_document:[snapshot]});
+  const field=node.mangaPanelBody.children.find(e=>e.tag==='textarea');
+  if(field){field.value='must not disappear';field.fire('input');}
+  assert.equal(node.widgets[0].value,invalid);
+  assert.match(node.mangaPanelStatus.textContent,/확인 필요/);
+ }
+ for(const invalid of ['[]','{"pages":[]}','{"pages":true}','{"pages":{"maskA":[]}}','{"identities":[]}']) {
+  editNode.widgets[0].value=invalid;
+  editNode.onExecuted({manga_edit_review:[editSnapshot]});
+  const c=editNode.mangaPanelBody.children.find(e=>e.children.some(q=>q.tag==='select'));
+  const control=c?.children.find(e=>e.tag==='select');
+  if(control){control.value='preserve';control.fire('change');}
+  assert.equal(editNode.widgets[0].value,invalid);
+  assert.match(editNode.mangaPanelStatus.textContent,/확인 필요/);
+ }
  const failedReport={regions:[],lettering_review:[{id:'r7',reason:'unsupported_translation_glyphs',diagnostic:{missing_characters:['ل','<img src=x>']}}]};
  editNode.onExecuted({manga_lettering_report:[failedReport]});
  assert.match(editNode.mangaPanelBody.children[0].textContent,/r7.*폰트.*ل.*<img src=x>/);

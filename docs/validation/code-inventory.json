@@ -283,7 +283,7 @@
     },
     {
       "path": "tests/test_canvas_frontend.py",
-      "functions": 1,
+      "functions": 3,
       "classes": 0
     },
     {
@@ -523,7 +523,7 @@
     },
     {
       "path": "tests/test_workflow_projects.py",
-      "functions": 34,
+      "functions": 36,
       "classes": 6
     },
     {

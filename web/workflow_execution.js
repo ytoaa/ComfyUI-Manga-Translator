@@ -9,6 +9,7 @@ const settled = new Set();
 let executingPrompt = null;
 const fields = node => Object.fromEntries((node.widgets || []).map(w => [w.name, w.value]));
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const isRecord = value => value !== null && typeof value === "object" && !Array.isArray(value);
 
 function show(node, text) {
     if (node?.mangaPanelStatus) node.mangaPanelStatus.textContent=text;
@@ -46,23 +47,47 @@ function sameCanvas(job) {
 }
 
 async function request(route, job) {
-    const response = await api.fetchApi(`/manga_translator/workflow/${route}`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project_name: job.project_name, run_id: job.run_id, prompt_id: job.prompt_id }),
+    const controller = new AbortController();
+    let timer;
+    const deadline = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+            reject(new Error("프로젝트 기록 요청 시간이 초과됐습니다. 상태 확인 후 재개하세요."));
+            controller.abort();
+        }, 15000);
     });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || `프로젝트 기록 확인 실패 (${response.status})`);
-    return result;
+    try {
+        return await Promise.race([deadline, (async () => {
+            const response = await api.fetchApi(`/manga_translator/workflow/${route}`, {
+                method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
+                body: JSON.stringify({ project_name: job.project_name, run_id: job.run_id, prompt_id: job.prompt_id }),
+            });
+            // Bound body decoding as well as receipt of response headers. A lost
+            // reply is ambiguous: never retry queue submission automatically.
+            const result = await response.json();
+            if (!response.ok) throw new Error(result?.error || `프로젝트 기록 확인 실패 (${response.status})`);
+            if (!isRecord(result) || (route === "resolve" &&
+                (typeof result.pending !== "boolean" || typeof result.continue !== "boolean" || !isRecord(result.report)))) {
+                throw new Error("프로젝트 기록 응답 형식이 올바르지 않습니다.");
+            }
+            return result;
+        })()]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+function currentCanvas(job) {
+    return lastTicket.get(String(job.source_node)) === job ? sameCanvas(job) : null;
 }
 
 async function pause(job) {
     job.stopped = true;
     try {
         const report = await request("pause", job);
-        const node = sameCanvas(job);
+        const node = currentCanvas(job);
         if (node) showReport(node, report);
     } catch (error) {
-        const node = sameCanvas(job);
+        const node = currentCanvas(job);
         show(node, `연속 제출 중지 · ${error.message}`);
     }
 }
@@ -72,7 +97,7 @@ async function finish(promptId, interrupted = false) {
     if (!job || settled.has(promptId)) return;
     settled.add(promptId);
     if (interrupted) job.stopped = true;
-    const node = sameCanvas(job);
+    const node = currentCanvas(job);
     show(node, `${job.relative_path} · 완료 기록 확인 중`);
     try {
         let result;
@@ -83,7 +108,9 @@ async function finish(promptId, interrupted = false) {
             await delay(200);
         }
         if (!result || result.pending) throw new Error("완료 이력을 확인하지 못했습니다. 상태 확인 후 재개하세요.");
-        if (node) showReport(node, result.report);
+        if (lastTicket.get(String(job.source_node)) !== job) return;
+        const display = currentCanvas(job);
+        if (display && active.get(promptId) === job) showReport(display, result.report);
         if (!result.continue || job.stopped) return;
         // ComfyUI can emit execution_error/success while its original
         // app.queuePrompt is still updating the job UI. A reentrant call queues
@@ -95,7 +122,7 @@ async function finish(promptId, interrupted = false) {
             await delay(100);
         }
         if (job.stopped) return;
-        const current = sameCanvas(job);
+        const current = currentCanvas(job);
         if (!current) { await pause(job); return; }
         // Only this queue call gets the continuation property. ComfyUI serializes
         // it in its normal workflow metadata, alongside the visible API graph.
@@ -111,7 +138,7 @@ async function finish(promptId, interrupted = false) {
         }
     } catch (error) {
         await pause(job);
-        show(node, `연속 제출 중지 · ${error.message}`);
+        show(currentCanvas(job), `연속 제출 중지 · ${error.message}`);
     } finally {
         active.delete(promptId);
         if (settled.size > 1000) settled.delete(settled.values().next().value);
@@ -128,6 +155,9 @@ api.addEventListener("executed", event => {
         }
         return;
     }
+    // A repeated executed event must not reset a stop request or resurrect a
+    // prompt whose completion was already handled.
+    if (settled.has(ticket.prompt_id) || active.has(ticket.prompt_id)) return;
     const node = sameCanvas(ticket);
     const job = { ...ticket, stopped: false };
     active.set(ticket.prompt_id, job);
@@ -147,7 +177,7 @@ api.addEventListener("executing", event => {
     const data = typeof raw === "object" && raw !== null ? raw : { node: raw, prompt_id: executingPrompt };
     const job = active.get(data.prompt_id);
     if (!job || !data.node) return;
-    const source = sameCanvas(job);
+    const source = currentCanvas(job);
     const current = app.graph?.getNodeById(data.display_node || data.node);
     show(source, `${job.index}/${job.total} · ${job.relative_path}\n실행 중: ${current?.title || current?.comfyClass || data.node}`);
 });
@@ -155,7 +185,7 @@ api.addEventListener("progress", event => {
     const data = event.detail || {};
     const job = active.get(data.prompt_id);
     if (!job) return;
-    const node = sameCanvas(job);
+    const node = currentCanvas(job);
     const current = app.graph?.getNodeById(data.node);
     show(node, `${job.index}/${job.total} · ${job.relative_path}\n${current?.title || "처리 중"} · ${data.value}/${data.max}`);
 });
@@ -166,9 +196,13 @@ api.addEventListener("reconnecting", () => {
     // Do not guess that an accepted prompt failed or automatically re-submit.
     for (const job of active.values()) {
         job.stopped = true;
-        show(app.graph?.getNodeById(job.source_node), "연결이 끊겼습니다. 현재 작업 이력 확인 후 같은 노드에서 재개하세요.");
+        // A replayed ticket after reconnect is still the interrupted browser
+        // session's job. Only a new manual prompt may resume continuation.
+        settled.add(job.prompt_id);
+        show(currentCanvas(job), "연결이 끊겼습니다. 현재 작업 이력 확인 후 같은 노드에서 재개하세요.");
     }
     active.clear();
+    while (settled.size > 1000) settled.delete(settled.values().next().value);
 });
 
 app.registerExtension({

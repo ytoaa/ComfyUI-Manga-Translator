@@ -6,6 +6,20 @@ const panels = new Set(["MangaPageEditPlan", "MangaReviewDocument", "MangaOCRMod
 const labels = {ready:"준비됨", reused:"저장 결과 재사용", computed:"계산 완료", completed:"완료", running:"실행 중", error:"확인 필요", needs_review:"검수 필요"};
 const widget = (node, name) => node.widgets?.find(w => w.name === name);
 const clone = value => JSON.parse(JSON.stringify(value));
+function reviewState(edits, revision) {
+    const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+    const message = `${edits?.name || '편집'} JSON의 pages·identities와 영역 편집은 객체여야 합니다.`;
+    const value = JSON.parse(edits?.value || '{}');
+    if (!record(value) || Object.keys(value).some(k => !['pages', 'identities'].includes(k))) throw Error(message);
+    if (value.pages === undefined) value.pages = {};
+    if (value.identities === undefined) value.identities = {};
+    if (!record(value.pages) || !record(value.identities) || Object.values(value.identities).some(v => typeof v !== 'string')) throw Error(message);
+    if (Object.hasOwn(value.pages, revision)) {
+        const page = value.pages[revision];
+        if (!record(page) || Object.values(page).some(row => !record(row))) throw Error(message);
+    }
+    return value;
+}
 function status(node, info) {
     if (!node.mangaPanelStatus) return;
     const state = info.state || "completed";
@@ -52,7 +66,7 @@ function review(node, snapshot) {
     const {stage, input_revision: revision, document: data, page_identity: owner} = snapshot;
     const edits = widget(node, "edits_json");
     function current() {
-        try { const result = JSON.parse(edits.value || "{}"); result.pages ||= {}; return result; }
+        try { return reviewState(edits, revision); }
         catch { throw new Error("edits_json JSON을 먼저 확인하세요."); }
     }
     function save(id, field, value, block) {
@@ -112,11 +126,7 @@ function editReview(node, snapshot) {
     if(!body || !edits)return;
     body.replaceChildren();
     const revision=snapshot.input_revision, owner=snapshot.page_identity;
-    const current=()=>{
-        const value=JSON.parse(edits.value || '{}');
-        if(!value || Array.isArray(value) || typeof value!=='object')throw Error('review_edits_json을 먼저 확인하세요.');
-        value.pages ||= {};value.identities ||= {};return value;
-    };
+    const current=()=>reviewState(edits, revision);
     const patch=id=>{const value=current();return clone(value.identities[revision]===owner ? value.pages[revision]?.[id] || {} : {});};
     function save(id,value) {
         if(!owner)throw Error('페이지 식별 정보가 없습니다.');

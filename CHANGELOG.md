@@ -1,3 +1,12 @@
+## v0.7.20
+
+- Bound canvas resolve/pause requests, including response bodies, to 15 seconds; stop continuation on malformed responses or ambiguous network outcomes.
+- Preserve stop requests across duplicate tickets, ignore settled tickets, and prevent late old-run responses from changing a newer run's status or submitting another page.
+- Bound each folder upload to 120 seconds, reject unexpected destination responses, guard repeated picker/button callbacks, and retain settings edited while uploads are pending. Partial uploads do not become the active input folder.
+- Keep project output directories inside the configured output root even when intermediate folders are symbolic links.
+- Reject malformed manual-review JSON containers before reporting edits as saved.
+- Add 34 executable frontend fault/input scenarios and three project-path checks; update current audit coverage and distinguish historical image findings from current limits. This release does not close the eight known image-quality gaps or certify live GPU/browser/model behavior.
+
 ## v0.7.19
 
 - Pause folder projects on actual translation authentication, rate-limit, server and timeout messages before submitting another page.

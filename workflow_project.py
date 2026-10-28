@@ -221,9 +221,11 @@ class WorkflowProjects:
         if (not isinstance(name,str) or not name.strip() or name != name.strip() or len(name)>80
                 or name in ('.','..') or '/' in name or '\\' in name or name.startswith('.')):
             raise ProjectError('프로젝트 이름은 경로 구분자 없이 1~80자로 입력하세요.')
-        root = Path(output_root).resolve()/'manga_translator'/'workflow_projects'
+        output = Path(output_root).resolve()
+        root = output/'manga_translator'/'workflow_projects'
         folder = root/name
-        if not folder.resolve().is_relative_to(root.resolve()) or folder.is_symlink():
+        if (not root.resolve().is_relative_to(output)
+                or not folder.resolve().is_relative_to(root.resolve()) or folder.is_symlink()):
             raise ProjectError('프로젝트 출력 경로가 올바르지 않습니다.')
         return folder
 
