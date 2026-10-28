@@ -30,7 +30,9 @@ def save(original, detector, regions, directory):
         if row.get('mask') is not None:_mask_metadata(row['mask'],w,h)
     raw=json.dumps(payload,ensure_ascii=False,allow_nan=False).encode()
     if len(raw)>128*1024*1024:raise ValueError('Reproduction detector JSON exceeds 128 MiB')
-    root=Path(directory)/'manga_translator'/'reproduction';root.mkdir(parents=True,exist_ok=True)
+    output=Path(directory).resolve();root=(output/'manga_translator'/'reproduction').resolve()
+    if not root.is_relative_to(output):raise ValueError('Reproduction folder lies outside configured output')
+    root.mkdir(parents=True,exist_ok=True)
     destination=root/f'page_{uuid.uuid4().hex}.zip';temporary=destination.with_suffix('.tmp')
     metadata={'schema':1,'version':VERSION,'page_size':[w,h],
               'scope':'original_float_pixels_and_raw_detection_not_model_quality_certificate','files':{}}

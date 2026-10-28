@@ -3,17 +3,37 @@ import hashlib
 import io
 import json
 import logging
+import math
 from pathlib import Path
 import os
 import uuid
 import numpy as np
 
-VERSION='0.7.19'
+VERSION='0.7.21'
 MAX_BYTES=256*1024*1024
 
 def root():
     import folder_paths
-    return Path(folder_paths.get_output_directory())/'manga_translator'/'stage_cache'
+    output=Path(folder_paths.get_output_directory()).resolve()
+    folder=(output/'manga_translator'/'stage_cache').resolve()
+    if not folder.is_relative_to(output):raise ValueError('Checkpoint root lies outside configured output')
+    return folder
+
+
+def _folder(key):
+    if not isinstance(key,str) or len(key)!=64 or any(c not in '0123456789abcdef' for c in key):
+        raise ValueError('Invalid checkpoint key')
+    base=root().resolve();folder=base/key[:2]/key
+    if folder.resolve()!=folder:raise ValueError('Checkpoint directory redirects outside its owned path')
+    return folder
+
+
+def _bounded_read(path,limit):
+    if not path.is_file():raise ValueError('Checkpoint artifact must be a regular file')
+    if path.resolve()!=path:raise ValueError('Checkpoint file redirects outside its owned path')
+    with path.open('rb') as stream:raw=stream.read(limit+1)
+    if len(raw)>limit:raise ValueError('Checkpoint file exceeds cache budget')
+    return raw
 
 
 _FILE_IDENTITIES={}
@@ -83,13 +103,12 @@ def identity(original,prompt,unique_id,stage,extra='',model_files=True):
 def read_entry(key,kind):
     """Read pixels and diagnostics against one verified manifest snapshot."""
     try:
-        folder=root()/key[:2]/key
-        if (folder/'manifest.json').stat().st_size>2_100_000:return None
-        meta=json.loads((folder/'manifest.json').read_text())
+        folder=_folder(key)
+        meta=json.loads(_bounded_read(folder/'manifest.json',2_100_000))
         if not isinstance(meta,dict):return None
         path=folder/'value.bin'
-        if meta['key']!=key or meta['kind']!=kind or path.stat().st_size>MAX_BYTES:return None
-        raw=path.read_bytes()
+        if meta['key']!=key or meta['kind']!=kind:return None
+        raw=_bounded_read(path,MAX_BYTES)
         if hashlib.sha256(raw).hexdigest()!=meta['sha256']:return None
         report=meta.get('report_json');details=None
         if 'report_json' in meta:
@@ -98,13 +117,22 @@ def read_entry(key,kind):
             if not isinstance(details,dict):return None
         if kind=='image':
             import torch
-            a=np.load(io.BytesIO(raw),allow_pickle=False)
+            stream=io.BytesIO(raw);version=np.lib.format.read_magic(stream)
+            if version==(1,0):shape,_,dtype=np.lib.format.read_array_header_1_0(stream)
+            elif version==(2,0):shape,_,dtype=np.lib.format.read_array_header_2_0(stream)
+            else:return None
+            if (dtype!=np.float32 or len(shape)!=4 or shape[0]!=1 or shape[-1]!=3
+                    or any(type(n) is not int or n<=0 for n in shape)
+                    or shape[1]*shape[2]>64*1024*1024
+                    or math.prod(shape)*dtype.itemsize!=len(raw)-stream.tell()):return None
+            stream.seek(0)
+            a=np.load(stream,allow_pickle=False)
             if a.dtype!=np.float32 or a.ndim!=4 or a.shape[0]!=1 or a.shape[-1]!=3 or not np.isfinite(a).all():return None
             return torch.from_numpy(a.copy()),details
         value=json.loads(raw)
         if kind=='text' and isinstance(value,str):return value,details
         if kind=='detection' and isinstance(value,dict) and value.get('protocol')==1:return value,details
-    except (OSError,ValueError,KeyError,EOFError,TypeError):pass
+    except (OSError,ValueError,KeyError,EOFError,TypeError,RecursionError):pass
     return None
 
 
@@ -114,6 +142,7 @@ def read(key,kind):
 
 
 def write(key,kind,value,report_json=None):
+    folder=_folder(key)
     if report_json is not None:
         try:
             valid=(isinstance(report_json,str) and len(report_json.encode())<=2_000_000
@@ -121,14 +150,14 @@ def write(key,kind,value,report_json=None):
         except (ValueError,TypeError):valid=False
         if not valid:
             # Never persist pixels while silently dropping their review state.
-            (root()/key[:2]/key/'manifest.json').unlink(missing_ok=True)
+            (folder/'manifest.json').unlink(missing_ok=True)
             logging.warning('Checkpoint report unavailable or oversized; skipping persistence')
             return
     if kind=='image':
         buf=io.BytesIO();np.save(buf,value.detach().cpu().numpy().astype(np.float32),allow_pickle=False);raw=buf.getvalue()
     else:raw=json.dumps(value,ensure_ascii=False,allow_nan=False).encode()
     if len(raw)>MAX_BYTES:logging.warning('Checkpoint exceeds cache budget; continuing without persistence');return
-    folder=root()/key[:2]/key;folder.mkdir(parents=True,exist_ok=True)
+    folder.mkdir(parents=True,exist_ok=True)
     def atomic(path,data):
         tmp=folder/(path.name+'.'+uuid.uuid4().hex+'.tmp')
         try:

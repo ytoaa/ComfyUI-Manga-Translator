@@ -18,33 +18,60 @@ def glossary(value):
     return list(found.values())
 
 
+def _read_json_bytes(path, limit):
+    if not path.is_file():raise ValueError('Context artifact must be a regular file')
+    with path.open('rb') as stream:
+        raw=stream.read(limit+1)
+    if len(raw)>limit:raise ValueError('Context artifact exceeds size limit')
+    return raw
+
+
 def history(report,language,budget):
-    if not report or not report.get('project_folder') or not budget:return []
+    if not report or not budget:return []
+    if not isinstance(report,dict):raise ValueError('Context report must be an object')
+    if not report.get('project_folder'):return []
     import folder_paths
-    root=(Path(folder_paths.get_output_directory())/'manga_translator'/'workflow_projects').resolve()
+    output=Path(folder_paths.get_output_directory()).resolve()
+    root=(output/'manga_translator'/'workflow_projects').resolve()
     folder=Path(report['project_folder']).resolve()
-    if folder==root or not folder.is_relative_to(root):raise ValueError('Context project lies outside workflow projects')
-    pages=[]
-    for page in report.get('pages',[]):
-        if page.get('relative_path')==report.get('current_page'):break
-        if page.get('status')!='completed':continue
+    if not root.is_relative_to(output) or folder==root or not folder.is_relative_to(root):
+        raise ValueError('Context project lies outside workflow projects')
+    pages=report.get('pages',[]);current=report.get('current_page')
+    if not isinstance(pages,list) or not isinstance(current,str) or not current:return []
+    positions=[i for i,p in enumerate(pages) if isinstance(p,dict) and p.get('relative_path')==current]
+    if len(positions)!=1:return []
+    chosen=[];used=0
+    for page in reversed(pages[:positions[0]]):
+        if used>=budget:break
+        if not isinstance(page,dict) or page.get('status')!='completed' or not isinstance(page.get('relative_path'),str):continue
         try:
             state_path=(folder/page['state_file']).resolve()
             if not state_path.is_relative_to(folder) or state_path.name!='state.json':continue
-            state=json.loads(state_path.read_text());path=state_path.parent/'target.json'
-            if path.stat().st_size>4*1024*1024:continue
-            raw=path.read_bytes()
-            if hashlib.sha256(raw).hexdigest()!=state['artifacts']['target.json']:continue
-            data=json.loads(raw);rows=data.get('regions',[])
-            if data.get('translation_metadata',{}).get('target_language')!=language or not rows or any(r.get('authored',{}).get('target',{}).get('origin')!='human' for r in rows):continue
-            pages.append({'page':page['relative_path'],'regions':[{'source':r['source'],'target':r['target']} for r in rows]})
-        except (OSError,ValueError,KeyError,TypeError):continue
-    chosen=[];used=0
-    for p in reversed(pages):
-        size=len(json.dumps(p,ensure_ascii=False).encode())
-        if used+size>budget:break
-        chosen.insert(0,p);used+=size
-    return chosen
+            state=json.loads(_read_json_bytes(state_path,2*1024*1024))
+            if not isinstance(state,dict) or not isinstance(state.get('artifacts'),dict):continue
+            path=(state_path.parent/'target.json').resolve()
+            if path.parent!=state_path.parent:continue
+            raw=_read_json_bytes(path,4*1024*1024)
+            if hashlib.sha256(raw).hexdigest()!=state['artifacts'].get('target.json'):continue
+            data=json.loads(raw)
+            if not isinstance(data,dict):continue
+            metadata=data.get('translation_metadata');rows=data.get('regions')
+            if not isinstance(metadata,dict) or metadata.get('target_language')!=language or not isinstance(rows,list) or not rows:continue
+            valid=True
+            for row in rows:
+                if not isinstance(row,dict) or any(not isinstance(row.get(k),str) for k in ('source','target')):
+                    valid=False;break
+                authored=row.get('authored')
+                target=authored.get('target') if isinstance(authored,dict) else None
+                if not isinstance(target,dict) or target.get('origin')!='human':
+                    valid=False;break
+            if not valid:continue
+            item={'page':page['relative_path'],'regions':[{'source':r['source'],'target':r['target']} for r in rows]}
+            size=len(json.dumps(item,ensure_ascii=False).encode())
+            if used+size>budget:break
+            chosen.append(item);used+=size
+        except (OSError,ValueError,KeyError,TypeError,RecursionError):continue
+    return list(reversed(chosen))
 
 
 class MangaTranslationContext:

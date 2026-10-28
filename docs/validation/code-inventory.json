@@ -173,7 +173,7 @@
     },
     {
       "path": "ocr_engines.py",
-      "functions": 12,
+      "functions": 14,
       "classes": 3
     },
     {
@@ -223,7 +223,7 @@
     },
     {
       "path": "stage_cache.py",
-      "functions": 17,
+      "functions": 19,
       "classes": 4
     },
     {
@@ -272,6 +272,11 @@
       "classes": 0
     },
     {
+      "path": "tests/test_cache_file_boundaries.py",
+      "functions": 13,
+      "classes": 1
+    },
+    {
       "path": "tests/test_cache_report_integrity.py",
       "functions": 6,
       "classes": 0
@@ -285,6 +290,11 @@
       "path": "tests/test_canvas_frontend.py",
       "functions": 3,
       "classes": 0
+    },
+    {
+      "path": "tests/test_context_boundaries.py",
+      "functions": 18,
+      "classes": 1
     },
     {
       "path": "tests/test_contracts.py",
@@ -342,6 +352,11 @@
       "classes": 0
     },
     {
+      "path": "tests/test_final_review_status.py",
+      "functions": 4,
+      "classes": 1
+    },
+    {
       "path": "tests/test_fit_preservation.py",
       "functions": 8,
       "classes": 0
@@ -374,6 +389,11 @@
     {
       "path": "tests/test_integrated_simulation.py",
       "functions": 15,
+      "classes": 3
+    },
+    {
+      "path": "tests/test_lazy_ocr_generation.py",
+      "functions": 11,
       "classes": 3
     },
     {
@@ -477,6 +497,11 @@
       "classes": 0
     },
     {
+      "path": "tests/test_reproduction_boundaries.py",
+      "functions": 5,
+      "classes": 0
+    },
+    {
       "path": "tests/test_restart_recovery.py",
       "functions": 18,
       "classes": 1
@@ -508,8 +533,8 @@
     },
     {
       "path": "tests/test_transition_v072.py",
-      "functions": 22,
-      "classes": 1
+      "functions": 26,
+      "classes": 2
     },
     {
       "path": "tests/test_translation_response.py",
@@ -658,7 +683,7 @@
     },
     {
       "path": "translation_context.py",
-      "functions": 4,
+      "functions": 5,
       "classes": 1
     },
     {

@@ -438,7 +438,7 @@ class Project:
                 or not {'input.png','result.png','source.json','target.json'} <= state['artifacts'].keys()):
             raise ProjectError('Completed project page has incomplete artifact records')
         if ('artifacts' in state and (not isinstance(state['artifacts'],dict)
-                or any(name not in ('input.png','result.png','source.json','target.json')
+                or any(name not in ('input.png','result.png','source.json','target.json','lettering-report.json')
                        or not re.fullmatch(r'[a-f0-9]{64}',str(sha)) for name,sha in state['artifacts'].items()))):
             raise ProjectError('Invalid project artifact records')
         if 'result' in state and state['result'] != (self._attempt_dir(state)/'result.png').relative_to(self.destination).as_posix():
@@ -752,12 +752,15 @@ class Project:
             if any(before.get(k) != after.get(k) for k in ('bbox','crop_bbox_pixels','edit_bbox_pixels','source')):
                 raise ProtocolError('Translation changed source text or geometry')
         lettering_review=[]
+        lettering_report=None
         link=self.graph[self.bind['final']]['inputs'].get('images')
         if isinstance(link,list) and self.graph.get(link[0],{}).get('class_type')=='MangaLetterApply':
             qa=history.get('outputs',{}).get(link[0],{}).get('manga_lettering_report')
             if qa is not None:
-                if not isinstance(qa,list) or len(qa)!=1 or not isinstance(qa[0],dict) or qa[0].get('schema')!=1:
+                if (not isinstance(qa,list) or len(qa)!=1 or not isinstance(qa[0],dict)
+                        or qa[0].get('schema')!=1 or type(qa[0].get('needs_review')) is not bool):
                     raise ProtocolError('Invalid final lettering quality report')
+                lettering_report=qa[0]
                 lettering_review=qa[0].get('lettering_review',[])
                 if not isinstance(lettering_review,list) or len(lettering_review)>64:
                     raise ProtocolError('Invalid preserved lettering region list')
@@ -821,6 +824,8 @@ class Project:
         state['result'] = self._artifact(state, 'result.png', data)
         self._artifact(state, 'source.json', json_bytes(source))
         self._artifact(state, 'target.json', json_bytes(target))
+        if lettering_report is not None:
+            self._artifact(state, 'lettering-report.json', json_bytes(lettering_report))
         if not source['regions']:
             state['status'] = 'unchanged_blank' if state['uniform_rgb'] and not source.get('needs_review') and not source.get('no_text_reason') else 'needs_review'
             state['reason'] = 'uniform_rgb_pixels' if state['status'] == 'unchanged_blank' else source.get('no_text_reason','no_text_detected_not_verified_blank')
@@ -831,6 +836,10 @@ class Project:
                          source.get('boundary_review',{}).get('reason','unresolved_detection_boundary')))
         elif edits is not None and edits.get('needs_review'):
             state.update(status='needs_review',reason=target.get('review_reason','source_edit_plan_requires_review'))
+        if lettering_report is not None and lettering_report['needs_review']:
+            state.update(status='needs_review')
+            if not state.get('reason') and not lettering_review:
+                state['reason']='lettering_quality_requires_review'
         if lettering_review:
             state.update(status='needs_review',reason=state.get('reason') or lettering_review[0].get('reason','unverified_bubble_ownership'),lettering_review=lettering_review)
         self._save(state)

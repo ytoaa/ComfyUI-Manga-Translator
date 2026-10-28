@@ -105,16 +105,28 @@ class MangaBackend:
 
 class LazyOCR:
     def __init__(self,engine,folder,device):
-        self.engine,self.folder,self.device=engine,folder,device
+        self.engine,self.folder,self.device=engine,Path(folder).resolve(),device
         repo,rev,files,_,_=spec(engine)
-        self.cache_identity={'engine':engine,'repository':repo,'revision':rev,'files':files,'device':device}
+        self.files=dict(files)
+        if self._generation()!=self.files:raise ValueError('OCR model SHA256 mismatch; reload a verified bundle')
+        self.cache_identity={'engine':engine,'repository':repo,'revision':rev,'files':dict(self.files),'device':device}
+    def _generation(self):
+        from .stage_cache import file_identity
+        return {name:file_identity(self.folder/name) for name in self.files}
+    def _verify(self):
+        try:
+            if self._generation()==self.files:return
+        except OSError:
+            pass
+        raise ValueError('OCR model bundle changed; reload the model before inference')
     def input_size(self,size,patches):
         if self.engine==ENGINES[1]:return 224,224
         from .adapters.hayai import preprocess_size
         return preprocess_size(size,patches)
     def ocr(self,image,options,max_patches=256):
-        key=(self.engine,str(self.folder),self.device)
+        key=(self.engine,str(self.folder),self.device,tuple(sorted(self.files.items())))
         with _LOCK:
+            self._verify()
             if key not in _RESIDENT:
                 if self.engine==ENGINES[1]:backend=MangaBackend(self.folder,self.device)
                 else:
@@ -125,8 +137,15 @@ class LazyOCR:
                         backend=object.__new__(Backend);backend.model=load_model(self.folder,'cpu')
                         backend.tokenizer=Tokenizer.from_file(str(self.folder/'tokenizer.json'))
                         backend.model_name=hayai_files.REPO;backend.revision=hayai_files.REV;backend.device='cpu'
+                self._verify()
+                for old in list(_RESIDENT):
+                    if old[:3]==key[:3]:del _RESIDENT[old]
                 _RESIDENT[key]=backend
-        return _RESIDENT[key].ocr(image,options,max_patches=max_patches)
+            backend=_RESIDENT[key]
+        self._verify()
+        result=backend.ocr(image,options,max_patches=max_patches)
+        self._verify()
+        return result
 
 
 class MangaOCRModel:

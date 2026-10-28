@@ -66,13 +66,20 @@ def test_run_write_failure_keeps_attempt_identity_and_blocks_duplicate(tmp_path,
 def test_cache_refresh_during_read_cannot_mix_pixels_and_diagnostics(tmp_path,monkeypatch):
     monkeypatch.setattr(K,'root',lambda:tmp_path);key='a'*64;image=torch.ones(1,8,9,3)
     K.write(key,'image',image*0,'{"generation":"A"}')
-    original=Path.read_bytes;swapped=[]
-    def swap(path):
-        raw=original(path)
-        if path.name=='value.bin' and not swapped:
-            swapped.append(True);K.write(key,'image',image,'{"generation":"B"}')
-        return raw
-    with patch.object(Path,'read_bytes',swap):value,report=K.read_entry(key,'image')
+    original=Path.open;swapped=[]
+    class RefreshAfterRead:
+        def __init__(self,stream):self.stream=stream
+        def __enter__(self):return self
+        def __exit__(self,*args):self.stream.close()
+        def read(self,*args):
+            raw=self.stream.read(*args)
+            if not swapped:
+                swapped.append(True);K.write(key,'image',image,'{"generation":"B"}')
+            return raw
+    def opening(path,*args,**kwargs):
+        stream=original(path,*args,**kwargs)
+        return RefreshAfterRead(stream) if path.name=='value.bin' and args==('rb',) else stream
+    with patch.object(Path,'open',opening):value,report=K.read_entry(key,'image')
     assert swapped and value.mean()==0 and report['generation']=='A'
     value,report=K.read_entry(key,'image');assert value.mean()==1 and report['generation']=='B'
 
