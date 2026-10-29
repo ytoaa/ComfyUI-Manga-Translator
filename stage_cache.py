@@ -9,7 +9,7 @@ import os
 import uuid
 import numpy as np
 
-VERSION='0.7.21'
+VERSION='0.7.22'
 MAX_BYTES=256*1024*1024
 
 def root():
@@ -247,7 +247,10 @@ class Checkpoint:
             except OSError as exc:logging.warning('Checkpoint persistence unavailable: %s',exc)
         details=(entry[1] if reused else json.loads(report_json) if report_json else {}) if self.KIND=='image' else {}
         report=json.dumps({**(details or {}),'stage_cache':{'stage':self.KIND,'state':'reused' if reused else 'computed','key':key,'generation_frozen':pinned}})
-        return {'ui':{'text':[report],'manga_status':[{'state':'reused' if reused else 'computed','message':self.KIND}]},'result':(value,report)}
+        ui={'text':[report],'manga_status':[{'state':'needs_review' if details and details.get('needs_review') else 'reused' if reused else 'computed','message':self.KIND}]}
+        if self.KIND=='image' and details and 'needs_review' in details:
+            ui['manga_cleanup_report']=[{'schema':1,**details}]
+        return {'ui':ui,'result':(value,report)}
 
 class MangaTextCheckpoint(Checkpoint):RETURN_TYPES=('STRING','STRING');RETURN_NAMES=('문서','재사용_보고서')
 class MangaDetectionCheckpoint(Checkpoint):

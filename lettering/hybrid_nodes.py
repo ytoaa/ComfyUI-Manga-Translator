@@ -50,7 +50,7 @@ class MangaLetterPlan:
             'optional':{'oriented_fit':field('BOOLEAN','회전된 로컬 프레임 안에서 맞춘 뒤 페이지로 변환합니다.',default=False),'bubble_mask':field('MASK','선택: 테두리·꼬리·그림을 제외한 실제 말풍선 내부. 자동 검출 마스크보다 우선합니다.'),
                         'detection_result':field('MANGA_DETECTION','선택: RF-DETR의 실제 bubble segmentation을 자동 재사용. 명시적 내부 마스크가 우선합니다.'),
                         'line_breaks':field(list(hybrid.LINE_BREAKS),'preserve=입력 줄바꿈 유지. reflow=단일 줄바꿈을 풀고 가용 폭을 먼저 채움; 빈 줄 문단/strict/세로는 유지.',default='preserve'),
-                        'fit_policy':field(list(hybrid.FIT_POLICIES),'readable=원문 비율 제한으로 맞지 않으면 min_font까지 추가 축소. source_ratio/strict/영역별 min_scale은 비율 제한 유지.',default='source_ratio'),
+                        'fit_policy':field(list(hybrid.FIT_POLICIES),'readable=비율 제한으로 맞지 않으면 min_font까지 추가 축소하고 작은 원문은 최소 크기로 확대·검수. 저대비 복구는 안정된 배경에서만 허용. strict/명시적 크기 상한은 유지.',default='source_ratio'),
                         'respect_bubbles':field('BOOLEAN','확인된 말풍선의 실제 픽셀 마스크 밖에 글자 알파가 생기면 거부합니다. 단순 사각형 경계와 다릅니다.',default=False),
                         'page_direction':field('STRING','번역문 방향 노드 출력. 가로/세로 통일은 모든 영역의 방향 설정보다 우선합니다.',forceInput=True),
                         'bubble_failure_policy':field(['preserve_review','stop'],'말풍선 소유권이 불확실하면 해당 영역과 겹친 이웃만 원본 복원·검수합니다. stop은 페이지를 중단합니다. require_bubble은 항상 중단합니다.',default='preserve_review'),

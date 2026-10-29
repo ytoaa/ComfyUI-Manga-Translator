@@ -69,15 +69,30 @@ def test_input_normalization_evaluates_actual_alpha_and_exif_pixels_and_rejectio
     assert len(audit.report['results'])==7 and audit.report['counts']=={'PASS':7}
 
 
-def test_bad_model_candidates_remain_quality_gaps_when_runtime_accepts_them(context):
+def test_partial_source_and_wrong_color_candidates_are_rejected(context):
+    args,refs,get=context;audit=T.A.Audit(args.destination,'guarded-tiles-unit')
+    T.tile_cases(audit,args,get,refs)
+    rows={r['id']:r for r in audit.report['results']}
+    assert all(row['status']=='PASS' for row in rows.values())
+    assert 'source_ink_components_retained' in rows['tile-partial-source']['evidence']['refused']
+    assert 'source_free_boundary_color_shift' in rows['tile-wrong-color']['evidence']['refused']
+    assert not rows['tile-partial-source']['evidence']['actual_qwen']
+
+
+def test_bad_model_candidates_remain_quality_gaps_when_runtime_accepts_them(context,monkeypatch):
     args,refs,get=context;audit=T.A.Audit(args.destination,'tiles-unit')
+    assembler=get('inpaint_tiles');original=assembler.assemble
+    def bypass(plan,values,**kwargs):
+        kwargs['strict_cleanup']=False
+        return original(plan,values,**kwargs)
+    monkeypatch.setattr(assembler,'assemble',bypass)
     T.tile_cases(audit,args,get,refs)
     rows={r['id']:r for r in audit.report['results']}
     assert rows['tile-known-clean']['status']=='PASS'
     assert rows['tile-nonowned-corruption']['status']=='PASS'
     assert rows['tile-partial-source']['status']=='GAP'
     assert rows['tile-wrong-color']['status']=='GAP'
-    assert rows['tile-unchanged']['status']=='PASS'
+    assert rows['tile-unchanged']['status']=='GAP'
     assert rows['tile-partial-source']['evidence']['accepted_by_runtime']
     assert rows['tile-partial-source']['evidence']['independent_reference_error_pixels']>0
     assert not rows['tile-partial-source']['evidence']['actual_qwen']

@@ -266,6 +266,8 @@ def _blend_cleanup_halo(original,output,cleanup,source,width):
 def assemble(plan, generated, strict_cleanup=True, blend_width=0):
     if not isinstance(plan, dict) or plan.get('version') != 1:
         raise ValueError('Expected an inpaint tile plan')
+    if type(strict_cleanup) is not bool:
+        raise ValueError('strict_cleanup must be a boolean')
     if len(generated) != len(plan['tiles']):
         raise ValueError('Generated tile count differs from plan; no partial page was accepted')
     if type(blend_width) is not int or not 0<=blend_width<=32:
@@ -276,6 +278,7 @@ def assemble(plan, generated, strict_cleanup=True, blend_width=0):
         return plan['original'].copy(), json.dumps(report, ensure_ascii=False, indent=2)
     output = plan['base'].copy()
     checks = []
+    warnings = []
     for index, (tile, candidate) in enumerate(zip(plan['tiles'], generated)):
         x0, y0, x1, y1 = tile['crop']
         if candidate.shape != (y1-y0, x1-x0, 3):
@@ -290,10 +293,27 @@ def assemble(plan, generated, strict_cleanup=True, blend_width=0):
         changed = np.max(np.abs(candidate-reference), axis=2) >= .045
         fraction = float(changed[ink].mean()) if ink.sum() >= 8 else None
         unchanged = fraction is not None and fraction < .10
+        labels, count = ndimage.label(ink, np.ones((3,3), bool))
+        sizes = np.bincount(labels.ravel(), minlength=count+1)
+        changes = np.bincount(labels.ravel(), weights=changed.ravel(), minlength=count+1)
+        retained = (sizes >= 8) & (changes < sizes*.10)
+        retained[0] = False
+        source = plan['source_mask'][y0:y1, x0:x1]
+        halo = owned & ~ndimage.binary_erosion(owned, iterations=2) & ~ndimage.binary_dilation(source, iterations=2)
+        shifted = float((np.max(np.abs(candidate-reference), axis=2)[halo] > .20).mean()) if halo.sum() >= 32 else None
+        codes = []
+        if unchanged: codes.append('nearly_all_source_ink_retained')
+        if retained.any(): codes.append('source_ink_components_retained')
+        if shifted is not None and shifted > .65: codes.append('source_free_boundary_color_shift')
         checks.append({'tile': index+1, 'source_ink_samples': int(ink.sum()),
-                       'changed_ink_fraction': fraction, 'unchanged_source_warning': unchanged})
-        if strict_cleanup and unchanged:
-            raise ValueError(f'Cleanup tile {index+1} retained nearly all source ink; lettering was stopped. '
+                       'changed_ink_fraction': fraction, 'unchanged_source_warning': unchanged,
+                       'retained_ink_components': int(retained.sum()),
+                       'source_free_boundary_samples': int(halo.sum()),
+                       'boundary_color_shift_fraction': shifted})
+        warnings.extend({'tile': index+1, 'code': code} for code in codes)
+        if strict_cleanup and codes:
+            detail = 'retained nearly all source ink' if unchanged else ', '.join(codes)
+            raise ValueError(f'Cleanup tile {index+1} {detail}; lettering was stopped. '
                              'Inspect the tile or change the native sampler seed. This is a pixel check, not OCR certification.')
         output[y0:y1, x0:x1][owned] = candidate[owned]
     edge_blend=(_blend_cleanup_halo(plan['original'],output,plan['cleanup_mask'],plan['source_mask'],blend_width)
@@ -303,7 +323,9 @@ def assemble(plan, generated, strict_cleanup=True, blend_width=0):
         raise ValueError('Cleanup changed pixels outside the permitted mask')
     report = {**plan['report'], 'tile_checks': checks,'edge_blend':edge_blend,
               'outside_mask_unchanged': True,
-              'quality_check': 'unchanged source-ink heuristic; not a guarantee of text-free output'}
+              'needs_review': bool(warnings) or bool(plan['report'].get('needs_review')),
+              'quality_warnings': warnings,
+              'quality_check': 'ink-component and source-free boundary heuristics; not semantic restoration certification'}
     return output, json.dumps(report, ensure_ascii=False, indent=2)
 
 

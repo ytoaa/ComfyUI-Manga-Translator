@@ -1,5 +1,6 @@
 """No Koharu application, scene, renderer, HTTP bridge, or typography inference."""
 import json
+from http.client import IncompleteRead
 import logging
 import math
 import os
@@ -128,20 +129,21 @@ def api_json(base, path, api_key_env, timeout, payload=None):
     if '\r' in token or '\n' in token:
         raise ValueError('API key environment variable contains a newline')
     headers = {'Content-Type': 'application/json'}
-    if token:
-        headers['Authorization'] = 'Bearer ' + token
     req = request.Request(endpoint(base) + path,
                           data=encode(payload).encode('utf-8') if payload is not None else None,
                           headers=headers)
+    if token: req.add_unredirected_header('Authorization', 'Bearer '+token)
     try:
         with request.urlopen(req, timeout=timeout) as response:
             data = response.read(2_000_001)
+            if type(getattr(response,'length',None)) is int and response.length>0 and len(data)<=2_000_000:
+                raise ConnectionError('Incomplete translation response')
             if len(data) > 2_000_000:
                 raise ValueError('LLM response is too large')
             return json.loads(data)
     except error.HTTPError as exc:
         raise RuntimeError(f'Translation API returned HTTP {exc.code}; check URL, model, and server log') from None
-    except (error.URLError, TimeoutError) as exc:
+    except (error.URLError, TimeoutError, ConnectionError, IncompleteRead) as exc:
         raise RuntimeError('Translation API is unreachable or timed out; check the configured server') from None
 
 

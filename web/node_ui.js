@@ -43,8 +43,11 @@ function letteringReview(node,report) {
         inconsistent_source_typography:'원문 크기 추정과 획 분포 불일치',
         ambiguous_source_overlap:'중복·혼합 원문 획 소유권 확인 필요',
         source_ratio_relaxed:'원문 대비 크기 비율을 완화해 식자함',
+        source_enlarged:'작은 원문을 최소 식자 크기로 확대함',
+        low_contrast_source:'저대비 원문에서 스타일을 추정함',
         ambiguous_cross_label_source:'글자 분류·소유권 확인 필요'};
-    for(const row of [...(report.lettering_review || []),...(report.source_preservation || []),...(report.regions || []).filter(r=>r.warning==='source_ratio_relaxed').map(r=>({id:r.id,reason:r.warning}))]) {
+    const adjustments=(report.regions || []).flatMap(r=>Object.entries(r.readability_adjustments || {}).filter(([,v])=>v===true).map(([reason])=>({id:r.id,reason})));
+    for(const row of [...adjustments,...(report.lettering_review || []),...(report.source_preservation || []),...(report.regions || []).filter(r=>r.warning==='source_ratio_relaxed').map(r=>({id:r.id,reason:r.warning}))]) {
         const line=document.createElement('div');
         const detail=row.diagnostic || {};
         const note=detail.code==='bubble_candidate_limit'?'관련 말풍선 후보 64개 초과':
@@ -54,7 +57,7 @@ function letteringReview(node,report) {
         line.style.cssText='padding:5px 0;overflow-wrap:anywhere;color:#ffb7b7';body.append(line);
     }
     if(!body.children.length){const line=document.createElement('div');line.textContent=`식자 ${report.regions?.length || 0}영역`;body.append(line);}
-    if(report.needs_review && !(report.lettering_review?.length || report.source_preservation?.length || report.regions?.some(r=>r.warning==='source_ratio_relaxed'))) {
+    if(report.needs_review && !adjustments.length && !(report.lettering_review?.length || report.source_preservation?.length || report.regions?.some(r=>r.warning==='source_ratio_relaxed'))) {
         const line=document.createElement('div');line.textContent='상위 단계에 검수 표시가 있습니다. 검출·원문 검수와 크롭 보고서에서 사유를 확인하세요.';
         line.style.color='#ffb7b7';body.append(line);
     }

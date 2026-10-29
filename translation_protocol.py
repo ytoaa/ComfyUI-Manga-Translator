@@ -1,6 +1,7 @@
 """Translation transport contracts and bounded, credential-free failure evidence."""
 import json
 import logging
+import os
 from pathlib import Path
 import uuid
 
@@ -44,7 +45,11 @@ def evidence(response):
 
 def failure_root():
     import folder_paths
-    return Path(folder_paths.get_output_directory()) / 'manga_translator' / 'translation_failures'
+    output = Path(folder_paths.get_output_directory()).resolve()
+    root = output / 'manga_translator' / 'translation_failures'
+    if not root.resolve().is_relative_to(output):
+        raise ValueError('Translation evidence directory is outside configured output')
+    return root
 
 
 def save_failure(source, settings, attempts, code):
@@ -58,7 +63,15 @@ def save_failure(source, settings, attempts, code):
         report = {'schema': 1, 'code': code, 'regions': rows,
                   'image_width': source.get('image_width'), 'image_height': source.get('image_height'),
                   'settings': settings, 'attempts': attempts[:32]}
-        path.write_text(json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2), encoding='utf-8')
+        raw = json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2).encode('utf-8')
+        if len(raw)>8*1024*1024: raise ValueError('Translation evidence exceeds 8 MiB')
+        temporary = path.with_suffix('.tmp')
+        try:
+            with temporary.open('xb') as stream:
+                stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
         logging.getLogger(__name__).error('Translation failure response saved: %s', path)
         return str(path)
     except Exception as exc:

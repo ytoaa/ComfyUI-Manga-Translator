@@ -23,10 +23,10 @@ async function fixture(handler) {
     };
     // Advance only the HTTP deadline; retain real asynchronous event ordering.
     const schedule = (callback, ms) => {
-        const timer = setTimeout(() => { timers.delete(timer); callback(); }, ms >= 10000 ? 0 : ms);
+        const timer = {callback,ms};
         timers.add(timer); return timer;
     };
-    const cancel = timer => { timers.delete(timer); clearTimeout(timer); };
+    const cancel = timer => { timers.delete(timer); };
     vm.runInNewContext(code, {app, api, console, AbortController, setTimeout:schedule, clearTimeout:cancel,
         document:{createElement(){ return {style:{}, value:''}; }}});
     class Node {
@@ -49,6 +49,7 @@ async function fixture(handler) {
     const announce = () => event('executed', {node:'1', output:{manga_workflow:[ticket]}});
     announce();
     return {node, app, requests, queued, timers, event, announce, ticket,
+        expireNetwork(){for(const timer of [...timers])if(timer.ms>=10000){timers.delete(timer);timer.callback();}},
         finish:() => event('execution_success', {prompt_id:ticket.prompt_id}),
         stop:() => node.widgets.find(w => w.type === 'button').callback()};
 }
@@ -59,14 +60,14 @@ const paused = () => response({status:'paused'});
 const cases = [
     ['HTTP fetch stalls', async () => {
         const f = await fixture(url => url.endsWith('/resolve') ? never() : paused());
-        f.finish(); await new Promise(resolve => setTimeout(resolve, 20)); await flush();
+        f.finish(); await flush(); f.expireNetwork(); await flush();
         assert.match(f.node.mangaStatus.value, /시간|timed out/i);
         assert.equal(f.queued.length, 0); assert.ok(f.requests[0].options.signal.aborted);
         assert.equal(f.timers.size, 0);
     }],
     ['HTTP response body stalls', async () => {
         const f = await fixture(url => url.endsWith('/resolve') ? {ok:true, json:never} : paused());
-        f.finish(); await new Promise(resolve => setTimeout(resolve, 20)); await flush();
+        f.finish(); await flush(); f.expireNetwork(); await flush();
         assert.match(f.node.mangaStatus.value, /시간|timed out/i);
         assert.equal(f.queued.length, 0); assert.ok(f.requests[0].options.signal.aborted);
         assert.equal(f.timers.size, 0);
@@ -76,7 +77,7 @@ const cases = [
             if (url.endsWith('/resolve')) throw new Error('resolve failed');
             return never();
         });
-        f.finish(); await new Promise(resolve => setTimeout(resolve, 20)); await flush();
+        f.finish(); await flush(); f.expireNetwork(); await flush();
         assert.match(f.node.mangaStatus.value, /resolve failed/);
         assert.equal(f.queued.length, 0); assert.ok(f.requests[1].options.signal.aborted);
         assert.equal(f.timers.size, 0);
@@ -142,7 +143,7 @@ const cases = [
     ['successful response clears deadline', async () => {
         const f = await fixture(url => url.endsWith('/pause') ? paused() : resolved());
         f.finish(); await flush(); assert.equal(f.queued.length, 1); assert.equal(f.timers.size, 0);
-        await new Promise(resolve => setTimeout(resolve, 20)); assert.equal(f.requests.length, 1);
+        f.expireNetwork(); await flush(); assert.equal(f.requests.length, 1);
     }],
 ];
 (async () => {
