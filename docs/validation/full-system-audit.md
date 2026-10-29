@@ -12,9 +12,9 @@ bugs. Baseline: v0.7.18. A passing existing suite is not a completed code review
 | OCR | models, ocr_engines, ocr_policy, source_recovery | Cache payload, acquisition recovery and resident generation checks tested; semantic accuracy and all engine combinations open |
 | Translation | translation_protocol, text_contract, nodes, lettering/translate | Malformed responses and real emitted service error messages tested; live server/model/template behavior open |
 | Document/manual editing | document, edit_review, boundary_review | Revision/ownership, block/source invalidation, brush limits/protection reviewed; malformed frontend containers fixed and tested; real browser editing E2E open |
-| Cleanup | inpaint_tiles, mask nodes | Two known injected-output quality gaps open |
-| Lettering | lettering package | Six known tiny/low-contrast cases open |
-| Cache and reuse | stage_cache, recognition_cache | Report persistence, nested OCR payload and file/header boundary findings fixed; concurrent processes/power-loss durability open |
+| Cleanup | inpaint_tiles, mask nodes | Retained-component and boundary-color guards added in v0.7.22; semantic restoration remains unverified |
+| Lettering | lettering package | Readable recovery and pigment invariants added in v0.7.22; current evidence linked below |
+| Cache and reuse | stage_cache, recognition_cache | Report persistence, nested OCR payload and file/header boundary findings fixed; POSIX contention/kill tests added in v0.7.22; power-loss durability unverified |
 | Cancellation/restart/concurrency | workflow_native, workflow_project, run_project, web | Queue/restart tests and new reordered/stalled event checks; real multiple tabs/processes open |
 | UI/output/status | all three web modules, save/review paths | Canvas and upload handlers executed with fault-injected network/DOM; final lettering quality flags persist through project collection; actual ComfyUI browser layout/E2E open |
 | Budgets/security/filesystem | limits, document/brush budgets, save/project/native file paths | Selected external boundaries inspected; symlink and disk faults tested; not a race-free sandbox/security audit |
@@ -241,3 +241,9 @@ All 200 registered source files, 122 local documentation links, the single
 GUI/API workflow and adapter provenance passed repository checks. The 77-case
 image run remains 69 PASS / 8 GAP; neither its gaps nor live-environment scope
 are converted into passes by the regression count.
+
+## v0.7.22 continuation
+
+See [non-GPU audit](non-gpu-audit-v0722.md) for current transport, process, cleanup,
+typography and pigment evidence. Earlier eight-gap counts are historical.
+Bounded scenario results do not certify all inputs, platforms or model accuracy.

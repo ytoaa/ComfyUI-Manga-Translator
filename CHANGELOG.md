@@ -1,3 +1,18 @@
+## v0.7.22
+
+- Fix white fringes with disabled outlines and pigment changes during alpha downsampling.
+- Recover tiny and faint source typography in readable mode with bounded evidence; retain explicit/strict limits and expose review reasons.
+- Reject retained source components and large boundary color shifts in strict cleanup. Persist non-strict warnings through image checkpoints and project completion/reuse.
+- Detect incomplete HTTP transfers and withhold authorization on redirects. Bound and atomically save translation failure evidence inside configured output.
+- Add loopback HTTP, POSIX process interruption/contention, independent pigment and image/status regressions. Repair stale cache-generation injection and nondeterministic frontend test timers.
+- See [v0.7.22 validation](docs/validation/non-gpu-audit-v0722.md). Actual ComfyUI/GPU execution is excluded; remaining environments and semantic quality are not certified.
+
+## v0.7.21
+
+- Bind OCR handles/resident models to declared file generations; reject changes around inference.
+- Persist final lettering review outcomes and bound preceding-page context reads.
+- Validate cache array headers before allocation; reject redirected files/FIFOs and reproduction output path escapes.
+
 ## v0.7.20
 
 - Bound canvas resolve/pause requests, including response bodies, to 15 seconds; stop continuation on malformed responses or ambiguous network outcomes.

@@ -119,6 +119,13 @@ Manga OCR은 `kha-white/manga-ocr-base`의 고정 revision `aa6573bd10b0d446cbf6
 
 식자는 `MangaLetterPlan`의 `line_breaks=reflow`, `fit_policy=readable`, `min_font=10`, `min_scale=0.55`, `respect_bubbles=true`가 기본입니다. reflow는 단일 개행을 풀어 폭을 활용하며 빈 줄 문단은 유지합니다. 말풍선은 실제 검출 마스크가 있을 때 제약으로 사용합니다. 공간 부족·보존 영역 침범·이웃 번역 충돌은 오류로 남깁니다.
 
+v0.7.22의 readable은 작은 원문을 min_font까지 확대하고 검수 사유를 남깁니다. strict와 명시적 font_cap/max_font는 유지합니다. 저대비 복구는 안정된 단색 배경의 근거가 있을 때만 적용하고 원문의 색을 유지합니다.
+
+strict_cleanup은 잔존 원문 성분과 원문 밖 경계의 큰 색 차이를 검사합니다. 끄면 의심 결과를 허용하되 checkpoint와 프로젝트에 검수 상태를 남깁니다. 생성 배경의 의미 품질 보증은 아닙니다.
+
+API 인증키는 첫 요청에만 보내고 리디렉션에는 전달하지 않습니다. 인증이 필요한 경우 최종 API 주소를 직접 설정하세요.
+
+
 `bubble_failure_policy=preserve_review`는 말풍선 소유권/공통 내부 공간의 근거가 불확실한 영역과 겹친 이웃을 원본 복원·보호하고 나머지 식자를 진행합니다. `stop` 또는 영역별 `require_bubble=true`는 중단합니다. 마스크를 임의로 합치거나 기존 95% 원문 획 지지 기준을 낮추지 않습니다. 잘못된 입력·분석 예산 초과·일반 공간 부족은 계속 오류입니다. 최종 `lettering_review`가 있으면 폴더는 needs_review이며 보존 영역이 번역 완료된 것은 아닙니다.
 
 새 옵션은 최신 통합 08을 가져오면 보입니다. 구형 캔버스의 누락 옵션은 기본값을 사용하며, 기존 URL·모델·폰트 설정은 확인 후 옮깁니다.
