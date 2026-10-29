@@ -18,12 +18,12 @@ async function fixture(handler = (_, request) => ok(request), chosen = files) {
     const document = {createElement(){const input={files:chosen,setAttribute(){},click(){pickers.push(this);}};return input;}};
     const schedule = (callback, ms) => {
         // The button-label reset is irrelevant; advance the network deadline.
-        const timer=setTimeout(()=>{timers.delete(timer);callback();}, ms >= 10000 ? 0 : 1);
+        const timer={callback,ms};
         timers.add(timer);return timer;
     };
     vm.runInNewContext(code, {app,api,document,FormData:Form,AbortController,
         console:{error(){}},window:{alert(message){alerts.push(message);}},
-        setTimeout:schedule,clearTimeout(timer){timers.delete(timer);clearTimeout(timer);}});
+        setTimeout:schedule,clearTimeout(timer){timers.delete(timer);}});
     class Node {
         constructor(){this.widgets=Object.entries({input_mode:'이미지 한 장',input_folder:'old',project_name:'book_01'}).map(([name,value])=>({name,value}));}
         addWidget(type,name,value,callback,options){const widget={type,name,value,callback,options};this.widgets.push(widget);return widget;}
@@ -33,6 +33,7 @@ async function fixture(handler = (_, request) => ok(request), chosen = files) {
     const node=new Node();node.onNodeCreated();
     const button=node.widgets.find(w=>w.type==='button');
     return {node,button,pickers,requests,alerts,timers,
+        expireNetwork(){for(const timer of [...timers])if(timer.ms>=10000){timers.delete(timer);timer.callback();}},
         value:name=>node.widgets.find(w=>w.name===name).value,
         select:()=>pickers.at(-1).onchange(), start:()=>button.callback()};
 }
@@ -62,7 +63,7 @@ const cases = [
     }],
     ...['fetch','body'].map(stage=>[`${stage} stall releases button without activating folder`,async()=>{
         const f=await fixture(()=>stage==='fetch'?never():{ok:true,json:never});
-        const task=f.start();f.select();await new Promise(resolve=>setTimeout(resolve,20));await flush();
+        const task=f.start();f.select();await flush();f.expireNetwork();await flush();
         assert.equal(f.button.disabled,false);assert.equal(f.value('input_folder'),'old');
         assert.match(f.alerts[0],/시간/);assert.ok(f.requests[0].signal.aborted);await task;
     }]),

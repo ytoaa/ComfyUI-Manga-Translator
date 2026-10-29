@@ -422,13 +422,20 @@ def transition_cases(a):
         with patch.object(K,'root',lambda:folder):
             key=node._key(image,key_graph,'1','',None)
             K.write(key,'image',image*0,'{"generation":"A"}')
-            original=Path.read_bytes;swapped=[]
-            def swapped_read(path):
-                raw=original(path)
-                if path.name=='value.bin' and not swapped:
-                    swapped.append(True);K.write(key,'image',image,'{"generation":"B"}')
-                return raw
-            with patch.object(Path,'read_bytes',swapped_read):node.check_lazy_status(image,prompt=key_graph,unique_id='1')
+            original=Path.open;swapped=[]
+            class RefreshAfterRead:
+                def __init__(self,stream):self.stream=stream
+                def __enter__(self):return self
+                def __exit__(self,*args):self.stream.close()
+                def read(self,*args):
+                    raw=self.stream.read(*args)
+                    if not swapped:
+                        swapped.append(True);K.write(key,'image',image,'{"generation":"B"}')
+                    return raw
+            def opening(path,*args,**kwargs):
+                stream=original(path,*args,**kwargs)
+                return RefreshAfterRead(stream) if path.name=='value.bin' and args==('rb',) else stream
+            with patch.object(Path,'open',opening):node.check_lazy_status(image,prompt=key_graph,unique_id='1')
             require(bool(swapped),'Concurrent writer injection did not run')
             out=node.checkpoint(image,prompt=key_graph,unique_id='1');mean=float(out['result'][0].mean());report=json.loads(out['result'][1])
             require((mean==0 and report.get('generation')=='A') or (mean==1 and report.get('generation')=='B'),

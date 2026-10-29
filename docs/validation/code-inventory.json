@@ -118,7 +118,7 @@
     },
     {
       "path": "lettering/hybrid.py",
-      "functions": 19,
+      "functions": 20,
       "classes": 1
     },
     {
@@ -292,6 +292,16 @@
       "classes": 0
     },
     {
+      "path": "tests/test_cleanup_candidate_evidence.py",
+      "functions": 3,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_cleanup_review_status.py",
+      "functions": 6,
+      "classes": 1
+    },
+    {
       "path": "tests/test_context_boundaries.py",
       "functions": 18,
       "classes": 1
@@ -348,8 +358,13 @@
     },
     {
       "path": "tests/test_expanded_image_scenarios.py",
-      "functions": 11,
+      "functions": 13,
       "classes": 0
+    },
+    {
+      "path": "tests/test_failure_evidence_files.py",
+      "functions": 7,
+      "classes": 1
     },
     {
       "path": "tests/test_final_review_status.py",
@@ -370,6 +385,11 @@
       "path": "tests/test_highres_contract_v0317.py",
       "functions": 8,
       "classes": 0
+    },
+    {
+      "path": "tests/test_http_transport_boundaries.py",
+      "functions": 11,
+      "classes": 1
     },
     {
       "path": "tests/test_hybrid_lettering.py",
@@ -400,6 +420,11 @@
       "path": "tests/test_lettering.py",
       "functions": 33,
       "classes": 2
+    },
+    {
+      "path": "tests/test_lettering_alpha_color.py",
+      "functions": 1,
+      "classes": 0
     },
     {
       "path": "tests/test_lettering_failures_v0712.py",
@@ -472,6 +497,11 @@
       "classes": 0
     },
     {
+      "path": "tests/test_process_boundaries.py",
+      "functions": 8,
+      "classes": 0
+    },
+    {
       "path": "tests/test_project_control_v0316.py",
       "functions": 17,
       "classes": 2
@@ -484,6 +514,11 @@
     {
       "path": "tests/test_project_simulation.py",
       "functions": 1,
+      "classes": 0
+    },
+    {
+      "path": "tests/test_readable_source_evidence.py",
+      "functions": 5,
       "classes": 0
     },
     {
@@ -568,8 +603,8 @@
     },
     {
       "path": "tools/audit_boundaries.py",
-      "functions": 71,
-      "classes": 4
+      "functions": 75,
+      "classes": 5
     },
     {
       "path": "tools/build_fallback_font.py",

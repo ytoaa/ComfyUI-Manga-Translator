@@ -453,15 +453,18 @@ def render_text(text, style, font_name='NanumGothic-Bold.ttf', direction='horizo
     repeat = np.tile(texture, (math.ceil(h/texture.shape[0]), math.ceil(w/texture.shape[1])))[:h, :w]
     tex = np.asarray(Image.fromarray(repeat).resize((w*s, h*s), Image.Resampling.BILINEAR))
     foreground = np.clip(np.array(style['foreground'])[None, None, :] + tex[..., None]*style['texture_strength'], 0, 1)
-    for a, color in ((shadow, style['shadow_color']), (outlined, style['outline_color']), (glyph, foreground)):
+    # Disabled outlines must contribute no antialiased coverage.
+    outline_alpha = outlined if stroke else np.zeros_like(glyph)
+    for a, color in ((shadow, style['shadow_color']), (outline_alpha, style['outline_color']), (glyph, foreground)):
         premult = np.asarray(color, np.float32)*a[..., None] + premult*(1-a[..., None])
         alpha = a + alpha*(1-a)
     # Downsample premultiplied RGB to avoid black/white fringes around antialiasing.
     if s > 1:
         alpha = np.asarray(Image.fromarray(alpha).resize((w, h), Image.Resampling.LANCZOS))
         premult = np.stack([np.asarray(Image.fromarray(premult[..., c]).resize((w, h), Image.Resampling.LANCZOS)) for c in range(3)], axis=-1)
-    alpha = np.clip(alpha, 0, 1)
+    # Unpremultiply before clipping Lanczos overshoot to preserve pigment.
     layer = np.divide(premult, alpha[..., None], out=np.zeros_like(premult), where=alpha[..., None] > 1e-6)
+    alpha = np.clip(alpha, 0, 1)
     layer = np.clip(layer, 0, 1).astype(np.float32)
     report = {'text': text, 'font': font_name, 'font_size': size, 'direction': direction,
               'requested_padding':padding,'effective_padding':effective_padding,'raster_guard_px':raster_guard,

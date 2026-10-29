@@ -1,0 +1,399 @@
+{
+  "schema": 1,
+  "version": "0.7.22",
+  "date_kst": "2026-10-30",
+  "baseline_commit": "5b775a8914e25b4b65c838c3742f064d76ecf632",
+  "regression": {
+    "passed": 1273,
+    "failed": 0,
+    "warnings": 5,
+    "seconds": 262.09,
+    "warning_scope": "Python 3.12 multithreaded POSIX fork deprecation in process tests"
+  },
+  "negative_baseline": {
+    "scope": "12 pigment + 27 HTTP checks against v0.7.21 code",
+    "failed": 24,
+    "passed": 15
+  },
+  "image_contracts": {
+    "completed": true,
+    "counts": {
+      "PASS": 77
+    },
+    "scope": "additional generated fixtures; translation excluded; no real Qwen generation",
+    "scenarios": [
+      {
+        "id": "cleanup-tiny-bubbles",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-tiny-bubbles-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-tiny-bubbles-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-tiny-bubbles-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "cleanup-mixed-directions",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-mixed-directions-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-mixed-directions-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-mixed-directions-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "cleanup-bright-and-colored",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-bright-and-colored-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-bright-and-colored-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-bright-and-colored-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "cleanup-low-contrast",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-low-contrast-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-low-contrast-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-low-contrast-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "cleanup-outlined-effect",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-outlined-effect-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-outlined-effect-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-outlined-effect-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "cleanup-mixed-punctuation",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-mixed-punctuation-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-mixed-punctuation-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-mixed-punctuation-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "cleanup-high-dpi",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-high-dpi-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-high-dpi-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-high-dpi-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "cleanup-gradient-caption",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-gradient-caption-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-gradient-caption-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-gradient-caption-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "cleanup-screentone",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-screentone-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-screentone-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-screentone-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "cleanup-slanted-labels",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-slanted-labels-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-slanted-labels-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-slanted-labels-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "cleanup-narrow-vertical",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-narrow-vertical-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-narrow-vertical-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-narrow-vertical-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "cleanup-overlap-paragraphs",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-overlap-paragraphs-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-overlap-paragraphs-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-overlap-paragraphs-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "cleanup-dense-footnotes",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-dense-footnotes-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-dense-footnotes-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-dense-footnotes-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "cleanup-edge-clipped",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-edge-clipped-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-edge-clipped-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-edge-clipped-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "cleanup-nontext-art",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-nontext-art-horizontal-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-nontext-art-horizontal-1.6",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-nontext-art-vertical_rtl-1",
+        "status": "PASS"
+      },
+      {
+        "id": "letter-impossible-length",
+        "status": "PASS"
+      },
+      {
+        "id": "input-rgba",
+        "status": "PASS"
+      },
+      {
+        "id": "input-palette-alpha",
+        "status": "PASS"
+      },
+      {
+        "id": "input-exif-rotation",
+        "status": "PASS"
+      },
+      {
+        "id": "input-high-bit-depth",
+        "status": "PASS"
+      },
+      {
+        "id": "input-animation",
+        "status": "PASS"
+      },
+      {
+        "id": "input-corrupt",
+        "status": "PASS"
+      },
+      {
+        "id": "input-changed-after-scan",
+        "status": "PASS"
+      },
+      {
+        "id": "tile-known-clean",
+        "status": "PASS"
+      },
+      {
+        "id": "tile-unchanged",
+        "status": "PASS"
+      },
+      {
+        "id": "tile-partial-source",
+        "status": "PASS"
+      },
+      {
+        "id": "tile-wrong-color",
+        "status": "PASS"
+      },
+      {
+        "id": "tile-missing",
+        "status": "PASS"
+      },
+      {
+        "id": "tile-extra",
+        "status": "PASS"
+      },
+      {
+        "id": "tile-wrong-size",
+        "status": "PASS"
+      },
+      {
+        "id": "tile-nan",
+        "status": "PASS"
+      },
+      {
+        "id": "tile-nonowned-corruption",
+        "status": "PASS"
+      }
+    ]
+  },
+  "independent_audits": {
+    "boundary_passed": 43,
+    "transition_passed": 29
+  },
+  "frontend": {
+    "node_review": "PASS",
+    "native_canvas_contract": "PASS",
+    "continuation_passed": 15,
+    "upload_passed": 9,
+    "actual_browser": "NOT_VERIFIED: Chromium absent; downloaded archive invalid/truncated"
+  },
+  "excluded": [
+    "actual ComfyUI execution",
+    "GPU inference"
+  ],
+  "not_certified": [
+    "all possible inputs and option combinations",
+    "live OCR/translation/restoration accuracy",
+    "Windows execution",
+    "power-loss durability",
+    "hostile concurrent filesystem path swaps",
+    "remote filesystem semantics"
+  ],
+  "changed_executable_sha256": {
+    "inpaint_tiles.py": "9a4d5758593ccc64a8c100ee4c21486655eddf0ffcb6a21e49725be8d6aba584",
+    "lettering/core.py": "f816d8b00e4daa9961a0d5ad297d8dec9e7a05a4c11029de340406cea7fe63f7",
+    "lettering/hybrid.py": "716fc6751af3bba46d8e211c416977803116c88d0508f46f446f3c94c1f73cde",
+    "lettering/hybrid_nodes.py": "f613dfea91f9d2d7a4a31f3a153eb0fb1f3b22be0b331964d7139dfe8970711c",
+    "lettering/translate.py": "d7fb7751b96751bbb100f39d239ce857e7b8f1df81807f09b7681a368efe7e59",
+    "nodes.py": "91c30ceb5d46417a73b40bbe70f411340e26df7da8402706f035970247fe535d",
+    "stage_cache.py": "c0644f74d5f87c378fb89e10fbb8deed4003aaaf152d1ff0425a4e7ccc624644",
+    "tests/test_cleanup_candidate_evidence.py": "1a0af405dd0cc70434d879103185008038c9a0cfca9de027c985888f17b6026e",
+    "tests/test_cleanup_review_status.py": "720174afdde08dac315803c9029ca6a128d310f13066fe6a41962a161b886b1f",
+    "tests/test_expanded_image_scenarios.py": "7dc3e8729377cd1a8dfcbb8b421aabc04867dc66ab1c48f89611ca03a1fd794d",
+    "tests/test_failure_evidence_files.py": "f9c6e0b334434603875ecddbc21203e7fc933eb8b3bc3e7dbbfcccca85367f1e",
+    "tests/test_http_transport_boundaries.py": "008cf1a8b81c2f68b02f30bf519e7013ad6b7d61c65a577ca96a3222fea32d67",
+    "tests/test_lettering_alpha_color.py": "efafe9d8bd378a08549081fbd755d2fa7e304c2d096a2afda755117accfda6a0",
+    "tests/test_process_boundaries.py": "e3a2e438fe0bfbd023bfa65fff969b8f1f8a793fa11d7e21ec1b2a155a78fe81",
+    "tests/test_readable_source_evidence.py": "306917cf137dabd74e4a7cb41a5fa7057616731dbef71530f2ece8d2789adaee",
+    "tests/test_text_geometry.py": "267aa519a1ffb8460c0ab5e90b335c1c4494bf8076658988ccb368006e15f5ed",
+    "tools/audit_boundaries.py": "1601a9c176536ac6a4919c6af07d49911fc42735765028c4b819e6a8f9bc8a45",
+    "tools/check_canvas_faults.cjs": "794c78f76ca1cd9a2e79742ac82d7c802b32c796924117aa49654c9ae9dc8cf3",
+    "tools/check_folder_upload.cjs": "771fd780efb990f484cbe6d317c9c0df5413ba2501c34069164bfd9f5a85a868",
+    "tools/check_node_ui.cjs": "b27a07229e8da88f5531568afa4293acf2c1e2ffcaa923edd543a7b561afc91c",
+    "tools/run_project.py": "70aa6c012906a2f1d4d727730a306b9c200839809aee9f5d4e2bc2e302647063",
+    "translation_protocol.py": "a0deb1dc04b3ceff4bcfed2796f6317b317ffa4e439e2b76711f61db772483f2",
+    "web/node_ui.js": "4cb149d9fa2ac6754191aeec1e6d1f711aa9fba942f0995094c8bb1251b34158",
+    "workflow_native.py": "6990feb237bbafa8fb668a7bbc340bfdece51dc30ef4d99338fb666f049a446b"
+  },
+  "log_sha256": {
+    "full-system-v0722-final.txt": "ce3ff1bde0d2890bfdaed065bca518edcfb87f77872e980b78f240b1e6b9175f",
+    "v0722-negative-baseline.txt": "a7a8f17641b49b1eb38c173e291ff95814d62cb6189d79cf3fb17a1603e54c62",
+    "audit-v0722-boundaries.txt": "81138e154c838f7c2948ced0afe8e072c0c69122ba020351239f47a53e7ef4e6",
+    "audit-v0722-transitions.txt": "669302860c81b6102c64ec62245d7d24fa4d4e6687579a6a9a04ab0d353f7505"
+  },
+  "release_checks": {
+    "packaging_and_workflow_tests_passed": 5,
+    "seconds": 2.98,
+    "registered_files": 209,
+    "documentation_links": 125,
+    "compileall": "PASS",
+    "generated_workflow_diff": "empty",
+    "adapter_provenance": "PASS"
+  }
+}

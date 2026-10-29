@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 import hashlib
 from io import BytesIO
 import json
+from http.client import IncompleteRead
 import math
 import os
 from pathlib import Path, PurePosixPath
@@ -339,11 +340,16 @@ class ComfyClient:
         headers = {}
         if data is not None: headers['Content-Type'] = content_type
         token = os.environ.get('COMFY_API_TOKEN', '').strip()
-        if token: headers['Authorization'] = 'Bearer '+token
+        if '\r' in token or '\n' in token: raise ValueError('ComfyUI token contains a newline')
         req = request.Request(self.base+route, data=data, headers=headers)
+        if token: req.add_unredirected_header('Authorization', 'Bearer '+token)
         try:
             with request.urlopen(req, timeout=self.timeout) as response:
                 value = response.read(128*1024*1024+1)
+                if type(getattr(response,'length',None)) is int and response.length>0 and len(value)<=128*1024*1024:
+                    raise ConnectionError('Incomplete ComfyUI response')
+        except (IncompleteRead, ConnectionError):
+            raise OSError('ComfyUI response transfer was interrupted') from None
         except error.HTTPError as exc:
             if 400 <= exc.code < 500:
                 raise Rejected(f'ComfyUI rejected {route.split("?")[0]}: HTTP {exc.code}') from exc
@@ -438,7 +444,7 @@ class Project:
                 or not {'input.png','result.png','source.json','target.json'} <= state['artifacts'].keys()):
             raise ProjectError('Completed project page has incomplete artifact records')
         if ('artifacts' in state and (not isinstance(state['artifacts'],dict)
-                or any(name not in ('input.png','result.png','source.json','target.json','lettering-report.json')
+                or any(name not in ('input.png','result.png','source.json','target.json','lettering-report.json','cleanup-report.json')
                        or not re.fullmatch(r'[a-f0-9]{64}',str(sha)) for name,sha in state['artifacts'].items()))):
             raise ProjectError('Invalid project artifact records')
         if 'result' in state and state['result'] != (self._attempt_dir(state)/'result.png').relative_to(self.destination).as_posix():
@@ -751,6 +757,25 @@ class Project:
                 raise ProtocolError('Invalid source region coordinates')
             if any(before.get(k) != after.get(k) for k in ('bbox','crop_bbox_pixels','edit_bbox_pixels','source')):
                 raise ProtocolError('Translation changed source text or geometry')
+        cleanup_reports=[]
+        pending=[self.bind['final']]; ancestors=set()
+        while pending:
+            node=pending.pop()
+            if node in ancestors: continue
+            ancestors.add(node)
+            entry=self.graph.get(node,{})
+            for value in entry.get('inputs',{}).values():
+                if isinstance(value,list) and len(value)==2 and isinstance(value[0],str) and value[0] in self.graph:
+                    pending.append(value[0])
+            if entry.get('class_type')!='MangaCleanupCheckpoint': continue
+            qa=history.get('outputs',{}).get(node,{}).get('manga_cleanup_report')
+            if qa is None: continue
+            if (not isinstance(qa,list) or len(qa)!=1 or not isinstance(qa[0],dict)
+                    or qa[0].get('schema')!=1 or type(qa[0].get('needs_review')) is not bool):
+                raise ProtocolError('Invalid cleanup quality report')
+            cleanup_reports.append(qa[0])
+        cleanup_report=({'schema':1,'reports':cleanup_reports,
+                         'needs_review':any(r['needs_review'] for r in cleanup_reports)} if cleanup_reports else None)
         lettering_review=[]
         lettering_report=None
         link=self.graph[self.bind['final']]['inputs'].get('images')
@@ -824,6 +849,8 @@ class Project:
         state['result'] = self._artifact(state, 'result.png', data)
         self._artifact(state, 'source.json', json_bytes(source))
         self._artifact(state, 'target.json', json_bytes(target))
+        if cleanup_report is not None:
+            self._artifact(state, 'cleanup-report.json', json_bytes(cleanup_report))
         if lettering_report is not None:
             self._artifact(state, 'lettering-report.json', json_bytes(lettering_report))
         if not source['regions']:
@@ -836,6 +863,8 @@ class Project:
                          source.get('boundary_review',{}).get('reason','unresolved_detection_boundary')))
         elif edits is not None and edits.get('needs_review'):
             state.update(status='needs_review',reason=target.get('review_reason','source_edit_plan_requires_review'))
+        if cleanup_report is not None and cleanup_report['needs_review']:
+            state.update(status='needs_review',reason=state.get('reason') or 'cleanup_quality_requires_review')
         if lettering_report is not None and lettering_report['needs_review']:
             state.update(status='needs_review')
             if not state.get('reason') and not lettering_review:

@@ -1,5 +1,6 @@
 """Explicit OpenAI-compatible text calls; no secret is stored in workflows."""
 import json
+from http.client import IncompleteRead
 import os
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
@@ -30,15 +31,16 @@ def translate(text, base_url='http://127.0.0.1:8000/v1', model='', source_langua
     if '\r' in key or '\n' in key:
         raise ValueError('API key contains a line break')
     headers = {'Content-Type': 'application/json'}
-    if key:
-        headers['Authorization'] = 'Bearer ' + key
 
     def call(path, payload=None):
         body = None if payload is None else json.dumps(payload, ensure_ascii=False).encode('utf-8')
         request = Request(url+path, data=body, headers=headers, method='GET' if body is None else 'POST')
+        if key: request.add_unredirected_header('Authorization', 'Bearer '+key)
         try:
             with urlopen(request, timeout=timeout) as response:
                 data = response.read(1024*1024+1)
+                if type(getattr(response,'length',None)) is int and response.length>0 and len(data)<=1024*1024:
+                    raise ConnectionError('Incomplete translation response')
             if len(data) > 1024*1024:
                 raise ValueError('Translation response exceeds 1 MiB')
             result = json.loads(data)
@@ -48,7 +50,7 @@ def translate(text, base_url='http://127.0.0.1:8000/v1', model='', source_langua
         except HTTPError as exc:
             # Do not echo server bodies/headers; they may contain credentials or user text.
             raise RuntimeError(f'Translation server HTTP {exc.code}') from None
-        except (URLError, TimeoutError) as exc:
+        except (URLError, TimeoutError, ConnectionError, IncompleteRead) as exc:
             raise RuntimeError(f'Translation server unavailable ({type(exc).__name__})') from None
 
     if not model:

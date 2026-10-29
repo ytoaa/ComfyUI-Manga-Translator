@@ -82,8 +82,36 @@ def column_size(ink,cols,extent):
             'ink_coverage':round(sum(eligible)/int(ink.sum()),4)}
 
 
-def profile(reference, cleaned, support, font_name, foreground=None):
-    ink = (support>.1) & (np.max(np.abs(reference-cleaned),axis=2) >= .07)
+def source_style(reference, cleaned, support, readable):
+    """Faint pigment requires localized evidence on an unchanged uniform background."""
+    try:
+        return core.analyze_style(reference, cleaned, support)
+    except ValueError as exc:
+        if not readable or not str(exc).startswith('Too few text pixels'): raise
+        original_error = exc
+    owned = support > .1
+    delta = np.max(np.abs(reference-cleaned), axis=2)
+    outside = ~ndimage.binary_dilation(owned, iterations=2)
+    if (owned.sum() < 32 or owned.mean() > .65 or outside.sum() < 16
+            or np.quantile(delta[outside], .95) > 2/255): raise original_error
+    background = np.median(cleaned.reshape(-1, 3), axis=0)
+    if np.quantile(np.max(np.abs(cleaned-background), axis=2), .95) > 2/255: raise original_error
+    contrast = float(np.quantile(delta[owned], .9))
+    if not 4/255 <= contrast < .07: raise original_error
+    threshold = max(3/255, contrast*.5)
+    ink = owned & (delta >= threshold)
+    if ink.sum() < 32: raise original_error
+    signed = np.mean(reference-cleaned, axis=2)[ink]
+    if max(np.mean(signed>0), np.mean(signed<0)) < .95: raise original_error
+    style, raw = core.analyze_style(reference, cleaned, support, difference_threshold=threshold)
+    analysis = json.loads(raw)
+    analysis.update(low_contrast_source=True, difference_threshold=threshold,
+                    evidence='localized consistent pigment on unchanged uniform background')
+    return style, json.dumps(analysis, ensure_ascii=False)
+
+
+def profile(reference, cleaned, support, font_name, foreground=None, difference_threshold=.07):
+    ink = (support>.1) & (np.max(np.abs(reference-cleaned),axis=2) >= difference_threshold)
     if foreground is not None:
         pigment=ink & (np.max(np.abs(reference-np.asarray(foreground)),axis=2)<.2)
         if pigment.sum()>=8: ink=pigment
@@ -341,9 +369,12 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
             owned=Image.new('L',(ref.shape[1],ref.shape[0]));x,y,_,_=item['bbox']
             ImageDraw.Draw(owned).polygon([(a-x,b-y) for a,b in item['frame_quad']],fill=255)
             mask=mask*(np.asarray(owned)>0)
+        policy=opts.get('fit_policy',fit_policy)
+        if policy not in FIT_POLICIES: raise ValueError(f'{ident}: invalid fit policy')
         try:
-            style,analysis=core.analyze_style(ref,clean,mask)
-            measured,ink=profile(ref,clean,mask,font,style['foreground'])
+            style,analysis=source_style(ref,clean,mask,policy=='readable' and selected_mode!='strict')
+            difference_threshold=json.loads(analysis).get('difference_threshold',.07)
+            measured,ink=profile(ref,clean,mask,font,style['foreground'],difference_threshold)
         except ValueError as exc:
             if (fit_failure_policy != 'preserve_review' or opts.get('mode',mode) == 'strict' or
                     not str(exc).startswith(('Too few text pixels', 'Too few source ink pixels'))):
@@ -366,7 +397,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
                 return np.asarray(raster.rotate(-source_angle,Image.Resampling.NEAREST if mode=='L' else Image.Resampling.BICUBIC,
                                                expand=True),np.float32)/255
             try:
-                rectified,_=profile(rotated(ref,'RGB'),rotated(clean,'RGB'),rotated(mask,'L'),font,style['foreground'])
+                rectified,_=profile(rotated(ref,'RGB'),rotated(clean,'RGB'),rotated(mask,'L'),font,style['foreground'],difference_threshold)
             except ValueError as exc:
                 if (fit_failure_policy!='preserve_review' or selected_mode=='strict' or
                         not str(exc).startswith(('Too few text pixels','Too few source ink pixels'))):raise
@@ -393,6 +424,14 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         ratio=opts.get('min_scale',min_scale);core.finite(ratio,.2,1,'min_scale')
         floor=opts.get('min_font',layout.pop('min_font',min_font));core.integer(floor,4,512,'min_font')
         absolute_floor=floor
+        source_enlarged=False
+        if (floor>cap and policy=='readable' and selected_mode!='strict'
+                and 'font_cap' not in opts and 'max_font' not in item.get('layout',{})):
+            cap=floor
+            source_enlarged=True
+        adjustments={'source_enlarged':source_enlarged,
+                     'low_contrast_source':bool(json.loads(analysis).get('low_contrast_source'))}
+        if any(adjustments.values()): plan['needs_review']=True
         floor=max(floor,math.ceil(cap*ratio))
         if floor>cap:
             if fit_failure_policy=='stop' or selected_mode=='strict':
@@ -462,6 +501,8 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
                   'text':rendered_text,'original_text':item['text'],'line_breaks':breaks,
                   'font':font,'font_fallback':font_fallback,'style':style,'source':source,
                   'phases':phases,'cap':cap,'floor':floor,'fallback_floor':fallback_floor,
+                  'style_cap':measured['font_cap'] if source_enlarged else cap,
+                  'readability_adjustments':adjustments,
                   'fit_policy':policy,'mode':selected_mode,'options':render_options,'bend':curve,
                   'bubble_guard':guard,'bubble_containment':guard_report,
                   'profile':measured,'analysis':json.loads(analysis),'warning':warning}
@@ -491,6 +532,7 @@ def build_plan(original,cleaned,source_mask,document,default_font='NanumGothic-B
         reports.append({'id':ident,'source':source,'source_profile':measured,'font':font,
                         'font_cap':cap,'min_font':floor,'mode':selected_mode,'font_fallback':font_fallback,
                         'fallback_min_font':fallback_floor,'fit_policy':policy,
+                        'readability_adjustments':adjustments,
                         'bubble_containment':guard_report,
                         'direction':actual_direction,'line_breaks':breaks,'soft_wraps_reflowed':reflow,
                         'style_analysis':json.loads(analysis),
@@ -589,7 +631,7 @@ def _render_plan_once(plan):
             # Reserve vertical clearance before bending, never crop the warped glyph.
             options['padding']=options['padding']+math.ceil(abs(region['bend']))
             for size in range(ceiling,floor-1,-1):
-                scale=size/region['cap']
+                scale=size/region.get('style_cap',region['cap'])
                 for candidate,candidate_phase in variants:
                     x,y,w,h=core.bbox(candidate,result.shape)
                     style=scaled_style(region['style'],scale,(w,h))
@@ -651,6 +693,7 @@ def _render_plan_once(plan):
         occupied[ndimage.binary_dilation(active,iterations=2)]=index+1
         reports.append({'id':region['id'],'source_profile':region['profile'],'bbox':bounds,
                         'font_fallback':region.get('font_fallback'),
+                        'readability_adjustments':region.get('readability_adjustments',{}),
                         'fit_phase':phase,'scale':round(scale,4),'render':render,
                         'fit_policy':region.get('fit_policy','source_ratio'),
                         'source_floor':region['floor'],'minimum_font':fallback_floor,

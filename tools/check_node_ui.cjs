@@ -98,6 +98,11 @@ class Node {
  assert.equal(editNode.mangaPanelBody.children[0].textContent,'식자 1영역');
  editNode.onExecuted({manga_lettering_report:[{regions:[],lettering_review:[{id:'r1',reason:'source_below_readability_minimum',diagnostic:{code:'source_below_readability_minimum',source_cap:6,minimum_font:10}}]}]});
  assert.match(editNode.mangaPanelBody.children[0].textContent,/r1.*6px < 최소 10px/);
+ for(const [key,label] of [['source_enlarged','최소 식자 크기'],['low_contrast_source','저대비 원문']]) {
+  editNode.onExecuted({manga_lettering_report:[{needs_review:true,regions:[{id:'r1',readability_adjustments:{[key]:true}}]}]});
+  assert.ok(editNode.mangaPanelBody.children.some(e=>e.textContent.includes(label)));
+  assert.ok(!editNode.mangaPanelBody.children.some(e=>e.textContent.includes('상위 단계')));
+ }
  for(const kind of ['MangaWorkflowInput','MangaReviewDocument','MangaPageEditPlan','MangaOCRAdaptive','MangaLetterPlan','MangaLetterApply']) {
   class SizingNode {
    constructor(){this.widgets=[];this.size=[420,600];}

@@ -284,12 +284,13 @@ def test_halo_feather_reduces_boundary_jump_without_restoring_source_ink():
     for tile in plan['tiles']:
         a,b,c,d=tile['crop'];candidate=original[b:d,a:c].copy();candidate[tile['mask']]=.85
         generated.append(candidate)
-    hard,_=T.assemble(plan,generated,blend_width=0)
-    soft,report=T.assemble(plan,generated,blend_width=8)
+    hard,_=T.assemble(plan,generated,strict_cleanup=False,blend_width=0)
+    soft,report=T.assemble(plan,generated,strict_cleanup=False,blend_width=8)
     assert np.array_equal(soft[~cleanup],original[~cleanup])
     assert np.array_equal(soft[raw],hard[raw])
     border=cleanup & ~ndimage.binary_erosion(cleanup)
     assert np.abs(soft[border]-.5).mean()<np.abs(hard[border]-.5).mean()/4
+    assert json.loads(report)['needs_review']  # deliberately wrong-color seam fixture
     assert json.loads(report)['edge_blend']['source_pixels_unattenuated']
 
 
@@ -300,7 +301,8 @@ def test_internal_tile_ownership_boundary_does_not_become_a_fade():
     cleanup=ndimage.binary_dilation(raw,iterations=12)
     plan=T.make_plan(original,raw,cleanup,uniform_fill=False)
     generated=[np.full((*tile['mask'].shape,3),.8,np.float32) for tile in plan['tiles']]
-    soft,_=T.assemble(plan,generated,blend_width=8)
+    soft,report=T.assemble(plan,generated,strict_cleanup=False,blend_width=8)
+    assert json.loads(report)['needs_review']
     # This halo row is more than 8px from the real mask perimeter. Every
     # ownership core must retain the same candidate color across split columns.
     assert np.allclose(soft[40,40:1060],.8)
