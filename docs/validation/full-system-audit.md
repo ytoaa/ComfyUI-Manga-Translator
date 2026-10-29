@@ -252,3 +252,5 @@ Bounded scenario results do not certify all inputs, platforms or model accuracy.
 contracts 77 PASS; independent boundary/transition audits 43 + 29 PASS.
 The recorded Chromium installation failure leaves actual browser layout
 unverified. Actual ComfyUI/GPU execution is excluded by request.
+
+Additional bounded CPU/TLS/batch coverage is recorded in [extended v0.7.22 validation](extended-cpu-v0722.md). This does not close the actual-browser, live-model, platform or long-duration scope.

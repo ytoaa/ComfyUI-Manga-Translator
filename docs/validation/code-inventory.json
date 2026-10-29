@@ -362,6 +362,11 @@
       "classes": 0
     },
     {
+      "path": "tests/test_extended_cpu_validation.py",
+      "functions": 10,
+      "classes": 1
+    },
+    {
       "path": "tests/test_failure_evidence_files.py",
       "functions": 7,
       "classes": 1

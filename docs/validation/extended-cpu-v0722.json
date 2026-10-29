@@ -1,0 +1,443 @@
+{
+  "schema": 1,
+  "baseline_commit": "c5dfe83a455b4f427e1148a8039ad35ce4cebf7f",
+  "date_kst": "2026-10-30",
+  "scope": "additional actual CPU/font/cache/local TLS; project API/model doubles; no ComfyUI/GPU",
+  "tests": 83,
+  "failed": 0,
+  "errors": 0,
+  "skipped": 0,
+  "seconds": 54.438,
+  "matrix": {
+    "cases": 72,
+    "rendered": 48,
+    "preserved_review": 12,
+    "strict_refusals": 12
+  },
+  "peak_memory_growth_bytes": 2318336,
+  "peak_memory_growth_mib": 2.2109375,
+  "source_sha256": "902c59b05c77dc124176fbab0cbaad9b5d3ab04b6f2005d5bbe60a2041632f4f",
+  "cases": [
+    {
+      "name": "test_typography_option_matrix[0-7-source_ratio-source-horizontal]",
+      "seconds": 0.055,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-source_ratio-source-vertical_rtl]",
+      "seconds": 0.015,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-source_ratio-source-vertical_ltr]",
+      "seconds": 0.015,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-source_ratio-bubble-horizontal]",
+      "seconds": 0.015,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-source_ratio-bubble-vertical_rtl]",
+      "seconds": 0.016,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-source_ratio-bubble-vertical_ltr]",
+      "seconds": 0.014,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-source_ratio-strict-horizontal]",
+      "seconds": 0.013,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-source_ratio-strict-vertical_rtl]",
+      "seconds": 0.014,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-source_ratio-strict-vertical_ltr]",
+      "seconds": 0.013,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-readable-source-horizontal]",
+      "seconds": 0.03,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-readable-source-vertical_rtl]",
+      "seconds": 0.031,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-readable-source-vertical_ltr]",
+      "seconds": 0.029,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-readable-bubble-horizontal]",
+      "seconds": 0.027,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-readable-bubble-vertical_rtl]",
+      "seconds": 0.028,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-readable-bubble-vertical_ltr]",
+      "seconds": 0.027,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-readable-strict-horizontal]",
+      "seconds": 0.015,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-readable-strict-vertical_rtl]",
+      "seconds": 0.013,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-7-readable-strict-vertical_ltr]",
+      "seconds": 0.013,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-source_ratio-source-horizontal]",
+      "seconds": 0.029,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-source_ratio-source-vertical_rtl]",
+      "seconds": 0.03,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-source_ratio-source-vertical_ltr]",
+      "seconds": 0.03,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-source_ratio-bubble-horizontal]",
+      "seconds": 0.028,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-source_ratio-bubble-vertical_rtl]",
+      "seconds": 0.029,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-source_ratio-bubble-vertical_ltr]",
+      "seconds": 0.028,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-source_ratio-strict-horizontal]",
+      "seconds": 0.029,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-source_ratio-strict-vertical_rtl]",
+      "seconds": 0.029,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-source_ratio-strict-vertical_ltr]",
+      "seconds": 0.03,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-readable-source-horizontal]",
+      "seconds": 0.031,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-readable-source-vertical_rtl]",
+      "seconds": 0.029,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-readable-source-vertical_ltr]",
+      "seconds": 0.029,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-readable-bubble-horizontal]",
+      "seconds": 0.03,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-readable-bubble-vertical_rtl]",
+      "seconds": 0.03,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-readable-bubble-vertical_ltr]",
+      "seconds": 0.034,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-readable-strict-horizontal]",
+      "seconds": 0.034,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-readable-strict-vertical_rtl]",
+      "seconds": 0.033,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[0-24-readable-strict-vertical_ltr]",
+      "seconds": 0.033,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-source_ratio-source-horizontal]",
+      "seconds": 0.017,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-source_ratio-source-vertical_rtl]",
+      "seconds": 0.016,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-source_ratio-source-vertical_ltr]",
+      "seconds": 0.018,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-source_ratio-bubble-horizontal]",
+      "seconds": 0.018,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-source_ratio-bubble-vertical_rtl]",
+      "seconds": 0.02,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-source_ratio-bubble-vertical_ltr]",
+      "seconds": 0.016,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-source_ratio-strict-horizontal]",
+      "seconds": 0.014,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-source_ratio-strict-vertical_rtl]",
+      "seconds": 0.013,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-source_ratio-strict-vertical_ltr]",
+      "seconds": 0.014,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-readable-source-horizontal]",
+      "seconds": 0.027,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-readable-source-vertical_rtl]",
+      "seconds": 0.03,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-readable-source-vertical_ltr]",
+      "seconds": 0.029,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-readable-bubble-horizontal]",
+      "seconds": 0.028,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-readable-bubble-vertical_rtl]",
+      "seconds": 0.027,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-readable-bubble-vertical_ltr]",
+      "seconds": 0.03,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-readable-strict-horizontal]",
+      "seconds": 0.014,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-readable-strict-vertical_rtl]",
+      "seconds": 0.013,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-7-readable-strict-vertical_ltr]",
+      "seconds": 0.013,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-source_ratio-source-horizontal]",
+      "seconds": 0.028,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-source_ratio-source-vertical_rtl]",
+      "seconds": 0.028,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-source_ratio-source-vertical_ltr]",
+      "seconds": 0.029,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-source_ratio-bubble-horizontal]",
+      "seconds": 0.029,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-source_ratio-bubble-vertical_rtl]",
+      "seconds": 0.029,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-source_ratio-bubble-vertical_ltr]",
+      "seconds": 0.029,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-source_ratio-strict-horizontal]",
+      "seconds": 0.034,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-source_ratio-strict-vertical_rtl]",
+      "seconds": 0.035,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-source_ratio-strict-vertical_ltr]",
+      "seconds": 0.041,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-readable-source-horizontal]",
+      "seconds": 0.032,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-readable-source-vertical_rtl]",
+      "seconds": 0.04,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-readable-source-vertical_ltr]",
+      "seconds": 0.035,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-readable-bubble-horizontal]",
+      "seconds": 0.028,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-readable-bubble-vertical_rtl]",
+      "seconds": 0.048,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-readable-bubble-vertical_ltr]",
+      "seconds": 0.052,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-readable-strict-horizontal]",
+      "seconds": 0.053,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-readable-strict-vertical_rtl]",
+      "seconds": 0.041,
+      "properties": {}
+    },
+    {
+      "name": "test_typography_option_matrix[8-24-readable-strict-vertical_ltr]",
+      "seconds": 0.033,
+      "properties": {}
+    },
+    {
+      "name": "test_real_tls_certificate_and_hostname_enforcement[trusted-nodes]",
+      "seconds": 0.201,
+      "properties": {}
+    },
+    {
+      "name": "test_real_tls_certificate_and_hostname_enforcement[trusted-lettering]",
+      "seconds": 0.016,
+      "properties": {}
+    },
+    {
+      "name": "test_real_tls_certificate_and_hostname_enforcement[trusted-comfy]",
+      "seconds": 0.016,
+      "properties": {}
+    },
+    {
+      "name": "test_real_tls_certificate_and_hostname_enforcement[untrusted-nodes]",
+      "seconds": 0.007,
+      "properties": {}
+    },
+    {
+      "name": "test_real_tls_certificate_and_hostname_enforcement[untrusted-lettering]",
+      "seconds": 0.009,
+      "properties": {}
+    },
+    {
+      "name": "test_real_tls_certificate_and_hostname_enforcement[untrusted-comfy]",
+      "seconds": 0.007,
+      "properties": {}
+    },
+    {
+      "name": "test_real_tls_certificate_and_hostname_enforcement[wrong_hostname-nodes]",
+      "seconds": 0.006,
+      "properties": {}
+    },
+    {
+      "name": "test_real_tls_certificate_and_hostname_enforcement[wrong_hostname-lettering]",
+      "seconds": 0.006,
+      "properties": {}
+    },
+    {
+      "name": "test_real_tls_certificate_and_hostname_enforcement[wrong_hostname-comfy]",
+      "seconds": 0.005,
+      "properties": {}
+    },
+    {
+      "name": "test_three_hundred_page_mixed_book_resume_and_artifact_integrity",
+      "seconds": 3.356,
+      "properties": {
+        "counts": "{\"completed\": 100, \"needs_review\": 100, \"failed\": 100}",
+        "resume_extra_submissions": "0"
+      }
+    },
+    {
+      "name": "test_repeated_real_lettering_and_cache_cycles_are_bounded",
+      "seconds": 48.53,
+      "properties": {
+        "peak_rss_bytes_after_warmup": "[269713408, 269787136, 269836288, 272023552, 272031744, 272031744]",
+        "cycles": "1500"
+      }
+    }
+  ]
+}
